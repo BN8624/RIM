@@ -101,12 +101,32 @@ def build_challenge_package_prompt(snapshot_md: str) -> str:
 
 라벨 규칙:
 - final_label은 GOOD_CHALLENGE / TOO_EASY / TOO_BIG / NOT_MY_TASTE / STEAL_ONLY / UNCLEAR_TO_OWNER / DROP 중 하나다.
-- GOOD_CHALLENGE: 작게 만들 수 있지만 핵심 난이도가 살아 있음.
-- TOO_EASY: 핵심 앵커가 약한 뻔한 과제. TOO_BIG: 핵심을 살리려면 너무 큼.
+- GOOD_CHALLENGE: 작게 만들 수 있지만 원본의 핵심 난이도/상호작용이 살아 있음.
+  아래를 모두 만족할 때만 준다.
+  · owner_clarity >= 3, difficulty_anchor_alive >= 4, not_too_easy >= 4, immediate_demo_value >= 3
+  · difficulty_anchors 2개 이상, forbidden_simplifications 2개 이상
+  · anchors와 forbidden이 구체적(사용자 행동·화면 요소·상태 변화·후속 액션 명시)일 것.
+- TOO_EASY: 다음 중 하나라도 해당하면 적극적으로 TOO_EASY를 줘라. TOO_EASY는 실패가 아니라 제대로 걸러냈다는 신호다.
+  · not_too_easy < 4 또는 difficulty_anchor_alive < 4
+  · core_interaction.hard_part가 추상적이거나 약함
+  · TODO/CRUD/검색창/정적 대시보드/메모장/타이머/계산기류로 쉽게 축소됨
+  · forbidden_simplifications가 구체적 금지 목록이 아니라 일반론("단순하게 만들지 말 것")뿐임
+  · difficulty_anchors가 추상 명사("좋은 UX", "자동화", "데이터 관리")뿐임
+- TOO_BIG: 핵심을 살리려면 하루로 안 됨.
 - STEAL_ONLY: 전체 과제는 별로지만 UI/루프/구조 하나는 훔칠 만함.
 - UNCLEAR_TO_OWNER: 바이브코더가 읽어도 뭘 만들라는 건지 감이 안 옴.
 - owner_clarity_score < 3이면 GOOD_CHALLENGE를 주지 마라.
-- 모든 score는 1~5 정수다.
+- 모든 score는 1~5 정수다. 근거가 약하면 억지로 앵커를 만들어내지 말고 낮은 점수를 줘라.
+
+difficulty_anchors 품질 기준:
+- 좋은 예: "사용자가 명령을 검색하고 즉시 실행한다", "결과 카드에서 다음 후속 액션을 선택할 수 있다", "선택에 따라 상태가 바뀌고 다음 추천이 달라진다".
+- 나쁜 예: "좋은 UX", "자동화", "데이터 관리", "대시보드", "사용자 친화성".
+- 사용자 행동/상태 변화/피드백 루프가 없는 추상 명사뿐이면 GOOD_CHALLENGE 불가.
+
+forbidden_simplifications 품질 기준:
+- 좋은 예: "결과 카드 없이 검색창만 만들지 말 것", "후속 액션 없이 실행 버튼 하나로 끝내지 말 것", "상태 변화 없이 정적 목록만 보여주지 말 것".
+- 나쁜 예: "단순하게 만들지 말 것", "기능을 줄이지 말 것".
+- 구체적 명사/행동/금지 대상이 없는 일반론뿐이면 GOOD_CHALLENGE 불가.
 
 implementation_prompt 규칙:
 - 구현자(Claude/Codex/Gemma/외주)에게 복사해 바로 넘길 수 있는 완결된 한국어 지시문으로 쓴다.
@@ -259,6 +279,158 @@ def mock_challenge_package(full_name: str = "example/example", repo_url: str | N
                 "- 검색창만 있고 실행 결과 카드가 없다\n"
                 "- 마우스 없이는 명령을 실행할 수 없다\n"
                 "- 실행해도 화면 상태가 바뀌지 않는다\n"
+            ),
+        },
+    }
+
+
+# ---------------------------------------------------------- Easy Calibration Set
+
+# 일부러 쉬운 seed/query. 판정이 제대로면 여기서는 GOOD_CHALLENGE가 나오면 안 된다.
+EASY_CALIBRATION_SEEDS = (
+    "todo app",
+    "calculator app",
+    "simple notes app",
+    "weather dashboard",
+    "linktree clone",
+    "markdown previewer",
+    "pomodoro timer",
+    "qr code generator",
+    "habit tracker",
+    "expense tracker",
+    "simple kanban board",
+)
+
+# (seed, variant) — variant는 왜 non-GOOD이 되는지를 지정한다.
+#   too_easy: 앵커/난이도가 약함, drop: 데모 가치 없음, unclear: 사장이 이해 못 함.
+EASY_CALIBRATION_CASES = (
+    ("todo app", "too_easy"),
+    ("calculator app", "too_easy"),
+    ("simple notes app", "too_easy"),
+    ("weather dashboard", "drop"),
+    ("linktree clone", "drop"),
+    ("markdown previewer", "too_easy"),
+    ("pomodoro timer", "too_easy"),
+    ("qr code generator", "drop"),
+    ("habit tracker", "too_easy"),
+    ("expense tracker", "too_easy"),
+    ("simple kanban board", "unclear"),
+)
+
+# variant별 점수 프로필. final_label은 일부러 GOOD_CHALLENGE로 둔다
+# — '판정이 후한 Judge'를 흉내 내서 자동 규칙이 강등하는지 검증하기 위함이다.
+_EASY_SCORE_PROFILES = {
+    # not_too_easy<4, difficulty_anchor_alive<4 → TOO_EASY. owner_clarity는 높게 둔다.
+    "too_easy": {
+        "difficulty_anchor_alive": 2,
+        "not_too_easy": 2,
+        "buildable_in_one_day": 5,
+        "visual_dependency_low": 4,
+        "immediate_demo_value": 4,
+        "owner_clarity": 5,
+        "user_taste_fit": 3,
+        "reuse_potential": 2,
+    },
+    # 앵커는 살아 있으나(4) 데모 가치가 없어서 immediate_demo_value<3 → DROP.
+    "drop": {
+        "difficulty_anchor_alive": 4,
+        "not_too_easy": 4,
+        "buildable_in_one_day": 5,
+        "visual_dependency_low": 4,
+        "immediate_demo_value": 2,
+        "owner_clarity": 4,
+        "user_taste_fit": 2,
+        "reuse_potential": 2,
+    },
+    # owner_clarity_score<3 → UNCLEAR_TO_OWNER.
+    "unclear": {
+        "difficulty_anchor_alive": 3,
+        "not_too_easy": 3,
+        "buildable_in_one_day": 4,
+        "visual_dependency_low": 4,
+        "immediate_demo_value": 3,
+        "owner_clarity": 2,
+        "user_taste_fit": 3,
+        "reuse_potential": 2,
+    },
+}
+
+
+def mock_easy_challenge_package(
+    full_name: str = "easy/example",
+    seed: str = "todo app",
+    repo_url: str | None = None,
+    variant: str = "too_easy",
+) -> dict:
+    """일부러 쉬운 후보의 mock. 판정 규칙이 GOOD_CHALLENGE로 통과시키면 안 된다.
+
+    difficulty_anchors / forbidden_simplifications를 일반론으로 채우고 점수를 낮춰,
+    over-generous Judge(final_label=GOOD_CHALLENGE)를 흉내 낸다.
+    """
+    url = repo_url or f"https://github.com/{full_name}"
+    scores = _EASY_SCORE_PROFILES.get(variant, _EASY_SCORE_PROFILES["too_easy"])
+    clarity = scores["owner_clarity"]
+    if variant == "drop":
+        # 난이도 앵커는 구체적이지만(살아 있음) 만들어도 보여줄 게 없는 경우.
+        difficulty_anchors = [
+            "사용자가 입력하면 결과 카드가 즉시 갱신된다",
+            "결과 카드에서 후속 액션을 선택할 수 있다",
+        ]
+        forbidden_simplifications = [
+            "결과 카드 없이 입력창만 만들지 말 것",
+            "상태 변화 없이 정적 목록만 보여주지 말 것",
+        ]
+    else:
+        difficulty_anchors = ["좋은 UX", "자동화", "데이터 관리"]
+        forbidden_simplifications = ["단순하게 만들지 말 것", "기능을 줄이지 말 것"]
+    return {
+        "owner_brief": {
+            "source_repo": full_name,
+            "what_is_this": f"쉽게 말하면 {seed} 하나를 만드는 흔한 앱이다.",
+            "why_people_like_it": "간단하고 익숙해서 사람들이 부담 없이 쓴다.",
+            "what_we_steal": "깔끔한 화면과 기본 기능.",
+            "what_screen_looks_like": f"화면에 목록과 입력창이 하나 있다. ({url})",
+            "what_user_does": ["항목을 추가한다", "항목을 지운다"],
+            "why_it_might_be_fun_or_useful": "금방 만들 수 있어서 좋다.",
+            "how_it_differs_from_easy_version": "사실상 쉬운 버전과 크게 다르지 않다.",
+            "owner_clarity_score": clarity,
+            "owner_clarity_risk": "너무 뻔해서 뭘 차별화할지 감이 안 온다.",
+        },
+        "screen_story": {
+            "first_screen": "입력창과 목록만 있는 화면.",
+            "user_actions": ["1. 입력한다", "2. 추가 버튼을 누른다"],
+            "thirty_second_demo": "항목 몇 개를 추가하고 지운다.",
+            "success_feeling": "목록이 채워진다.",
+            "failure_screen": "아무 일도 일어나지 않으면 실패다.",
+        },
+        "challenge_card": {
+            "source_repo": full_name,
+            "repo_summary": f"{seed} 류의 흔한 앱.",
+            "surface_features": ["항목 추가", "항목 삭제"],
+            "core_interaction": {
+                "actor": "사용자",
+                "trigger": "무언가를 입력한다",
+                "loop": "추가하고 지운다",
+                "reward": "목록이 바뀐다",
+                "state_change": "항목 개수가 변한다",
+                "hard_part": "특별히 어려운 부분이 없다",
+            },
+            "difficulty_anchors": difficulty_anchors,
+            "forbidden_simplifications": forbidden_simplifications,
+            "allowed_simplifications": ["디자인은 기본값으로 둬도 된다"],
+            "challenge_title": f"{seed} 만들기",
+            "one_line_challenge": f"{seed} 하나를 만들어라.",
+            "poc_30_min": "입력창과 목록을 띄운다.",
+            "build_1_day": "추가/삭제를 붙인다.",
+            "expansion_3_day": "약간의 정렬을 붙인다.",
+            "pass_criteria": ["항목을 추가할 수 있다"],
+            "failure_criteria": ["추가가 안 된다"],
+            "scores": scores,
+            "final_label": "GOOD_CHALLENGE",
+            "taste_risk": "너무 흔해서 흥미가 안 생길 수 있다.",
+            "implementation_prompt": (
+                f"너는 {seed} 하나를 만든다. 입력창과 목록을 두고 추가/삭제를 붙여라. "
+                "산출 파일: index.html, style.css, app.js, README.md."
             ),
         },
     }

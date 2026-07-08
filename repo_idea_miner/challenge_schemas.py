@@ -141,30 +141,75 @@ class ChallengeIndex(_Base):
     items: list[ChallengeIndexItem]
 
 
+# 구체성 판정용 마커 — 사용자 행동/화면 요소/상태 변화/피드백 루프를 가리키는 토큰.
+# difficulty_anchors나 forbidden_simplifications가 이 마커를 하나도 담지 못하면
+# '일반론뿐'으로 보고 GOOD_CHALLENGE를 막는다 (Label Calibration).
+_CONCRETE_MARKERS = (
+    "검색", "카드", "목록", "리스트", "버튼", "메뉴", "링크", "화면", "상태",
+    "액션", "루프", "입력", "실행", "결과", "선택", "갱신", "저장", "표시",
+    "생성", "후속", "클릭", "드래그", "필터", "정렬", "매칭", "랭킹", "이어",
+    "바뀌", "바뀐", "누른", "누르", "정적", "todo", "crud", "타이머", "메모",
+    "미리보기", "단축키", "키보드", "그래프", "노드", "드롭", "확대",
+)
+
+
+def _item_is_concrete(text: str) -> bool:
+    """항목에 구체 마커(행동/화면 요소/상태 변화)가 하나라도 들어 있으면 True."""
+    low = text.lower()
+    return any(marker in low for marker in _CONCRETE_MARKERS)
+
+
+def is_generic_list(items: list[str]) -> bool:
+    """리스트의 모든 항목이 구체 마커를 하나도 담지 못하면 True(일반론뿐).
+
+    '좋은 UX', '자동화', '단순하게 만들지 말 것'처럼 추상 명사/일반 금지문만 있으면
+    True. '결과 카드 없이 검색창만 만들지 말 것'처럼 구체 대상이 있으면 False.
+    """
+    return len(items) > 0 and not any(_item_is_concrete(t) for t in items)
+
+
 def apply_auto_label_rules(package: ChallengePackage) -> list[str]:
-    """§9 자동 판정 규칙을 적용해 final_label을 보정하고, 적용된 규칙 목록을 반환한다.
+    """§9 자동 판정 규칙 + Label Calibration 보정을 적용하고, 적용된 규칙 목록을 반환한다.
 
     package를 in-place로 수정한다. 규칙은 위에서 아래 순서로 평가하며
     먼저 걸린 규칙의 라벨이 최종 라벨이 된다.
+
+    Label Calibration: GOOD_CHALLENGE는 원본의 핵심 난이도가 살아 있는 과제여야 한다.
+    difficulty_anchor_alive / not_too_easy 기준을 4로 올리고, anchors·forbidden이
+    2개 미만이거나 일반론뿐이면 GOOD_CHALLENGE를 주지 않는다.
     """
     card = package.challenge_card
     scores = card.scores
     clarity = package.owner_brief.owner_clarity_score
+    anchors = card.difficulty_anchors
+    forbidden = card.forbidden_simplifications
     applied: list[str] = []
 
     corrected: str | None = None
     if clarity < 3:
         corrected = corrected or "UNCLEAR_TO_OWNER"
         applied.append("owner_clarity_score<3 → UNCLEAR_TO_OWNER")
-    if scores.difficulty_anchor_alive < 3:
-        corrected = corrected or "TOO_EASY"
-        applied.append("difficulty_anchor_alive<3 → TOO_EASY")
-    if scores.not_too_easy < 3:
-        corrected = corrected or "TOO_EASY"
-        applied.append("not_too_easy<3 → TOO_EASY")
     if scores.buildable_in_one_day < 2:
         corrected = corrected or "TOO_BIG"
         applied.append("buildable_in_one_day<2 → TOO_BIG")
+    if scores.difficulty_anchor_alive < 4:
+        corrected = corrected or "TOO_EASY"
+        applied.append("difficulty_anchor_alive<4 → TOO_EASY")
+    if scores.not_too_easy < 4:
+        corrected = corrected or "TOO_EASY"
+        applied.append("not_too_easy<4 → TOO_EASY")
+    if len(anchors) < 2:
+        corrected = corrected or "TOO_EASY"
+        applied.append("difficulty_anchors<2 → TOO_EASY")
+    if len(forbidden) < 2:
+        corrected = corrected or "TOO_EASY"
+        applied.append("forbidden_simplifications<2 → TOO_EASY")
+    if is_generic_list(anchors):
+        corrected = corrected or "TOO_EASY"
+        applied.append("difficulty_anchors 일반론뿐 → TOO_EASY")
+    if is_generic_list(forbidden):
+        corrected = corrected or "TOO_EASY"
+        applied.append("forbidden_simplifications 일반론뿐 → TOO_EASY")
     if scores.immediate_demo_value < 3:
         corrected = corrected or "DROP"
         applied.append("immediate_demo_value<3 → DROP")
