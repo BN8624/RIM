@@ -234,7 +234,7 @@ class GoogleGenAIGemmaClient(LLMClient):
                         max_delay=self.settings.retry_max_delay_seconds,
                         rng=self._rng,
                     )
-                self._log(worker, model, key_index, attempt, False, latency_ms, error_type, retry_after, backoff_delay, prompt, None, False, False)
+                self._log(worker, model, key_index, attempt, False, latency_ms, error_type, retry_after, backoff_delay, prompt, None, False, None)
                 self._sleep(backoff_delay)
                 continue
 

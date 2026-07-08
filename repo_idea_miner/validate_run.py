@@ -42,15 +42,32 @@ def validate_single_run(run_dir: Path, problems: list[str]) -> None:
             problems.append(f"judge_output_final.json 스키마 위반: {type(exc).__name__}")
 
 
+def _run_failed(report_path: Path) -> bool:
+    """run_report에 실패(JSON Validation != PASS)가 기록된 run인지 확인한다."""
+    text = report_path.read_text(encoding="utf-8", errors="replace")
+    section = text.split("## JSON Validation", 1)
+    if len(section) < 2:
+        return True
+    return section[1].strip().splitlines()[0].strip() != "PASS"
+
+
 def validate_search_run(run_dir: Path, problems: list[str]) -> None:
     for name in ("top_ideas.md", "search_report.md", "candidates.json"):
         if not (run_dir / name).exists():
             problems.append(f"{name} 없음")
     for repo_dir in sorted((run_dir / "repos").glob("*")):
-        if repo_dir.is_dir():
-            sub_problems: list[str] = []
-            validate_single_run(repo_dir, sub_problems)
-            problems.extend(f"{repo_dir.name}: {p}" for p in sub_problems)
+        if not repo_dir.is_dir():
+            continue
+        report = repo_dir / "run_report.md"
+        if not report.exists():
+            problems.append(f"{repo_dir.name}: run_report.md 없음")
+            continue
+        # LLM 실패 등으로 run 실패가 기록된 후보는 카드 부재가 정상이다.
+        if _run_failed(report):
+            continue
+        sub_problems: list[str] = []
+        validate_single_run(repo_dir, sub_problems)
+        problems.extend(f"{repo_dir.name}: {p}" for p in sub_problems)
 
 
 def validate_run_dir(run_dir: str | Path, secret_values: list[str] | None = None) -> tuple[bool, list[str]]:

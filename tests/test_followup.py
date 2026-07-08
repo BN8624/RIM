@@ -198,17 +198,25 @@ def test_judge_with_null_optional_fields_renders(tmp_path):
 # ---------------------------------------------------------------- §7.4 validation_success 의미
 
 def test_llm_calls_validation_success_is_null_for_live_client(fake_env):
+    # 실패(transient) 후 성공하는 시나리오 — 실패/성공 로그 모두 validation_success는 null이어야 한다
     logger = LLMCallLogger(None)
-    settings = Settings(google_keys=load_google_keys(fake_env))
+    settings = Settings(google_keys=load_google_keys(fake_env), retry_initial_delay_seconds=0.01)
+    calls = {"n": 0}
+
+    def transport(*a):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("503 UNAVAILABLE")
+        return '{"ok": true}'
+
     client = GoogleGenAIGemmaClient(
         settings, KeyPool(settings.google_keys), call_logger=logger,
-        transport=lambda *a: '{"ok": true}', sleep_fn=lambda s: None,
+        transport=transport, sleep_fn=lambda s: None,
     )
     client.generate_json("p", "bouncer")
-    assert logger.entries, "로그가 없음"
+    assert len(logger.entries) >= 2, "실패/성공 로그가 모두 있어야 함"
     for entry in logger.entries:
         assert entry["validation_success"] is None
-        assert entry["json_parse_success"] is True
 
 
 def test_llm_calls_validation_success_is_null_for_mock_client():
@@ -250,6 +258,27 @@ def test_final_scan_includes_run_report(tmp_path):
         f.write("\nleak ghp_abcdef123456789012\n")
     leaked = final_secret_scan(run_dir, [])
     assert str(report_path) in leaked
+
+
+def test_validate_search_skips_failed_candidates(tmp_path):
+    # 실패가 기록된 후보(run_report의 JSON Validation FAIL)는 카드 부재를 위반으로 보지 않는다
+    from repo_idea_miner.validate_run import validate_run_dir
+
+    run_dir = tmp_path / "search_run"
+    (run_dir / "repos" / "o_failed").mkdir(parents=True)
+    for name in ("top_ideas.md", "search_report.md", "candidates.json"):
+        (run_dir / name).write_text("{}", encoding="utf-8")
+    (run_dir / "repos" / "o_failed" / "run_report.md").write_text(
+        "# Run Report\n\n## JSON Validation\nFAIL\n", encoding="utf-8"
+    )
+    ok, problems = validate_run_dir(run_dir, [])
+    assert ok, problems
+
+    # run_report 자체가 없으면 여전히 위반
+    (run_dir / "repos" / "o_missing").mkdir()
+    ok, problems = validate_run_dir(run_dir, [])
+    assert not ok
+    assert any("run_report.md 없음" in p for p in problems)
 
 
 def test_pipeline_fails_when_redaction_bypassed(tmp_path, monkeypatch):
