@@ -70,7 +70,29 @@ def validate_search_run(run_dir: Path, problems: list[str]) -> None:
         problems.extend(f"{repo_dir.name}: {p}" for p in sub_problems)
 
 
-def validate_run_dir(run_dir: str | Path, secret_values: list[str] | None = None) -> tuple[bool, list[str]]:
+def validate_viewer(run_dir: Path, problems: list[str]) -> None:
+    """--require-viewer 시 viewer.html의 존재·필수 요소·secret 노출을 검사한다."""
+    viewer = run_dir / "viewer.html"
+    if not viewer.exists():
+        problems.append("viewer.html 없음")
+        return
+    text = viewer.read_text(encoding="utf-8", errors="replace")
+    checks = [
+        ('name="viewport"', "모바일 viewport meta 누락"),
+        ("data-filter", "필터 버튼 누락"),
+        ('class="card"', "카드 목록 누락"),
+        ('class="badge', "verdict label 누락"),
+    ]
+    for needle, msg in checks:
+        if needle not in text:
+            problems.append(f"viewer.html: {msg}")
+
+
+def validate_run_dir(
+    run_dir: str | Path,
+    secret_values: list[str] | None = None,
+    require_viewer: bool = False,
+) -> tuple[bool, list[str]]:
     run_dir = Path(run_dir)
     problems: list[str] = []
     if not run_dir.is_dir():
@@ -80,6 +102,9 @@ def validate_run_dir(run_dir: str | Path, secret_values: list[str] | None = None
         validate_search_run(run_dir, problems)
     else:
         validate_single_run(run_dir, problems)
+
+    if require_viewer:
+        validate_viewer(run_dir, problems)
 
     files = [p for p in run_dir.rglob("*") if p.is_file()]
     leaked = scan_files_for_secrets(files, secret_values or [])

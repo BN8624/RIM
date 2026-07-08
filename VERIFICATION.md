@@ -161,3 +161,99 @@ files: 739 / secret scan: PASS
 ```
 
 주: [18]의 key 5 실패 로그에 `validation_success=False`로 남던 잔여 경로 1곳은 보완 커밋에서 `null`로 수정되었고 회귀 테스트가 실패/성공 로그 모두를 검증한다.
+
+---
+
+# 모바일 HTML 뷰어 + Tailscale 읽기 전용 서버 검수 (별도 주문서)
+
+- 검수 일시: 2026-07-08
+- 검수 환경: Windows 11, Python 3.14.5
+- 추가 모듈: `repo_idea_miner/viewer.py`, `repo_idea_miner/serve.py`
+- 추가 CLI: `view`, `serve`, `validate --require-viewer`
+
+## 완료 기준 대비 결과 (주문서 §15)
+
+| # | 기준 | 결과 |
+|---|---|---|
+| 1 | `view` 명령 추가 | PASS |
+| 2 | `serve` 명령 추가 | PASS |
+| 3 | 단일 run에서 viewer.html 생성 | PASS |
+| 4 | search run에서 viewer.html 생성 | PASS |
+| 5 | 모바일 반응형(viewport meta + inline CSS/JS) | PASS |
+| 6 | Tailscale IP로 iPhone 접속 (`--host 0.0.0.0`/IP 바인딩) | PASS (바인딩·URL 출력 확인) |
+| 7 | KEEP/MAYBE/DROP/ERROR 필터 | PASS |
+| 8 | 점수/판정/한 줄 결론/핵심 패턴/다음 행동 표시 | PASS |
+| 9 | 상세 접기/펼치기(`<details>`) | PASS |
+| 10 | 외부 CDN/API 없이 동작 | PASS (CDN/fetch 참조 0) |
+| 11 | run_dir 밖 접근 금지 | PASS (403) |
+| 12 | `.env` 접근 금지 | PASS (403) |
+| 13 | `debug/raw` 기본 노출 금지 | PASS (403, 중첩 경로 포함) |
+| 14 | viewer.html secret scan 포함 | PASS |
+| 15 | `validate --require-viewer` 지원 | PASS |
+| 16 | pytest 통과 | PASS (159 passed, 뷰어/서버 24개 포함) |
+| 17 | mock run/search + view + validate + serve 검수 | PASS (아래 로그) |
+| 18 | README에 iPhone + Tailscale 사용법 | PASS |
+| 19 | SCOPE/VERIFICATION 문서 갱신 | PASS (본 문서) |
+
+## 주문서 §13 테스트 매핑 (20개)
+
+`tests/test_viewer.py` / `tests/test_serve.py`.
+
+1. view가 단일 run viewer 생성 → `test_view_creates_viewer_single`
+2. view가 search run viewer 생성 → `test_view_creates_viewer_search`
+3. serve가 읽기 전용 정적 서버로 뜸 → `test_serve_starts_and_serves_viewer`
+4. serve root가 run 디렉터리로 제한 → `test_serve_blocks_outside_root`
+5. serve가 `.env` 차단 → `test_serve_blocks_env`
+6. serve가 path traversal 차단 → `test_serve_blocks_traversal`
+7. serve가 debug/raw 기본 차단 → `test_serve_blocks_debug_raw_and_prompts`, `test_is_denied_unit`
+8. viewer가 KEEP/MAYBE/DROP 라벨 포함 → `test_viewer_has_verdict_labels`
+9. viewer가 score 포함 → `test_viewer_has_score`
+10. viewer가 repo 링크 포함 → `test_viewer_has_repo_links`
+11. viewer 필터 버튼 존재 → `test_viewer_has_filter_buttons`
+12. viewer 모바일 viewport meta → `test_viewer_has_mobile_viewport`
+13. viewer secret scan이 가짜 GITHUB_TOKEN 탐지 → `test_viewer_secret_scan_catches_github_token`
+14. viewer secret scan이 가짜 GOOGLE_API_KEY 탐지 → `test_viewer_secret_scan_catches_google_key`
+15. `validate --require-viewer` viewer 부재 시 실패 → `test_validate_require_viewer_fails_when_missing`
+16. `validate --require-viewer` viewer 존재 시 통과 → `test_validate_require_viewer_passes_when_present`
+17. JSON 부재 시 idea_card.md fallback → `test_missing_json_falls_back_to_idea_card`
+18. 카드 부재 시 크래시 대신 ERROR 카드 → `test_missing_card_becomes_error_not_crash`
+19. search viewer가 ERROR 후보 표시 → `test_search_viewer_displays_error_candidates`
+20. targeted_score 정렬 옵션 노출 → `test_targeted_sort_shown_when_available`
+
+추가 방어 테스트: GET/HEAD 외 501(`test_serve_is_read_only`), 생성된 viewer 무누출(`test_generated_viewer_is_clean`), idea_card 파싱(`test_parse_idea_card_extracts_fields`).
+
+## 검수 터미널 로그
+
+```text
+=== pytest ===
+159 passed in 4.85s   (뷰어/서버 24개 포함)
+
+=== run mock (BN8624/RIM) ===
+run_dir: runs\20260708_093836
+verdict: MAYBE / score: 5 / fast_drop: False
+
+=== view (single) ===
+viewer: runs\20260708_093836\viewer.html
+
+=== validate --require-viewer (single) ===
+VALIDATION PASS
+
+=== serve smoke (single, 127.0.0.1:8811) ===
+/ -> 200   viewer.html -> 200   .env -> 403   debug/raw -> 403
+
+=== search mock --targeted (limit 10 top 5) ===
+run_dir: runs\20260708_093857
+analyzed: 10 / errors: 0
+
+=== view (search) ===
+viewer: runs\20260708_093857\viewer.html
+
+=== validate --require-viewer (search) ===
+VALIDATION PASS
+summary: keep 0 / maybe 10 / drop 0 / error 0 / secret_scan PASS / validation PASS / has_targeted true
+
+=== serve smoke (search, 127.0.0.1:8812) ===
+/ -> 200   candidates.json -> 200   repos/<name>/debug/raw/metadata.json -> 403
+```
+
+주: Tailscale 실기기(iPhone Safari) 접속은 `--host 0.0.0.0`/Tailscale IP 바인딩과 URL 출력까지 로컬에서 검증했다. 실제 tailnet 왕복은 사용자 기기 환경에서 수행한다 (README 3단계 참고).

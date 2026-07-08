@@ -79,7 +79,52 @@ python -m repo_idea_miner search \
 python -m repo_idea_miner validate runs/<timestamp>/
 ```
 
-구조·JSON 스키마·secret 노출·필수 섹션을 검증합니다.
+구조·JSON 스키마·secret 노출·필수 섹션을 검증합니다. `--require-viewer`를 주면 `viewer.html`의 존재·모바일 viewport·필터 버튼·카드·verdict label·secret scan까지 함께 검사합니다.
+
+### 모바일 HTML 뷰어 (iPhone + Tailscale)
+
+RIM 실행 결과를 아이폰 Safari에서 읽기 좋게 보기 위한 정적 뷰어와 읽기 전용 로컬 서버입니다. 서버형 대시보드가 아니라, 지정한 run 디렉터리만 읽기 전용으로 제공합니다.
+
+**1. viewer.html 생성**
+
+```bash
+python -m repo_idea_miner view runs/<timestamp>/
+```
+
+`runs/<timestamp>/viewer.html`을 만듭니다. 단일 레포 run과 검색 run 모두 지원하며, 모바일 우선 반응형·다크모드 대응·inline CSS/JS(외부 CDN/API 0회)로 동작합니다. 검색 결과는 KEEP/MAYBE/DROP/ERROR 카드, 필터(전체/KEEP/MAYBE/DROP/ERROR/DROP 숨기기), 정렬(점수순/판정순/원래 순서/targeted_score순), 상세 접기/펼치기를 제공합니다.
+
+**2. 읽기 전용 서버 실행**
+
+```bash
+# 로컬 확인 (기본 host 127.0.0.1)
+python -m repo_idea_miner serve runs/<timestamp>/ --host 127.0.0.1 --port 8787
+
+# iPhone에서 Tailscale로 보려면 외부 바인딩
+python -m repo_idea_miner serve runs/<timestamp>/ --host 0.0.0.0 --port 8787
+```
+
+이 서버는 읽기 전용입니다. 지정한 run 디렉터리 밖의 파일에 접근할 수 없고, path traversal·`.env`·`debug/raw`·`debug/prompts`·`llm_calls.jsonl`은 차단하며, GET/HEAD 이외 메서드는 501로 거부합니다. RIM 실행 버튼·key 입력 화면 같은 것은 존재하지 않습니다.
+
+**3. iPhone Safari에서 열기 (Tailscale)**
+
+1. PC/VM과 iPhone이 같은 Tailscale tailnet에 연결돼 있어야 합니다.
+2. PC/VM에서 `search`(또는 `run`)로 분석을 실행합니다.
+3. `python -m repo_idea_miner view runs/<timestamp>/`로 viewer.html을 생성합니다.
+4. `python -m repo_idea_miner serve runs/<timestamp>/ --host 0.0.0.0 --port 8787`로 서버를 띄웁니다.
+5. iPhone Safari에서 `http://<PC_or_VM_Tailscale_IP>:8787/`로 접속합니다. Tailscale MagicDNS를 쓰면 `http://<machine-name>:8787/`도 가능합니다.
+
+`serve` 실행 시 로컬/Tailscale(100.x.x.x 추정)/LAN 후보 URL을 출력합니다. Tailscale IP 자동 탐지에 실패하면 `http://<your-tailscale-ip>:8787/` 안내 문구만 출력합니다 (`tailscale ip -4`로 직접 확인 가능).
+
+전체 예시:
+
+```bash
+python -m repo_idea_miner search \
+  --query "automation workflow python" \
+  --limit 10 --top 5 --mode live --targeted
+python -m repo_idea_miner view runs/<timestamp>/
+python -m repo_idea_miner serve runs/<timestamp>/ --host 0.0.0.0 --port 8787
+# → iPhone Safari: http://<TAILSCALE_IP>:8787/
+```
 
 ## 테스트
 

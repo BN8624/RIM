@@ -21,11 +21,17 @@
 - Length truncation: §25, Score Ceiling Validator: §26 (raw/final 분리 기록 §26.9)
 - Verdict 규칙: §27, idea_card.md: §28, top_ideas.md: §29, run_report.md: §30, search_report.md: §31
 - llm_calls.jsonl: §32, Secret redaction: §33 (패턴 + 로딩된 값 치환 + 최종 파일 스캔)
-- 필수 테스트: §34 전체 (113개, pytest)
+- 필수 테스트: §34 전체 (pytest)
+- 모바일 HTML 뷰어 (`view`) + 읽기 전용 로컬 서버 (`serve`): 별도 주문서 §3 (runs/<timestamp>/viewer.html 생성, Tailscale 경유 iPhone Safari 읽기 전용 열람)
+  - viewer.html: 모바일 우선 반응형, inline CSS/JS, 외부 CDN/API 0회, 다크모드 대응, KEEP/MAYBE/DROP/ERROR 카드·필터·정렬·접기/펼치기
+  - serve: 표준 라이브러리(`http.server`) 기반, run_dir 밖 접근·path traversal·`.env`·`debug/raw`·`debug/prompts`·`llm_calls.jsonl` 차단, GET/HEAD 외 501
+  - validate `--require-viewer`: viewer.html 존재·viewport·필터·카드·verdict label·secret scan 검사
 
 ## 미구현 / 제외 범위 (§36 구현 금지 사항)
 
-- 웹 대시보드 / 브라우저 UI
+- 풀 웹 대시보드 / SPA(React·Vue·Svelte) / Flask·FastAPI·Django 서버 (뷰어는 정적 HTML + 읽기 전용 파일 서버로만 구현)
+- DB / 로그인·계정 / 실행 제어 버튼 / API key·GitHub token 입력 화면 / 외부 인터넷 공개용 인증
+- 실시간 실행 상태 / 클라우드 배포 / 외부 CDN·외부 API 호출
 - 유튜브·블로그 콘텐츠 자동 생성
 - 자동 프로젝트 생성
 - 사용자 feedback 학습 시스템

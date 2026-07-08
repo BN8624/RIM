@@ -34,8 +34,17 @@ def build_parser() -> argparse.ArgumentParser:
     search_p.add_argument("--max-prs", type=int, default=10)
     search_p.add_argument("--tree-depth", type=int, default=2)
 
+    view_p = sub.add_parser("view", help="run 디렉터리에서 모바일 viewer.html 생성")
+    view_p.add_argument("run_dir")
+
+    serve_p = sub.add_parser("serve", help="run 디렉터리를 읽기 전용으로 serve")
+    serve_p.add_argument("run_dir")
+    serve_p.add_argument("--host", default="127.0.0.1", help="기본 127.0.0.1; Tailscale은 0.0.0.0 또는 100.x.x.x")
+    serve_p.add_argument("--port", type=int, default=8787)
+
     val_p = sub.add_parser("validate", help="run 디렉터리 산출물 검증")
     val_p.add_argument("run_dir")
+    val_p.add_argument("--require-viewer", action="store_true", help="viewer.html 존재·필수 요소 검사")
     return parser
 
 
@@ -81,11 +90,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"analyzed: {len(out['results'])} / errors: {len(out['errors'])}")
             return 0
 
+        if args.command == "view":
+            from repo_idea_miner.viewer import generate_viewer
+
+            out = generate_viewer(args.run_dir)
+            print(f"viewer: {out}")
+            return 0
+
+        if args.command == "serve":
+            from repo_idea_miner.serve import serve
+
+            serve(args.run_dir, host=args.host, port=args.port)
+            return 0
+
         if args.command == "validate":
             from repo_idea_miner.validate_run import validate_run_dir
 
             settings = load_settings()
-            ok, problems = validate_run_dir(args.run_dir, settings.secret_values())
+            ok, problems = validate_run_dir(
+                args.run_dir, settings.secret_values(), require_viewer=args.require_viewer
+            )
             if ok:
                 print("VALIDATION PASS")
                 return 0
