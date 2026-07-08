@@ -89,6 +89,22 @@ def test_paused_daemon_does_not_dispatch(tmp_path):
     daemon.conn.close()
 
 
+def test_daemon_recovers_stranded_in_progress(tmp_path):
+    from repo_idea_miner.challenge_db import enqueue_repo, open_db
+
+    db = tmp_path / "challenge.db"
+    conn = open_db(db)
+    enqueue_repo(conn, "https://github.com/a/b", "q")
+    conn.execute("UPDATE repo_queue SET status='in_progress'")
+    conn.commit()
+    conn.close()
+    # 새 daemon 시작 시 멈춘 항목이 다시 queued로 복구되어야 한다
+    daemon = _daemon(tmp_path)
+    assert queue_counts(daemon.conn)["in_progress"] == 0
+    assert queue_counts(daemon.conn)["queued"] >= 1
+    daemon.conn.close()
+
+
 def test_daemon_status_reports_counts(tmp_path):
     daemon = _daemon(tmp_path)
     daemon.run_cycle()

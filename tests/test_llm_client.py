@@ -206,6 +206,41 @@ def test_next_worker_call_can_reuse_temp_failed_key(fake_env):
     assert pool.status_of(1) == KeyStatus.AVAILABLE
 
 
+# ---- 단일 키 pool 백오프 재시도 (Challenge Miner 워커) ----
+
+def test_single_key_retries_same_key_then_succeeds():
+    """키 1개 pool은 transient 후 NoAvailableKeyError로 죽지 않고 같은 키로 재시도한다."""
+    settings = Settings(google_keys={1: "AQ.single_key_aaaaaaaaaaaaaaaa"},
+                        retry_initial_delay_seconds=0.01, retry_max_delay_seconds=0.05)
+    pool = KeyPool(settings.google_keys)
+    calls = {"n": 0}
+
+    def transport(api_key, prompt, model, temperature, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise FakeError("500 internal", code=500)
+        return GOOD_JSON
+
+    client = GoogleGenAIGemmaClient(settings, pool, transport=transport, sleep_fn=lambda s: None)
+    assert client.generate_json("p", "challenge_package") == {"ok": True}
+    assert calls["n"] == 2  # 같은 키로 재시도해 성공
+
+
+def test_single_key_persistent_transient_raises_llmcallerror():
+    """지속 transient면 NoAvailableKeyError가 아니라 원인이 담긴 LLMCallError를 던진다."""
+    settings = Settings(google_keys={1: "AQ.single_key_bbbbbbbbbbbbbbbb"},
+                        retry_initial_delay_seconds=0.01, retry_max_delay_seconds=0.05)
+    pool = KeyPool(settings.google_keys)
+
+    def transport(api_key, prompt, model, temperature, timeout):
+        raise FakeError("429 RESOURCE_EXHAUSTED", code=429)
+
+    client = GoogleGenAIGemmaClient(settings, pool, transport=transport, sleep_fn=lambda s: None)
+    with pytest.raises(LLMCallError) as exc:
+        client.generate_json("p", "challenge_package", max_retries=3)
+    assert "429" in str(exc.value)  # 원인 전파 → scheduler가 transient로 분류 가능
+
+
 # ---- §34.23 request timeout ----
 
 def test_timeout_setting_passed_to_transport(fake_env):

@@ -160,6 +160,9 @@ class ChallengeDaemon:
         self.conn = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         open_db(self.db_path).close()  # 스키마 보장
+        # 이전 실행이 비정상 종료돼 in_progress로 멈춘 큐 항목을 다시 대기로 되돌린다
+        self.conn.execute("UPDATE repo_queue SET status='queued' WHERE status='in_progress'")
+        self.conn.commit()
         keys = self.settings.google_keys
         if mode == "mock" and not keys:
             keys = {i: f"mock-key-{i}" for i in range(1, 12)}

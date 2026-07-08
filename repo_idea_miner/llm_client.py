@@ -218,6 +218,10 @@ class GoogleGenAIGemmaClient(LLMClient):
                     raise LLMConfigError(f"{worker}: 재시도 불가 오류 (invalid payload/schema/prompt bug).") from exc
                 # transient
                 self.key_pool.mark_temp_failed(key_index)
+                # 단일 키 pool(Challenge Miner 워커 등)은 넘어갈 다른 키가 없으므로,
+                # 같은 키로 백오프 재시도할 수 있도록 즉시 복원한다. 멀티키는 기존 회전 유지.
+                if self.key_pool.loaded_key_count == 1:
+                    self.key_pool.new_cycle()
                 self.retry_count += 1
                 self.failover_count += 1
                 attempt += 1
