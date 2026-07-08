@@ -86,7 +86,8 @@ class RunContext:
         path = self.run_dir / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(redact_text(text, self.secrets), encoding="utf-8")
-        self.output_files.append(rel_path)
+        if rel_path not in self.output_files:
+            self.output_files.append(rel_path)
         return path
 
     def write_json(self, rel_path: str, obj) -> Path:
@@ -193,13 +194,19 @@ def _content_gate(card_text: str) -> str:
 
 
 def _finalize_secret_check(ctx: RunContext, report_ctx: dict) -> None:
-    """run_report 작성 전 모든 산출물 secret 스캔 → report에 기록 후 report 자체도 검사."""
+    """run_report 작성 전 모든 산출물 secret 스캔 → report에 기록."""
     files = [p for p in ctx.run_dir.rglob("*") if p.is_file()]
     leaked = scan_files_for_secrets(files, ctx.secrets)
     report_ctx["secret_redaction"] = "FAIL" if leaked else "PASS"
     report_ctx["token_exposure"] = "YES" if leaked else "NO"
     if leaked:
         ctx.errors.append(f"secret 노출 파일: {leaked}")
+
+
+def final_secret_scan(run_dir: Path, secret_values: list[str]) -> list[str]:
+    """run_report.md 포함 runs/<timestamp>/ 전체를 다시 스캔한다 (§7.6 최종 안전장치)."""
+    files = [p for p in Path(run_dir).rglob("*") if p.is_file()]
+    return scan_files_for_secrets(files, secret_values)
 
 
 def run_single_repo(
@@ -263,9 +270,18 @@ def run_single_repo(
 
     def finish(exit_ok: bool) -> dict:
         report_ctx["key_pool"] = _key_pool_report(settings, pool, llm)
+        result["llm_retry_count"] = getattr(llm, "retry_count", 0)
+        result["llm_failover_count"] = getattr(llm, "failover_count", 0)
         _finalize_secret_check(ctx, report_ctx)
         ctx.write_text("run_report.md", render_run_report(report_ctx))
-        result["ok"] = exit_ok and report_ctx.get("secret_redaction") == "PASS"
+        # run_report.md 포함 전체 재스캔 — 최종 PASS/FAIL은 이 결과 기준 (§7.6)
+        leaked = final_secret_scan(ctx.run_dir, ctx.secrets)
+        if leaked:
+            report_ctx["secret_redaction"] = "FAIL"
+            report_ctx["token_exposure"] = "YES"
+            ctx.errors.append(f"최종 secret scan 실패: {leaked}")
+            ctx.write_text("run_report.md", render_run_report(report_ctx))
+        result["ok"] = exit_ok and not leaked and report_ctx.get("secret_redaction") == "PASS"
         return result
 
     # 1~13: 수집 + preflight + evidence packet
@@ -366,10 +382,9 @@ def run_single_repo(
     }
 
     # 23~24: truncation + final
+    # 길이 초과는 Error가 아니라 축약 — Length Truncation 섹션에만 기록 (§7.5)
     final, truncated_fields = apply_length_limits(ceiling.final)
     report_ctx["truncation"] = {"truncated_fields": truncated_fields}
-    if truncated_fields:
-        ctx.errors.append(f"LENGTH_TRUNCATED: {', '.join(truncated_fields)}")
     ctx.write_json("debug/worker_outputs/critic_judge_final.json", final)
     ctx.write_json("debug/judge_output_final.json", final)
 

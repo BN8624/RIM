@@ -38,5 +38,6 @@
 ## 알려진 한계
 
 - unique commenter / maintainer ratio는 high-comment bucket 이슈에 대해서만 댓글을 추가 수집한다 (API rate limit 절약). 나머지 이슈는 null로 기록되며 run_report의 `unique_commenters_available`에 표시된다.
-- GitHub 검색은 REST search API 기본 정렬(best match)을 사용하고 `--explore`는 updated 정렬로 전환한다. `--targeted`는 현재 기본 정렬과 동일하게 동작한다.
+- GitHub 검색은 REST search API 기본 정렬(best match)을 사용하고 `--explore`는 updated 정렬로 전환한다. `--targeted`는 관심사 키워드 기반 `targeted_score`를 계산해 후보를 재정렬하며 candidates.json에 점수·매칭 근거를 기록한다.
 - REST fallback 호출(§6.3)은 디버그용으로 명세만 따르며, 기본 경로는 항상 Python SDK다.
+- `llm_calls.jsonl`의 `validation_success`는 항상 null이다. Pydantic validation은 pipeline 단계에서 확정되므로 run_report.md의 `JSON Validation` 항목이 공식 기록이다.

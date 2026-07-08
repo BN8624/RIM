@@ -207,14 +207,14 @@ class GoogleGenAIGemmaClient(LLMClient):
                 if kind == "auth":
                     self.key_pool.mark_disabled(key_index)
                     self.failover_count += 1
-                    self._log(worker, model, key_index, attempt + 1, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, False)
+                    self._log(worker, model, key_index, attempt + 1, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, None)
                     last_error = error_type
                     continue  # 다른 key로 같은 요청 재시도 (attempt 미소진)
                 if kind == "fatal_model":
-                    self._log(worker, model, key_index, attempt + 1, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, False)
+                    self._log(worker, model, key_index, attempt + 1, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, None)
                     raise LLMConfigError(f"{worker}: model not found / invalid model name ({model}). 전체 설정 오류로 즉시 실패.") from exc
                 if kind == "fatal":
-                    self._log(worker, model, key_index, attempt + 1, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, False)
+                    self._log(worker, model, key_index, attempt + 1, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, None)
                     raise LLMConfigError(f"{worker}: 재시도 불가 오류 (invalid payload/schema/prompt bug).") from exc
                 # transient
                 self.key_pool.mark_temp_failed(key_index)
@@ -222,7 +222,7 @@ class GoogleGenAIGemmaClient(LLMClient):
                 self.failover_count += 1
                 attempt += 1
                 if attempt >= max_retries:
-                    self._log(worker, model, key_index, attempt, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, False)
+                    self._log(worker, model, key_index, attempt, False, latency_ms, error_type, retry_after, 0.0, prompt, None, False, None)
                     last_error = error_type
                     break
                 if self.settings.respect_retry_after and retry_after is not None:
@@ -243,10 +243,10 @@ class GoogleGenAIGemmaClient(LLMClient):
             if parsed is None:
                 self.retry_count += 1
                 attempt += 1
-                self._log(worker, model, key_index, attempt, False, latency_ms, "JSON_PARSE_FAIL", None, 0.0, prompt, text, False, False, repair_used)
+                self._log(worker, model, key_index, attempt, False, latency_ms, "JSON_PARSE_FAIL", None, 0.0, prompt, text, False, None, repair_used)
                 last_error = "JSON_PARSE_FAIL"
                 continue
-            self._log(worker, model, key_index, attempt + 1, True, latency_ms, None, retry_after, backoff_delay, prompt, text, True, True, repair_used)
+            self._log(worker, model, key_index, attempt + 1, True, latency_ms, None, retry_after, backoff_delay, prompt, text, True, None, repair_used)
             return parsed
 
         raise LLMCallError(f"{worker}: LLM 호출이 {max_retries}회 재시도 후 실패했습니다. last_error={last_error}")
@@ -265,7 +265,7 @@ class GoogleGenAIGemmaClient(LLMClient):
         prompt,
         output,
         json_parse_success,
-        validation_success,
+        validation_success=None,  # Pydantic validation은 pipeline 단계에서 확정되므로 여기서는 null
         repair_used=False,
     ) -> None:
         self.logger.log(
@@ -318,7 +318,7 @@ class MockLLMClient(LLMClient):
             input_chars=len(prompt or ""),
             output_chars=len(json.dumps(out, ensure_ascii=False)),
             json_parse_success=True,
-            validation_success=True,
+            validation_success=None,
             repair_used=False,
         )
         return json.loads(json.dumps(out))  # deep copy

@@ -19,6 +19,62 @@ def _safe_name(full_name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.\-]", "_", full_name.replace("/", "_"))
 
 
+# --targeted: 사용자의 관심사 키워드 (topics 매칭은 가중치 2, 이름/설명/언어는 1)
+INTEREST_KEYWORDS = [
+    "automation",
+    "workflow",
+    "developer productivity",
+    "productivity",
+    "cli",
+    "python",
+    "ocr",
+    "document extraction",
+    "test automation",
+    "code review",
+    "code helper",
+    "simulation",
+    "game tool",
+    "repo analysis",
+    "repository analysis",
+    "idea mining",
+]
+
+
+def compute_targeted_score(
+    full_name: str | None,
+    description: str | None,
+    topics: list[str] | None,
+    language: str | None,
+) -> tuple[int, list[str]]:
+    """관심사 키워드 매칭 점수와 매칭된 키워드 목록을 반환한다."""
+    topics_text = " ".join(t.lower() for t in (topics or []))
+    flat_text = f"{full_name or ''} {description or ''} {language or ''}".lower()
+    score = 0
+    matched: list[str] = []
+    for kw in INTEREST_KEYWORDS:
+        hit = False
+        if kw in topics_text:
+            score += 2
+            hit = True
+        if kw in flat_text:
+            score += 1
+            hit = True
+        if hit:
+            matched.append(kw)
+    return score, matched
+
+
+def rank_candidates_targeted(candidates: list[dict]) -> list[dict]:
+    """targeted_score 내림차순 → star 내림차순으로 재정렬한다. 점수/근거는 후보에 기록된다."""
+    for cand in candidates:
+        score, matched = compute_targeted_score(
+            cand.get("full_name"), cand.get("description"), cand.get("topics"), cand.get("language")
+        )
+        cand["targeted_score"] = score
+        cand["targeted_matched"] = matched
+    return sorted(candidates, key=lambda c: (-(c.get("targeted_score") or 0), -(c.get("stars") or 0)))
+
+
 def run_search(
     query: str,
     limit: int = 30,
@@ -59,11 +115,15 @@ def run_search(
             "url": it.get("html_url"),
             "description": it.get("description"),
             "stars": it.get("stargazers_count", 0),
+            "topics": it.get("topics", []),
+            "language": it.get("language"),
             "archived": it.get("archived", False),
             "fork": it.get("fork", False),
         }
         for it in items
     ]
+    if targeted:
+        candidates = rank_candidates_targeted(candidates)
     (run_dir / "candidates.json").write_text(
         redact_text(json.dumps(candidates, ensure_ascii=False, indent=2), secrets), encoding="utf-8"
     )
@@ -115,11 +175,22 @@ def run_search(
     top_ideas = render_top_ideas(query, results, top)
     (run_dir / "top_ideas.md").write_text(redact_text(top_ideas, secrets), encoding="utf-8")
 
-    pool_for_report = key_pool
-    client_for_report = shared_llm
+    # key pool 집계 (§7.2): llm이 후보별 내부 생성이면 per-repo 카운터를 합산,
+    # 공유 client가 주입됐으면 그 client의 누적 카운터를 그대로 사용한다.
+    if shared_llm is not None:
+        total_retry = getattr(shared_llm, "retry_count", 0)
+        total_failover = getattr(shared_llm, "failover_count", 0)
+    else:
+        total_retry = sum(r.get("llm_retry_count") or 0 for r in results)
+        total_failover = sum(r.get("llm_failover_count") or 0 for r in results)
+    pool_report = _key_pool_report(settings, key_pool, None)
+    pool_report["retry_count"] = total_retry
+    pool_report["failover_count"] = total_failover
+
     report = render_search_report(
         {
             "query": query,
+            "targeted_sort": "YES (targeted_score 내림차순, star 수 보조 정렬)" if targeted else "NO",
             "requested_limit": limit,
             "collected_count": len(candidates),
             "after_preflight_count": len(candidates) - pf_counts["FAST_DROP_PREFLIGHT"],
@@ -131,7 +202,7 @@ def run_search(
             "keep_count": sum(1 for r in results if r.get("verdict") == "KEEP"),
             "maybe_count": sum(1 for r in results if r.get("verdict") == "MAYBE"),
             "drop_count": sum(1 for r in results if r.get("verdict") == "DROP"),
-            "key_pool": _key_pool_report(settings, pool_for_report, client_for_report),
+            "key_pool": pool_report,
             "correction_count": correction_count,
             "correction_rate": correction_rate,
             "errors": errors,

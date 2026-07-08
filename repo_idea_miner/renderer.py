@@ -94,22 +94,22 @@ def render_idea_card(final: dict, repo_full_name: str) -> str:
 
 ## 내 현재 병목에 적용
 - area: {app.get('area')}
-- related_project: {app.get('related_project')}
+- related_project: {app.get('related_project') or '(없음)'}
 - reason: {app.get('reason')}
 
 ## 1일 MVP
 - status: {mvp.get('status')}
-- feature: {mvp.get('feature')}
-- input: {mvp.get('input')}
-- output: {mvp.get('output')}
+- feature: {mvp.get('feature') or '(없음)'}
+- input: {mvp.get('input') or '(없음)'}
+- output: {mvp.get('output') or '(없음)'}
 - excluded_scope: {', '.join(mvp.get('excluded_scope') or []) or '(없음)'}
 - reason: {mvp.get('reason')}
 
 ## 1일 Pattern PoC
 - status: {poc.get('status')}
-- idea: {poc.get('idea')}
-- input: {poc.get('input')}
-- output: {poc.get('output')}
+- idea: {poc.get('idea') or '(없음)'}
+- input: {poc.get('input') or '(없음)'}
+- output: {poc.get('output') or '(없음)'}
 - reason: {poc.get('reason')}
 
 ## 만들면 망하는 이유
@@ -365,6 +365,7 @@ def render_search_report(ctx: dict) -> str:
 - collected_count: {g('collected_count')}
 - after_preflight_count: {g('after_preflight_count')}
 - analyzed_count: {g('analyzed_count')}
+- targeted_sort: {g('targeted_sort', 'NO')}
 
 ## Preflight Summary
 - proceed: {g('proceed_count', 0)}

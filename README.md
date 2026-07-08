@@ -66,6 +66,11 @@ python -m repo_idea_miner search \
   --mode live
 ```
 
+옵션:
+
+- `--targeted` — 관심사 키워드(automation, workflow, developer productivity, CLI, Python, OCR/document extraction, test automation, code review, simulation/game tool, repo analysis, idea mining)와 후보의 topics(가중치 2)·이름·설명·언어(가중치 1)를 매칭해 `targeted_score`를 계산하고, 점수 내림차순(동점 시 star 수)으로 후보를 재정렬합니다. 점수와 매칭 근거는 `candidates.json`의 `targeted_score`/`targeted_matched`에, 정렬 사용 여부는 `search_report.md`의 `targeted_sort`에 기록됩니다.
+- `--explore` — GitHub 검색을 updated 정렬로 전환해 넓게 탐색합니다.
+
 출력 (`runs/<timestamp>/`): `top_ideas.md`, `search_report.md`, `candidates.json`, `cards/OWNER_REPO_idea_card.md`, `repos/OWNER_REPO/…`
 
 ### 산출물 검증

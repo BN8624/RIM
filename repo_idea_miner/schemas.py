@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 VERDICTS = ("KEEP", "MAYBE", "DROP")
 RISK_LEVELS = ("low", "medium", "high", "unknown", "not_collected")
@@ -64,25 +64,46 @@ class Application(_Base):
         "문서/카드 UI",
         "적용 부적합",
     ]
-    related_project: str
+    # 적용 부적합이면 related_project는 null이 자연스럽다
+    related_project: str | None = None
     reason: str
 
 
 class OneDayMvp(_Base):
     status: Literal["가능", "축소 불가", "불확실"]
-    feature: str
-    input: str
-    output: str
+    # 축소 불가/불확실이면 null 허용, 가능이면 필수 (아래 validator)
+    feature: str | None = None
+    input: str | None = None
+    output: str | None = None
     excluded_scope: list[str]
     reason: str
+
+    @model_validator(mode="after")
+    def _require_fields_when_possible(self):
+        if self.status == "가능":
+            for name in ("feature", "input", "output"):
+                value = getattr(self, name)
+                if not value or not value.strip():
+                    raise ValueError(f"one_day_mvp.status=가능이면 {name}는 비어 있을 수 없다")
+        return self
 
 
 class PatternPoc(_Base):
     status: Literal["가능", "불가능", "불확실"]
-    idea: str
-    input: str
-    output: str
+    # 불가능/불확실이면 null 허용, 가능이면 필수 (아래 validator)
+    idea: str | None = None
+    input: str | None = None
+    output: str | None = None
     reason: str
+
+    @model_validator(mode="after")
+    def _require_fields_when_possible(self):
+        if self.status == "가능":
+            for name in ("idea", "input", "output"):
+                value = getattr(self, name)
+                if not value or not value.strip():
+                    raise ValueError(f"pattern_poc.status=가능이면 {name}는 비어 있을 수 없다")
+        return self
 
 
 class IssueSignalStats(_Base):
