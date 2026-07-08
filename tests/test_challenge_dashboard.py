@@ -50,8 +50,8 @@ def _get(url: str) -> str:
 def test_index_lists_challenges(dashboard):
     base, _, _ = dashboard
     body = _get(base + "/")
-    assert "RIM Challenge Dashboard" in body
-    assert "GOOD_CHALLENGE" in body
+    assert "RIM 챌린지 대시보드" in body
+    assert "좋은 과제" in body  # GOOD_CHALLENGE 한글 라벨
     assert "owner/repo" in body
     assert "오늘 생성" in body
 
@@ -61,17 +61,17 @@ def test_index_filters(dashboard):
     body = _get(base + "/?final_label=GOOD_CHALLENGE&owner_status=unseen")
     assert "owner/repo" in body
     body = _get(base + "/?final_label=TOO_EASY")
-    assert "표시할 challenge가 없습니다" in body
+    assert "조건에 맞는 과제가 없습니다" in body
 
 
 def test_detail_tabs(dashboard):
     base, _, cid = dashboard
     body = _get(f"{base}/challenge/{cid}?tab=implementation_prompt")
-    assert "Implementation Prompt" in body
-    assert "Forbidden Simplifications" in body
+    assert "구현 지시문" in body  # 탭 한글 라벨
+    assert "Forbidden Simplifications" in body  # 지시문 원문 섹션
     body = _get(f"{base}/challenge/{cid}?tab=owner_brief")
     assert "쉽게 말해" in body
-    assert "COPY IMPLEMENTATION PROMPT" in body
+    assert "구현 지시문 복사" in body  # COPY 버튼 한글
 
 
 def test_review_post_updates_owner_status(dashboard):

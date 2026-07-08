@@ -23,64 +23,109 @@ _DETAIL_FILES = {
 }
 
 _STATUS_ACTIONS = [
-    ("saved", "SAVE"),
-    ("maybe", "MAYBE"),
-    ("dropped", "DROP"),
-    ("build_next", "BUILD NEXT"),
-    ("built", "MARK BUILT"),
+    ("saved", "저장"),
+    ("maybe", "보류"),
+    ("dropped", "버림"),
+    ("build_next", "다음 구현"),
+    ("built", "구현 완료"),
+]
+
+# 라벨/상태 enum을 화면용 한글로 (색상 class는 enum 그대로 유지)
+_LABEL_KO = {
+    "GOOD_CHALLENGE": "좋은 과제",
+    "STEAL_ONLY": "훔칠 것만",
+    "NOT_MY_TASTE": "취향 아님",
+    "TOO_BIG": "너무 큼",
+    "UNCLEAR_TO_OWNER": "이해 어려움",
+    "TOO_EASY": "너무 쉬움",
+    "DROP": "버림",
+}
+
+_OSTATUS_KO = {
+    "unseen": "안 봄",
+    "saved": "저장",
+    "maybe": "보류",
+    "dropped": "버림",
+    "build_next": "다음 구현",
+    "built": "구현 완료",
+}
+
+_TAB_KO = [
+    ("owner_brief", "쉬운 설명"),
+    ("screen_story", "화면 흐름"),
+    ("challenge_card", "과제 카드"),
+    ("implementation_prompt", "구현 지시문"),
+    ("validation_report", "검증 결과"),
 ]
 
 _CSS = """
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 16px; line-height: 1.5; background: #f4f5f7; color: #1c1c1e; }
-.wrap { max-width: 860px; margin: 0 auto; padding: 16px 14px 64px; }
-h1 { font-size: 1.3rem; margin: 4px 0 14px; }
+  font-size: 17px; line-height: 1.6; background: #f4f5f7; color: #1c1c1e; -webkit-text-size-adjust: 100%; }
+.wrap { max-width: 780px; margin: 0 auto; padding: 18px 16px 72px; }
+h1 { font-size: 1.35rem; margin: 4px 0 16px; }
 h1 a { color: inherit; text-decoration: none; }
-.summary, .card, .panel { background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 12px;
+.sec-h { font-size: .95rem; margin: 0 0 10px; color: #6b7280; font-weight: 700; }
+.summary, .card, .panel { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 12px; }
-.sitem { display: flex; flex-direction: column; }
-.sitem .k { font-size: .72rem; color: #6b7280; }
-.sitem .val { font-weight: 700; }
-form.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-form.filters select, form.filters input, form.filters button {
-  font-size: .9rem; padding: 8px 10px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; color: inherit; }
-.badge { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; color: #fff; }
-.l-GOOD_CHALLENGE { background: #16a34a; } .l-STEAL_ONLY { background: #7c3aed; }
-.l-NOT_MY_TASTE { background: #d97706; } .l-TOO_BIG { background: #0891b2; }
-.l-UNCLEAR_TO_OWNER { background: #db2777; } .l-TOO_EASY { background: #6b7280; }
-.l-DROP { background: #374151; }
-.ostatus { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px;
-  background: #e5e7eb; color: #374151; }
-.chead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.repo { font-weight: 700; word-break: break-all; flex: 1 1 auto; }
-.repo a { color: #2563eb; text-decoration: none; }
-.title { font-weight: 700; margin: 6px 0 2px; }
-.muted { color: #6b7280; font-size: .85rem; }
-.score { font-size: .8rem; font-weight: 600; background: #eef2ff; color: #374151; padding: 3px 9px; border-radius: 999px; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.actions button { font-size: .85rem; padding: 8px 12px; border-radius: 10px; border: 1px solid #d1d5db;
-  background: #fff; color: inherit; cursor: pointer; }
+.sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 16px; }
+.sitem { display: flex; flex-direction: column; gap: 2px; }
+.sitem .k { font-size: .8rem; color: #6b7280; }
+.sitem .val { font-weight: 700; font-size: 1.15rem; }
+form.filters { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 14px; align-items: flex-end; }
+form.filters label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: #6b7280; }
+form.filters select, form.filters input {
+  font-size: 1rem; padding: 10px 12px; border-radius: 12px; border: 1px solid #d1d5db; background: #fff; color: inherit; min-height: 44px; }
+form.filters button { font-size: 1rem; padding: 10px 18px; border-radius: 12px; border: 1px solid #2563eb;
+  background: #2563eb; color: #fff; min-height: 44px; cursor: pointer; }
+.chip-link { align-self: center; font-size: .9rem; padding: 10px 14px; border-radius: 999px;
+  border: 1px solid #d1d5db; text-decoration: none; color: inherit; }
+.count { color: #6b7280; font-size: .88rem; margin: 0 2px 12px; }
+.badge { font-size: .82rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; color: #fff; white-space: nowrap; }
+.l-GOOD_CHALLENGE { background: #15803d; } .l-STEAL_ONLY { background: #6d28d9; }
+.l-NOT_MY_TASTE { background: #b45309; } .l-TOO_BIG { background: #0e7490; }
+.l-UNCLEAR_TO_OWNER { background: #be185d; } .l-TOO_EASY { background: #52525b; }
+.l-DROP { background: #1f2937; }
+.ostatus { font-size: .8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+  background: #e5e7eb; color: #374151; white-space: nowrap; }
+.chead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.repo { font-weight: 700; font-size: .92rem; word-break: break-all; flex: 1 1 auto; color: #6b7280; }
+.repo a { color: #6b7280; text-decoration: none; }
+.title { font-weight: 700; font-size: 1.12rem; margin: 6px 0 4px; }
+.title a { color: inherit; text-decoration: none; }
+.oneline { margin: 4px 0 8px; }
+.meta { color: #6b7280; font-size: .85rem; margin: 6px 0 0; }
+.muted { color: #6b7280; }
+.back { margin: 0 0 12px; } .back a { color: #2563eb; text-decoration: none; font-size: .95rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.actions.copy-row { margin-top: 8px; }
+.actions button { font-size: .95rem; padding: 11px 16px; border-radius: 12px; border: 1px solid #d1d5db;
+  background: #fff; color: inherit; cursor: pointer; min-height: 46px; }
 .actions button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
-pre { white-space: pre-wrap; word-break: break-word; background: #f3f4f6; border-radius: 10px;
-  padding: 12px; font-size: .85rem; overflow-x: auto; }
-.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.tabs a { font-size: .85rem; padding: 7px 12px; border-radius: 999px; border: 1px solid #d1d5db;
-  text-decoration: none; color: inherit; }
+.actions button.on { outline: 3px solid #93c5fd; font-weight: 700; }
+.actions button.copy { border-style: dashed; color: #2563eb; }
+pre { white-space: pre-wrap; word-break: break-word; background: #f3f4f6; border-radius: 12px;
+  padding: 14px; font-size: .95rem; line-height: 1.65; overflow-x: auto; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.tabs a { font-size: .92rem; padding: 9px 14px; border-radius: 999px; border: 1px solid #d1d5db;
+  text-decoration: none; color: inherit; min-height: 40px; display: inline-flex; align-items: center; }
 .tabs a.active { background: #2563eb; color: #fff; border-color: #2563eb; }
-textarea { width: 100%; border-radius: 10px; border: 1px solid #d1d5db; padding: 8px; font: inherit; }
+textarea { width: 100%; border-radius: 12px; border: 1px solid #d1d5db; padding: 10px; font: inherit; font-size: 1rem; }
 @media (prefers-color-scheme: dark) {
   body { background: #000; color: #f2f2f7; }
   .summary, .card, .panel { background: #1c1c1e; box-shadow: none; border: 1px solid #2c2c2e; }
-  form.filters select, form.filters input, form.filters button, .actions button
+  .sec-h { color: #98989f; }
+  form.filters select, form.filters input, .actions button, .chip-link, .tabs a
     { background: #1c1c1e; border-color: #3a3a3c; color: #f2f2f7; }
-  .actions button.primary { background: #2563eb; border-color: #2563eb; }
+  form.filters button { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .actions button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .actions button.copy { color: #6ea8fe; }
   pre { background: #2c2c2e; }
   .ostatus { background: #2c2c2e; color: #d1d5db; }
-  .repo a { color: #6ea8fe; }
-  .tabs a { border-color: #3a3a3c; }
+  .repo, .repo a, .meta, .muted, .count, form.filters label { color: #98989f; }
+  .back a { color: #6ea8fe; }
+  .tabs a.active { background: #2563eb; color: #fff; border-color: #2563eb; }
 }
 """
 
@@ -89,7 +134,7 @@ function copyText(id, btn) {
   var el = document.getElementById(id);
   if (!el) return;
   navigator.clipboard.writeText(el.textContent).then(function () {
-    var old = btn.textContent; btn.textContent = 'COPIED';
+    var old = btn.textContent; btn.textContent = '복사됨';
     setTimeout(function () { btn.textContent = old; }, 1200);
   });
 }
@@ -102,7 +147,12 @@ def _e(v) -> str:
 
 def _label_badge(label: str | None) -> str:
     lab = label or "DROP"
-    return f'<span class="badge l-{_e(lab)}">{_e(lab)}</span>'
+    return f'<span class="badge l-{_e(lab)}">{_e(_LABEL_KO.get(lab, lab))}</span>'
+
+
+def _ostatus_badge(status: str | None) -> str:
+    st = status or "unseen"
+    return f'<span class="ostatus">{_e(_OSTATUS_KO.get(st, st))}</span>'
 
 
 def _page(title: str, body: str) -> str:
@@ -116,7 +166,7 @@ def _page(title: str, body: str) -> str:
 </head>
 <body>
 <div class="wrap">
-<h1><a href="/">RIM Challenge Dashboard</a></h1>
+<h1><a href="/">RIM 챌린지 대시보드</a></h1>
 {body}
 </div>
 <script>{_COPY_JS}</script>
@@ -197,41 +247,42 @@ def today_summary(conn: sqlite3.Connection) -> dict:
 def render_index(conn: sqlite3.Connection, filters: dict) -> str:
     s = today_summary(conn)
     labels = s["labels"]
-    key_line = ", ".join(f"{k['key_id']}:{k['status']}" for k in s["keys"]) or "(등록된 key 없음)"
+    avail = sum(1 for k in s["keys"] if k["status"] == "available")
     summary = f"""
 <section class="summary">
+  <h2 class="sec-h">오늘 요약</h2>
   <div class="sgrid">
-    <div class="sitem"><span class="k">오늘 생성</span><span class="val">{s['today_total']}</span></div>
-    <div class="sitem"><span class="k">GOOD_CHALLENGE</span><span class="val">{labels.get('GOOD_CHALLENGE', 0)}</span></div>
-    <div class="sitem"><span class="k">STEAL_ONLY</span><span class="val">{labels.get('STEAL_ONLY', 0)}</span></div>
-    <div class="sitem"><span class="k">TOO_EASY</span><span class="val">{labels.get('TOO_EASY', 0)}</span></div>
-    <div class="sitem"><span class="k">DROP</span><span class="val">{labels.get('DROP', 0)}</span></div>
-    <div class="sitem"><span class="k">에러</span><span class="val">{s['errors']}</span></div>
-    <div class="sitem"><span class="k">처리 중</span><span class="val">{s['queue']['in_progress']}</span></div>
-    <div class="sitem"><span class="k">대기 중</span><span class="val">{s['queue']['queued']}</span></div>
-    <div class="sitem"><span class="k">miner</span><span class="val">{'PAUSED' if s['paused'] else 'RUNNING'}</span></div>
+    <div class="sitem"><span class="k">오늘 생성</span><span class="val">{s['today_total']}건</span></div>
+    <div class="sitem"><span class="k">좋은 과제</span><span class="val">{labels.get('GOOD_CHALLENGE', 0)}건</span></div>
+    <div class="sitem"><span class="k">훔칠 것만</span><span class="val">{labels.get('STEAL_ONLY', 0)}건</span></div>
+    <div class="sitem"><span class="k">너무 쉬움</span><span class="val">{labels.get('TOO_EASY', 0)}건</span></div>
+    <div class="sitem"><span class="k">버림</span><span class="val">{labels.get('DROP', 0)}건</span></div>
+    <div class="sitem"><span class="k">에러</span><span class="val">{s['errors']}건</span></div>
+    <div class="sitem"><span class="k">처리 중 / 대기 중</span><span class="val">{s['queue']['in_progress']} / {s['queue']['queued']}</span></div>
+    <div class="sitem"><span class="k">수집기 상태</span><span class="val">{'멈춤' if s['paused'] else '실행 중'}</span></div>
+    <div class="sitem"><span class="k">가용 키</span><span class="val">{avail} / {len(s['keys'])}</span></div>
   </div>
-  <p class="muted">keys: {_e(key_line)}</p>
 </section>"""
 
-    label_opts = '<option value="">final_label</option>' + "".join(
-        f'<option value="{lab}"{" selected" if filters.get("final_label") == lab else ""}>{lab}</option>'
+    label_opts = '<option value="">라벨 전체</option>' + "".join(
+        f'<option value="{lab}"{" selected" if filters.get("final_label") == lab else ""}>{_LABEL_KO.get(lab, lab)}</option>'
         for lab in CHALLENGE_LABELS
     )
-    status_opts = '<option value="">owner_status</option>' + "".join(
-        f'<option value="{st}"{" selected" if filters.get("owner_status") == st else ""}>{st}</option>'
+    status_opts = '<option value="">판정 전체</option>' + "".join(
+        f'<option value="{st}"{" selected" if filters.get("owner_status") == st else ""}>{_OSTATUS_KO.get(st, st)}</option>'
         for st in OWNER_STATUSES
     )
     filter_form = f"""
 <form class="filters" method="get" action="/">
-  <select name="final_label">{label_opts}</select>
-  <select name="owner_status">{status_opts}</select>
-  <input name="language" placeholder="language" value="{_e(filters.get('language') or '')}">
-  <input name="created_date" placeholder="YYYY-MM-DD" value="{_e(filters.get('created_date') or '')}">
-  <input name="score_min" placeholder="score ≥" size="6" value="{_e(filters.get('score_min') or '')}">
-  <input name="score_max" placeholder="score ≤" size="6" value="{_e(filters.get('score_max') or '')}">
-  <button type="submit">필터</button>
-  <a href="/?owner_status=build_next" style="align-self:center">BUILD NEXT만</a>
+  <label>라벨<select name="final_label">{label_opts}</select></label>
+  <label>내 판정<select name="owner_status">{status_opts}</select></label>
+  <label>언어<input name="language" placeholder="예: Python" value="{_e(filters.get('language') or '')}"></label>
+  <label>날짜<input name="created_date" placeholder="YYYY-MM-DD" value="{_e(filters.get('created_date') or '')}"></label>
+  <label>점수 ≥<input name="score_min" inputmode="numeric" size="4" value="{_e(filters.get('score_min') or '')}"></label>
+  <label>점수 ≤<input name="score_max" inputmode="numeric" size="4" value="{_e(filters.get('score_max') or '')}"></label>
+  <button type="submit">필터 적용</button>
+  <a class="chip-link" href="/">초기화</a>
+  <a class="chip-link" href="/?owner_status=build_next">다음 구현만 보기</a>
 </form>"""
 
     rows = query_challenges(conn, filters)
@@ -242,18 +293,18 @@ def render_index(conn: sqlite3.Connection, filters: dict) -> str:
     <div class="chead">
       <span class="repo"><a href="/challenge/{c['id']}">{_e(_repo_name(c))}</a></span>
       {_label_badge(c['final_label'])}
-      <span class="ostatus">{_e(c['owner_status'])}</span>
-      <span class="score">clarity {_e(c['owner_clarity_score'])} · score {_e(c['score_total'])}</span>
+      {_ostatus_badge(c['owner_status'])}
     </div>
-    <p class="title">{_e(c['challenge_title'])}</p>
-    <p>{_e(c['one_line_challenge'])}</p>
-    <p class="muted">{_e(c.get('language') or '')} · {_e((c.get('created_at') or '')[:10])}</p>
+    <p class="title"><a href="/challenge/{c['id']}">{_e(c['challenge_title'])}</a></p>
+    <p class="oneline">{_e(c['one_line_challenge'])}</p>
+    <p class="meta">이해도 {_e(c['owner_clarity_score'])}/5 · 점수 {_e(c['score_total'])}/40 · {_e(c.get('language') or '언어 미상')} · {_e((c.get('created_at') or '')[:10])}</p>
   </article>"""
         )
-    body = summary + filter_form + (
-        "\n".join(cards) if cards else '<p class="muted">표시할 challenge가 없습니다.</p>'
+    count_line = f'<p class="count">{len(rows)}건 표시</p>'
+    body = summary + filter_form + count_line + (
+        "\n".join(cards) if cards else '<p class="muted">조건에 맞는 과제가 없습니다.</p>'
     )
-    return _page("RIM Challenge Dashboard", body)
+    return _page("RIM 챌린지 대시보드", body)
 
 
 def _repo_name(c: dict) -> str:
@@ -286,56 +337,53 @@ def render_detail(conn: sqlite3.Connection, challenge_id: int, tab: str, secrets
 
     tabs = "".join(
         f'<a href="/challenge/{challenge_id}?tab={key}" class="{"active" if key == tab else ""}">{label}</a>'
-        for key, label in [
-            ("owner_brief", "Owner Brief"),
-            ("screen_story", "Screen Story"),
-            ("challenge_card", "Challenge Card"),
-            ("implementation_prompt", "Implementation Prompt"),
-            ("validation_report", "Validation Report"),
-        ]
+        for key, label in _TAB_KO
     )
 
     action_buttons = "".join(
         f"""<form method="post" action="/challenge/{challenge_id}/review" style="display:inline">
 <input type="hidden" name="owner_status" value="{st}">
-<button type="submit" class="{'primary' if st == 'build_next' else ''}">{label}</button></form>"""
+<button type="submit" class="{'primary' if st == 'build_next' else ''}{' on' if c['owner_status'] == st else ''}">{label}</button></form>"""
         for st, label in _STATUS_ACTIONS
     )
 
     # 복사 버튼용 원문 (implementation prompt / challenge card md)
     copy_sources = ""
     copy_buttons = ""
-    for key, btn_label in (("implementation_prompt", "COPY IMPLEMENTATION PROMPT"), ("challenge_card", "COPY CHALLENGE CARD")):
+    for key, btn_label in (("implementation_prompt", "구현 지시문 복사"), ("challenge_card", "과제 카드 복사")):
         p = artifact_dir / _DETAIL_FILES[key]
         if artifact_dir.is_dir() and p.is_file():
             raw = redact_text(p.read_text(encoding="utf-8", errors="replace"), secrets)
             copy_sources += f'<pre id="copy-{key}" style="display:none">{_e(raw)}</pre>'
-            copy_buttons += f'<button type="button" onclick="copyText(\'copy-{key}\', this)">{btn_label}</button>'
+            copy_buttons += f'<button type="button" class="copy" onclick="copyText(\'copy-{key}\', this)">{btn_label}</button>'
 
     body = f"""
+<p class="back"><a href="/">← 목록으로</a></p>
 <section class="summary">
   <div class="chead">
     <span class="repo"><a href="{_e(c.get('repo_url'))}" target="_blank" rel="noopener">{_e(_repo_name(c))}</a></span>
     {_label_badge(c['final_label'])}
-    <span class="ostatus">{_e(c['owner_status'])}</span>
-    <span class="score">clarity {_e(c['owner_clarity_score'])} · score {_e(c['score_total'])}</span>
+    {_ostatus_badge(c['owner_status'])}
   </div>
   <p class="title">{_e(c['challenge_title'])}</p>
-  <p>{_e(c['one_line_challenge'])}</p>
+  <p class="oneline">{_e(c['one_line_challenge'])}</p>
+  <p class="meta">이해도 {_e(c['owner_clarity_score'])}/5 · 점수 {_e(c['score_total'])}/40</p>
 </section>
 <section class="panel">
-  <div class="actions">{action_buttons}{copy_buttons}</div>
-  <form method="post" action="/challenge/{challenge_id}/review" style="margin-top:10px">
+  <h2 class="sec-h">내 판정</h2>
+  <div class="actions">{action_buttons}</div>
+  <div class="actions copy-row">{copy_buttons}</div>
+  <form method="post" action="/challenge/{challenge_id}/review" style="margin-top:12px">
     <input type="hidden" name="owner_status" value="{_e(c['owner_status'])}">
-    <textarea name="note" rows="2" placeholder="note">{_e(c.get('owner_note') or '')}</textarea>
-    <div class="actions"><button type="submit">노트 저장</button></div>
+    <textarea name="note" rows="2" placeholder="메모를 남기세요">{_e(c.get('owner_note') or '')}</textarea>
+    <div class="actions"><button type="submit">메모 저장</button></div>
   </form>
 </section>
 <div class="tabs">{tabs}</div>
 <section class="panel"><pre>{_e(content)}</pre></section>
 {copy_sources}
 """
-    return _page(f"Challenge #{challenge_id}", body)
+    return _page(f"챌린지 #{challenge_id}", body)
 
 
 # ---------------------------------------------------------------- HTTP 서버
