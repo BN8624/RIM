@@ -1,6 +1,6 @@
 # Repo Idea Card
 
-레포: pallets/click
+레포: BN8624/RIM
 
 ## 판정
 KEEP
@@ -12,61 +12,62 @@ NO
 8
 
 ## 한 줄 결론
-데코레이터 기반의 선언적 CLI 구성 패턴은 Repo Idea Miner의 인터페이스를 빠르게 구축하는 데 최적이다.
+GitHub 레포의 다각도 증거를 수집해 LLM으로 냉정하게 평가하는 파이프라인 패턴이 매우 강력하며, 즉시 적용 가능하다.
 
 ## 왜 사람들이 관심 가졌나
-최소한의 코드로 복잡한 계층 구조의 CLI를 구축하고, 자동 도움말 생성 및 지연 로딩을 통해 효율적인 도구 제작이 가능하기 때문
+단순한 레포 요약이 아니라, README의 자기홍보를 걷어내고 실제 사용자 고통(Pain Point)과 구현 가능성을 기반으로 아이디어의 가치를 빠르게 판단하고 싶어함.
 
 ## 실제 사용자 고통
-- 도움말 파라미터 자동 해결 버그
-- 쉘 완성(shell completion) 시 '=' 구분자 처리 미흡
-- Windows 환경의 프롬프트 출력 유출 문제
+- 수많은 오픈소스 레포지토리 중 실제로 가치 있는 아이디어를 찾는 데 시간이 너무 많이 걸림
+- README의 과장된 설명과 실제 구현 수준/사용자 반응 사이의 괴리가 큼
 
 ## 기능 요청 신호
-- 다중 옵션(multiple=True) 시 메타변수에 말줄임표(...) 자동 추가
-- 초보자를 위한 CLI 기초 튜토리얼 제공
+- 관심사 키워드 기반의 타겟팅 점수 계산 및 정렬 기능
+- LLM의 긍정 편향을 방지하는 스코어 상한선(Ceiling) 검증 로직
 
 ## 워크플로우/자동화 신호
-- 복잡한 CLI 구조를 시각적으로 설명하기 위한 자동화된 스크린샷 생성 워크플로우 부족
+- LLM의 불안정한 JSON 출력으로 인한 파이프라인 중단
+- API 키 제한으로 인한 대량 분석의 어려움
 
 ## 가져올 패턴
-데코레이터를 이용한 명령어-옵션-인자의 선언적 매핑 및 커맨드 그룹핑(Nesting) 패턴
+Multi-source Evidence Collection (README, Issues, PR, Structure, Deps) $\rightarrow$ LLM Synthesis $\rightarrow$ Structured Verdict (KEEP/MAYBE/DROP)
 
 ## 버릴 것
-- Python 2 관련 레거시 유틸리티
-- 단순 문서화 개선 이슈
+- 특정 모델(gemma-4-31b-it)에 종속된 설정
+- 초기 단계의 낮은 스타 수 및 포크 수 (도구의 내적 완성도가 높음)
 
 ## Dependency / Runtime Risk
 - level: low
-- reason: 외부 의존성 없는 순수 파이썬 라이브러리로 런타임 리스크가 매우 낮음
+- reason: 표준 Python 라이브러리와 범용 API(GitHub, Google GenAI)만 사용하며, 복잡한 시스템 의존성이 없음.
 
 ## 내 현재 병목에 적용
-- area: 업무 자동화/OCR
+- area: 아이디어 채굴
 - related_project: Repo Idea Miner
-- reason: Repo Idea Miner의 사용자 접점인 CLI 인터페이스를 전문적이고 확장 가능하게 구축하기 위해 필수적인 패턴임
+- reason: 레포지토리 분석을 통해 유망한 아이디어를 식별하고 필터링하는 프로세스 자체가 이 프로젝트의 핵심 목적임.
 
 ## 1일 MVP
 - status: 가능
-- feature: 기본 CLI 명령어 체계 구축
-- input: 명령어 및 옵션 정의 데코레이터 코드
-- output: 자동 생성된 Help 페이지 및 파싱된 인자값
-- excluded_scope: 복잡한 쉘 완성 스크립트 커스텀, OS별 특수 프롬프트 처리
-- reason: 라이브러리 설치 후 데코레이터 몇 개만으로 즉시 동작하는 CLI 구현 가능
+- feature: 단일 레포 URL 입력 시 README와 최신 Issue를 수집하여 KEEP/DROP 판단 카드를 생성하는 CLI
+- input: GitHub Repository URL
+- output: Markdown 형식의 Idea Card (판정, 근거, 핵심 패턴 포함)
+- excluded_scope: 검색어 기반 대량 후보 분석, API 키 라운드 로빈 및 페일오버, 상세한 검증 리포트 생성
+- reason: 핵심 파이프라인(수집 $\rightarrow$ 분석 $\rightarrow$ 출력)이 이미 모듈화되어 있어 빠르게 구현 가능함.
 
 ## 1일 Pattern PoC
 - status: 가능
-- idea: 명령어 중첩(Nesting)을 통한 기능별 그룹화 PoC
-- input: 그룹 명령어(Group)와 서브 명령어(Command) 정의
-- output: 계층 구조의 CLI 실행 결과
-- reason: Click의 핵심 기능인 @click.group()을 통해 즉시 검증 가능
+- idea: LLM의 긍정 편향을 막기 위한 'Score Ceiling Validator'와 '증거 기반 부정 분석' 프롬프트 패턴 구현
+- input: 레포지토리 분석 결과 JSON
+- output: 보정된 최종 점수 및 판정 결과
+- reason: 단순 요약 LLM과 차별화되는 '비판적 분석' 로직을 POC로 검증할 가치가 높음.
 
 ## 만들면 망하는 이유
-- 이미 너무 유명한 라이브러리라 새로운 기술적 발견이나 독창적 아이디어로 보기 어려움
-- 단순 라이브러리 도입에 그칠 경우 아키텍처적 성장이 없음
+- LLM이 증거를 무시하고 README의 홍보 문구에 휩쓸려 모든 레포를 KEEP으로 판정할 경우 도구의 가치가 상실됨
+- GitHub API Rate Limit으로 인해 대량의 레포지토리를 분석할 때 병목이 발생함
 
 ## 왜 이 판정인가
-- CLI 도구 제작에 있어 업계 표준에 가까운 완성도를 제공함
-- 1일 MVP 구현이 매우 쉬우며, 확장성이 뛰어나 프로젝트 성장 단계에 맞춰 기능을 추가하기 좋음
+- 단순 요약이 아니라 '버리기 위한 분석'이라는 관점이 명확하며, 이를 위한 장치(Ceiling Validator 등)가 설계되어 있음
+- JSON 복구, Pydantic 검증, Secret Redaction 등 LLM 파이프라인의 실무적 안정성을 높이는 패턴들이 매우 잘 구현되어 있음
+- 테스트 코드가 매우 촘촘하게 작성되어 있어 코드 신뢰도가 높음
 
 ## 다음 행동
-argparse, typer 등 유사 CLI 라이브러리와의 생산성 비교 분석
+유사 레포 3개와 비교

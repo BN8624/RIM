@@ -3,7 +3,44 @@
   "files_found": [
     "pyproject.toml"
   ],
-  "entries": [],
+  "entries": [
+    {
+      "file": "pyproject.toml",
+      "name": "google-genai>=1.0.0",
+      "origin": "RUNTIME"
+    },
+    {
+      "file": "pyproject.toml",
+      "name": "pydantic>=2.5",
+      "origin": "RUNTIME"
+    },
+    {
+      "file": "pyproject.toml",
+      "name": "python-dotenv>=1.0",
+      "origin": "RUNTIME"
+    },
+    {
+      "file": "pyproject.toml",
+      "name": "requests>=2.31",
+      "origin": "RUNTIME"
+    },
+    {
+      "file": "pyproject.toml",
+      "name": "pytest>=8",
+      "origin": "DEV_TEST"
+    }
+  ],
   "docker": null,
-  "risk_keyword_hits": []
+  "risk_keyword_hits": [
+    {
+      "keyword": "docker",
+      "where": "README",
+      "origin": "README_ONLY"
+    },
+    {
+      "keyword": "worker",
+      "where": "README",
+      "origin": "README_ONLY"
+    }
+  ]
 }

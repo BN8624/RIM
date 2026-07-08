@@ -1,34 +1,28 @@
 {
-  "owner": "pallets",
-  "repo": "click",
-  "full_name": "pallets/click",
-  "description": "Python composable command line interface toolkit",
-  "stars": 17566,
-  "forks": 1846,
-  "watchers": 182,
-  "topics": [
-    "cli",
-    "click",
-    "pallets",
-    "python"
-  ],
+  "owner": "BN8624",
+  "repo": "RIM",
+  "full_name": "BN8624/RIM",
+  "description": null,
+  "stars": 0,
+  "forks": 0,
+  "watchers": 0,
+  "topics": [],
   "primary_language": "Python",
   "languages": [
-    "Python",
-    "Shell"
+    "Python"
   ],
-  "updated_at": "2026-07-08T05:57:17Z",
-  "created_at": "2014-04-24T09:52:19Z",
-  "pushed_at": "2026-07-08T05:57:12Z",
+  "updated_at": "2026-07-08T07:29:58Z",
+  "created_at": "2026-07-08T06:03:53Z",
+  "pushed_at": "2026-07-08T07:29:45Z",
   "archived": false,
   "disabled": false,
   "fork": false,
   "is_template": false,
   "mirror_url": null,
-  "open_issues_count": 99,
-  "license": "BSD-3-Clause",
-  "homepage": "https://click.palletsprojects.com",
+  "open_issues_count": 0,
+  "license": null,
+  "homepage": null,
   "default_branch": "main",
-  "size": 5022,
-  "html_url": "https://github.com/pallets/click"
+  "size": 113,
+  "html_url": "https://github.com/BN8624/RIM"
 }

@@ -1,18 +1,18 @@
 {
-  "claimed_core_value": "최소한의 코드로 구성 가능하며 아름다운 명령줄 인터페이스(CLI)를 구축할 수 있게 해주는 'CLI 제작 키트'",
+  "claimed_core_value": "GitHub 레포지토리의 다양한 증거(README, Issues, PR, 구조, 의존성)를 분석하여, 자기홍보를 배제하고 실제 사용자 고통을 식별함으로써 아이디어의 채택 여부(KEEP/MAYBE/DROP)를 5분 안에 빠르게 판단하게 하는 것",
   "readme_attractions": [
-    "명령어의 임의 중첩(Arbitrary nesting) 지원",
-    "자동 도움말 페이지 생성",
-    "런타임 시 서브커맨드의 지연 로딩(Lazy loading) 지원",
-    "높은 설정 가능성과 합리적인 기본값 제공"
+    "README, Issues, PR, 파일 구조, 의존성 증거를 종합적으로 수집 및 분석하는 파이프라인",
+    "빠른 의사결정을 위한 '아이디어 카드' 및 비교 리포트 생성",
+    "관심사 키워드 매칭을 통한 후보군 재정렬 및 타겟팅 점수(targeted_score) 계산 기능",
+    "JSON 구문 복구, Pydantic 검증, Secret Redaction, Score Ceiling Validator 등 LLM 출력의 신뢰성을 높이는 장치",
+    "다수의 Google AI Studio API 키를 활용한 라운드 로빈 및 페일오버 지원"
   ],
   "overclaim_risks": [
-    "인터페이스가 '아름답다(beautiful)'는 주관적 주장",
-    "개발 과정이 '빠르고 즐겁다(quick and fun)'는 감성적 소구",
-    "CLI API 구현 시 발생하는 '모든 좌절을 방지(preventing any frustration)'한다는 과감한 약속"
+    " '5분 안에 판단을 내릴 수 있다'는 주장은 LLM의 응답 속도와 분석 대상 레포지토리의 규모에 따라 달라질 수 있는 주관적 수치임",
+    " '자기홍보와 실제 사용자 고통을 분리'한다는 분석 능력은 프롬프트 설계에 의존하며, 실제 분석 정확도에 대한 객관적 지표가 없음"
   ],
   "unverifiable_points": [
-    "최소한의 코드로 구현 가능하다는 상대적 기준",
-    "의도한 CLI API를 구현하지 못하는 상황을 완전히 방지할 수 있는지 여부"
+    "Score Ceiling Validator가 실제로 'KEEP' 판정의 남발을 효과적으로 방지하는지 여부",
+    "targeted_score 기반의 정렬이 실제로 더 가치 있는 아이디어를 찾아내는 데 기여하는지에 대한 실증적 근거"
   ]
 }

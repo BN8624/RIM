@@ -84,206 +84,256 @@ Use the exact schema.
 If evidence is insufficient, use "불확실" or "unknown" rather than inventing facts.
 
 === DETERMINISTIC ISSUE STATS (copy into issue_signal_stats) ===
-{"sampled_issue_count": 8, "classified_issue_count": 7, "defect_count": 5, "feature_request_count": 6, "workflow_pain_count": 5, "confusion_count": 4, "install_env_version_count": 1, "noise_count": 1, "product_pain_count": 5, "confidence": "high"}
+{"sampled_issue_count": 0, "classified_issue_count": 0, "defect_count": 0, "feature_request_count": 0, "workflow_pain_count": 0, "confusion_count": 0, "install_env_version_count": 0, "noise_count": 0, "product_pain_count": 0, "confidence": "low"}
 
 === README SCOUT ===
-{"claimed_core_value": "최소한의 코드로 구성 가능하며 아름다운 명령줄 인터페이스(CLI)를 구축할 수 있게 해주는 'CLI 제작 키트'", "readme_attractions": ["명령어의 임의 중첩(Arbitrary nesting) 지원", "자동 도움말 페이지 생성", "런타임 시 서브커맨드의 지연 로딩(Lazy loading) 지원", "높은 설정 가능성과 합리적인 기본값 제공"], "overclaim_risks": ["인터페이스가 '아름답다(beautiful)'는 주관적 주장", "개발 과정이 '빠르고 즐겁다(quick and fun)'는 감성적 소구", "CLI API 구현 시 발생하는 '모든 좌절을 방지(preventing any frustration)'한다는 과감한 약속"], "unverifiable_points": ["최소한의 코드로 구현 가능하다는 상대적 기준", "의도한 CLI API를 구현하지 못하는 상황을 완전히 방지할 수 있는지 여부"]}
+{"claimed_core_value": "GitHub 레포지토리의 다양한 증거(README, Issues, PR, 구조, 의존성)를 분석하여, 자기홍보를 배제하고 실제 사용자 고통을 식별함으로써 아이디어의 채택 여부(KEEP/MAYBE/DROP)를 5분 안에 빠르게 판단하게 하는 것", "readme_attractions": ["README, Issues, PR, 파일 구조, 의존성 증거를 종합적으로 수집 및 분석하는 파이프라인", "빠른 의사결정을 위한 '아이디어 카드' 및 비교 리포트 생성", "관심사 키워드 매칭을 통한 후보군 재정렬 및 타겟팅 점수(targeted_score) 계산 기능", "JSON 구문 복구, Pydantic 검증, Secret Redaction, Score Ceiling Validator 등 LLM 출력의 신뢰성을 높이는 장치", "다수의 Google AI Studio API 키를 활용한 라운드 로빈 및 페일오버 지원"], "overclaim_risks": [" '5분 안에 판단을 내릴 수 있다'는 주장은 LLM의 응답 속도와 분석 대상 레포지토리의 규모에 따라 달라질 수 있는 주관적 수치임", " '자기홍보와 실제 사용자 고통을 분리'한다는 분석 능력은 프롬프트 설계에 의존하며, 실제 분석 정확도에 대한 객관적 지표가 없음"], "unverifiable_points": ["Score Ceiling Validator가 실제로 'KEEP' 판정의 남발을 효과적으로 방지하는지 여부", "targeted_score 기반의 정렬이 실제로 더 가치 있는 아이디어를 찾아내는 데 기여하는지에 대한 실증적 근거"]}
 
 === PAIN SCOUT ===
-{"user_pain": ["도움말(help) 파라미터의 자동 해결(automatic resolution)이 문서와 다르게 작동하지 않는 버그", "bash 및 zsh에서 롱 옵션 사용 시 '='를 사용하여 값을 구분할 때 쉘 완성(shell completion)이 제대로 작동하지 않음", "isolated_filesystem() 유틸리티가 스레드 세이프(thread safe)하지 않아 발생하는 문제", "Windows 환경에서 prompt() 및 confirm(err=True) 사용 시 일부 프롬프트 텍스트가 stdout으로 유출되어 JSON 파싱 등을 방해함"], "feature_requests": ["multiple=True 설정 시 메타변수에 자동으로 말줄임표(...)를 추가하여 사용자에게 반복 가능함을 시각적으로 알리는 기능", "CLI 경험이 없는 개발자를 위한 기초 커맨드 라인 튜토리얼 제공"], "workflow_pain": ["문서 내에서 복잡한 CLI 구조(서브 커맨드, 옵션 등)를 직관적으로 설명하기 위한 스크린샷 및 시각적 가이드 생성 워크플로우 부족"], "noise_issues": ["Python 2 전용 유틸리티 및 사용 빈도가 낮은 유틸리티 제거 작업", "AI 생성 스팸 PR"], "bike_shedding_notes": ["스크린샷 워크플로우 추가(#3081) 이슈에서 구현 도구, CI 연동 방식, 이미지 품질 등 세부 구현 방법론에 대한 논의가 많음"]}
+{"user_pain": ["불확실"], "feature_requests": ["불확실"], "workflow_pain": ["불확실"], "noise_issues": ["불확실"], "bike_shedding_notes": ["불확실"]}
 
 === STRUCTURE / RISK SCOUT ===
-{"implementation_weight": "light", "runtime_risk_level": "low", "runtime_risk_reason": "외부 서비스 의존성이 없는 순수 파이썬 라이브러리로, 표준 라이브러리 기반의 CLI 파싱 기능을 수행하므로 런타임 리스크가 매우 낮음.", "dev_vs_runtime_notes": ["런타임 의존성은 거의 없으며, pyproject.toml을 통해 테스트 및 문서화 관련 dev dependency가 관리됨"], "pattern_poc_feasibility": "가능"}
+{"implementation_weight": "medium", "runtime_risk_level": "low", "runtime_risk_reason": "외부 API(GitHub, Google GenAI) 의존성이 주된 리스크이며, 시스템 레벨의 복잡한 의존성이나 무거운 런타임 요구사항이 없음.", "dev_vs_runtime_notes": ["Runtime: google-genai, pydantic, python-dotenv, requests", "Dev/Test: pytest"], "pattern_poc_feasibility": "가능"}
 
 === EVIDENCE PACKET ===
 # Evidence Packet
 
 ## Repo Metadata
 status: OK
-- full_name: pallets/click
-- description: Python composable command line interface toolkit
-- stars: 17566 / forks: 1846 / watchers: 182
-- topics: cli, click, pallets, python
-- primary_language: Python / languages: Python, Shell
-- created_at: 2014-04-24T09:52:19Z / updated_at: 2026-07-08T05:57:17Z / pushed_at: 2026-07-08T05:57:12Z
+- full_name: BN8624/RIM
+- description: None
+- stars: 0 / forks: 0 / watchers: 0
+- topics: (없음)
+- primary_language: Python / languages: Python
+- created_at: 2026-07-08T06:03:53Z / updated_at: 2026-07-08T07:29:58Z / pushed_at: 2026-07-08T07:29:45Z
 - archived: NO / disabled: NO / fork: NO
-- open_issues_count: 99
-- license: BSD-3-Clause / homepage: https://click.palletsprojects.com
-- default_branch: main / size: 5022
+- open_issues_count: 0
+- license: None / homepage: None
+- default_branch: main / size: 113
 
 ## Input Mode
 direct
 
 ## Preflight
-status: PROCEED
-reason: 정상 진행
+status: LOW_SIGNAL_PROCEED
+reason: 낮은 신호로 계속 진행: star 수 낮음, fork 수 낮음, issue 적음
 
 ## README Signal
 status: OK
-- length: 1778
-- has_install: NO / has_usage_example: YES / has_features: YES
-- has_demo_or_docs_link: YES / mentions_api: YES / mentions_docker: NO
-- external_service_keywords: (없음)
+- length: 3624
+- has_install: YES / has_usage_example: YES / has_features: NO
+- has_demo_or_docs_link: YES / mentions_api: YES / mentions_docker: YES
+- external_service_keywords: docker, worker
 
 ### README Excerpt
 ```
-<div align="center"><img src="https://raw.githubusercontent.com/pallets/click/refs/heads/stable/docs/_static/click-name.svg" alt="" height="150"></div>
+# Repo Idea Miner
 
-# Click
+GitHub 레포지토리 URL 또는 검색어를 입력받아 README / Issues / PR / 파일 구조 / dependency evidence를 수집·분석하고, 5분 안에 **KEEP / MAYBE / DROP** 판단을 내릴 수 있는 아이디어 카드와 비교 리포트를 생성하는 Python CLI 도구입니다.
 
-Click is a Python package for creating beautiful command line interfaces
-in a composable way with as little code as necessary. It's the "Command
-Line Interface Creation Kit". It's highly configurable but comes with
-sensible defaults out of the box.
+이 도구는 레포를 긍정적으로 요약하는 도구가 아닙니다. README의 자기홍보와 실제 사용자 고통을 분리하고, 별로인 아이디어는 빠르게 버리게 하는 것이 목적입니다.
 
-It aims to make the process of writing command line tools quick and fun
-while also preventing any frustration caused by the inability to
-implement an intended CLI API.
+## 설치
 
-Click in three points:
+Python 3.11 이상이 필요합니다.
 
--   Arbitrary nesting of commands
--   Automatic help page generation
--   Supports lazy loading of subcommands at runtime
-
-
-## A Simple Example
-
-```python
-import click
-
-@click.command()
-@click.option("--count", default=1, help="Number of greetings.")
-@click.option("--name", prompt="Your name", help="The person to greet.")
-def hello(count, name):
-    """Simple program that greets NAME for a total of COUNT times."""
-    for _ in range(count):
-        click.echo(f"Hello, {name}!")
-
-if __name__ == '__main__':
-    hello()
+```bash
+git clone https://github.com/BN8624/RIM.git
+cd RIM
+pip install -e ".[dev]"
 ```
 
+## 설정
+
+`.env.example`을 `.env`로 복사하고 인증 정보를 넣습니다.
+
+```bash
+cp .env.example .env
 ```
-$ python hello.py --count=3
-Your name: Click
-Hello, Click!
-Hello, Click!
-Hello, Click!
+
+- `GITHUB_TOKEN` — GitHub API 토큰
+- `GOOGLE_API_KEY_1` ~ `GOOGLE_API_KEY_11` — Google AI Studio 프로젝트별 독립 API key (일부만 넣어도 동작)
+- `RIM_GEMMA_MODEL` — 기본값 `gemma-4-31b-it`
+- 나머지 retry/backoff/timeout 설정은 `.env.example` 참고
+
+`.env`는 `.gitignore`에 의해 커밋되지 않습니다. key 값은 어떤 산출물/로그에도 기록되지 않으며 key index(1~11)만 기록됩니다.
+
+## 사용법
+
+### 단일 레포 분석
+
+```bash
+python -m repo_idea_miner run \
+  --repo https://github.com/OWNER/REPO \
+  --mode live \
+  --input-mode direct
 ```
 
+- `--mode mock|live` (기본 mock): mock은 외부 LLM 호출 없이 파이프라인 구조를 검증
+- `--input-mode direct|search` (기본 direct): direct는 낮은 star 수만으로 hard drop하지 않음
+- `--output-dir` (기본 `runs/`), `--max-issues` (10), `--max-prs` (10), `--tree-depth` (2), `--no-llm` (mock alias)
 
-## Donate
+출력 (`runs/<timestamp>/`):
 
-The Pallets organization develops and supports Click and other popular
-packages. In order to grow the community of contributors and users, and
-allow the maintainers to devote more time to the projects, [please
-donate today][].
+```text
+idea_card.md          ← 5분 판단용 카드
+run_report.md         ← 실행/검증 리포트
+debug/evidence_packet.md
+debug/worker_outputs/*.json
+debug/judge_output_raw.json / judge_output_final.json
+debug/llm_calls.jsonl
+debug/prompts/ , debug/raw/
+```
 
-[please donate today]: https://palletsprojects.com/donate
+### 검색어 기반 후보 분석
 
-## Contributing
+```bash
+python -m repo_idea_miner search \
+  --query "automation workflow python" \
+  --limit 30 \
+  --top 10 \
+  --mode live
+```
 
-See our [detailed contributing documentation][contrib] for many ways to
-contribute, including reporting issues, requesting features, asking or answering
-questions, and making PRs.
+옵션:
 
-[contrib]: https://palletsprojects.com/contributing/
+- `--targeted` — 관심사 키워드(automation, workflow, developer productivity, CLI, Python, OCR/document extraction, test automation, code review, simulation/game tool, repo analysis, idea mining)와 후보의 topics(가중치 2)·이름·설명·언어(가중치 1)를 매칭해 `targeted_score`를 계산하고, 점수 내림차순(동점 시 star 수)으로 후보를 재정렬합니다. 점수와 매칭 근거는 `candidates.json`의 `targeted_score`/`targeted_matched`에, 정렬 사용 여부는 `search_report.md`의 `targeted_sort`에 기록됩니다.
+- `--explore` — GitHub 검색을 updated 정렬로 전환해 넓게 탐색합니다.
 
+출력 (`runs/<timestamp>/`): `top_ideas.md`, `search_report.md`, `candidates.json`, `cards/OWNER_REPO_idea_card.md`, `repos/OWNER_REPO/…`
+
+### 산출물 검증
+
+```bash
+python -m repo_idea_miner validate runs/<timestamp>/
+```
+
+구조·JSON 스키마·secret 노출·필수 섹션을 검증합니다.
+
+## 테스트
+
+```bash
+pytest
+```
+
+URL 파싱, preflight, collector 필터, issue sampler/signal tag, bike-shedding, dependency origin, JSON validation/repair, length truncation, score ceiling, renderer, secret redaction, key pool round-robin/failover, retry-after/backoff, timeout 설정을 모두 커버합니다.
+
+## 아키텍처 요약
+
+```text
+수집 (github_api) → preflight → evidence_packet
+  → Bouncer → README Scout / Pain Scout / Structure·Risk Scout → Critic/Judge
+  → JSON parse (+syntax repair 1회) → Pydantic validation
+  → Score Ceiling Validator (KEEP 남발 방지, raw/final 분리 기록)
+  → Length truncation (실패가 아니라 축약)
+  → idea_card.md / run_report.md 렌더링 → secret redaction 검증
+```
+
+핵심 원칙:
+
+- LLM 출력은 Markd
 ```
 
 ## User Pain Signal
-status: OK
+status: MISSING
 
 ### Recent Open Issues
-- title: help not resolving automatically
-  - number: #2819
-  - labels: bug
-  - comments_count: 4
-  - unique_commenters_count: None
-  - maintainer_comment_ratio: None
-  - bot_comment_count: None
-  - bike_shedding_possible: NO
-  - updated_at: 2026-07-08T05:59:50Z
-  - signal_tags: defect_signal, feature_signal, workflow_signal, confusion_signal
-  - body_sample: From the docs:   The help parameter is implemented in Click in a very special manner. Unlike regular parameters it’s automatically added by Click for any command and it performs automatic conflict resolution. By default it’s called --help, but this can be changed. If a command itself implements a parameter with the same name, the default help parameter stops accepting it. There is a context setting that can be used to override the names of the help parameters called [help_option_names](https://c [...] From the docs:   The help parameter is implemented in Click in a very special manner. Unlike 
-- title: Remove Python 2 utilities and little used utilities
-  - number: #3481
-  - labels: f:prompt, f:help
-  - comments_count: 7
-  - unique_commenters_count: None
-  - maintainer_comment_ratio: None
-  - bot_comment_count: None
-  - bike_shedding_possible: NO
-  - updated_at: 2026-07-08T05:57:39Z
-  - signal_tags: feature_signal
-  - body_sample: Python2-centric utilities:   - `get_binary_stream` - `get_text_stream`  Little used Utilities:   - `wrap_text` - `getchar`  In the interest of making more time to focus on core click details, these utilities are planned to be deprecated in the next feature release, and removed from the public api in one after. If any of these are critical to your uses, please explain below, and we may consider other options.
-- title: Long option completion with = broken
-  - number: #2847
-  - labels: bug
-  - comments_count: 0
-  - unique_commenters_count: None
-  - maintainer_comment_ratio: None
-  - bot_comment_count: None
-  - bike_shedding_possible: NO
-  - updated_at: 2026-07-07T14:05:40Z
-  - signal_tags: defect_signal, feature_signal, workflow_signal, confusion_signal
-  - body_sample: When using Click shell completion in bash and zsh, long option completion is not working properly when = is used to separate the option from the value (e.g., `command --long-option=value` vs. `command --long-option value`). In zsh, the option being completed is replaced with the incomplete value or matched value, essentially "gobbling" up the option. In bash, the option isn't completed at all. I did not test fish.  ## Steps to reproduce the issue  1. Create the following script and place it in t [...] -------------------------------| | gobble --color= | gobble --color= | auto always never| --c
-- title: Automatically append ellipsis (`...`) to metavars when `multiple=True` in options
-  - number: #3652
-  - labels: f:help
-  - comments_count: 4
-  - unique_commenters_count: None
-  - maintainer_comment_ratio: None
-  - bot_comment_count: None
-  - bike_shedding_possible: NO
-  - updated_at: 2026-07-03T06:41:11Z
-  - signal_tags: defect_signal, feature_signal, workflow_signal
-  - body_sample: When building a command-line interface with `click.option(..., multiple=True)`, the auto-generated usage string does not visually signal to the user that the option can be repeated. For instance, an option --foo=FOO looks identical whether it accepts single or multiple arguments. This is different from the common convention for multi-value items in shell interfaces often suggests adding an ellipsis like `--foo=FOO...`  Expected behavior if option "foo" has `multiple=True`: ``` Usage: script.py [ [...] OPTIONS]  Options:   --foo TEXT...  A list of foo strings.   --help         Show this message
-- title: Add Screenshot workflow
-  - number: #3081
-  - labels: docs, good first issue
-  - comments_count: 15
-  - unique_commenters_count: None
-  - maintainer_comment_ratio: None
-  - bot_comment_count: None
-  - bike_shedding_possible: NO
-  - updated_at: 2026-06-27T08:33:50Z
-  - signal_tags: defect_signal, feature_signal, workflow_signal, confusion_signal, noise_signal
-  - body_sample: In a few places in the docs, it would be really nice to be able to run some code take a screen shot, and draw boxes around different parts. For example setup an example click app with multiple sub commands, options, epilog help, and arguments and then draw boxes and label the various blocks. Requirements:  - run locally  for doc generation (actually locally not calling out to api) - run in ci job (not calling out to external service) - No added dependencies that are not pip installable  - have t [...] he screen shots not be blurry (common problem) - draw boxes around various sections.   Conduc
+(없음)
 
 ### High Comment Open Issues
-- title: Introduction to the command line tutorial
-  - number: #3076
-  - labels: docs, good first issue
-  - comments_count: 16
-  - unique_commenters_count: 5
-  - maintainer_comment_ratio: 0.38
-  - bot_comment_count: 0
-  - bike_shedding_possible: NO
-  - updated_at: 2026-06-22T13:33:02Z
-  - signal_tags: confusion_signal
-  - body_sample: Developers coming to Click docs may or may not have command line experience. The command line is a big subject with a lot of cross platform differences. A tutorial which targets basic things you can do would be very helpful. The goal is the minimal amount to get started.   Requirements  - Written in myst - uses Diataxis principles  - Uses docs tabs so can eventually add multiple oses and shells - roughly 15 minutes for user to complete tutorial  - shows getting operating system information, dire [...] ctory vs file, file path, moving around, making a directory, making a file, editing a file, p
-- title: Add Screenshot workflow
-  - number: #3081
-  - labels: docs, good first issue
-  - comments_count: 15
-  - unique_commenters_count: 5
-  - maintainer_comment_ratio: 0.8
-  - bot_comment_count: 0
-  - bike_shedding_possible: YES
-  - updated_at: 2026-06-27T08:33:50Z
-  - signal_tags: defect_signal, feature_signal, workflow_signal, confusion_signal, noise_signal
-  - body_sample: In a few places in the docs, it would be really nice to be able to run some code take a screen shot, and draw boxes around different parts. For example setup an example click app with multiple sub commands, options, epilog help, and arguments and then draw boxes and label the various blocks. Requirements:  - run locally  for doc generation (actually locally not calling out to api) - run in ci job (not calling out to external service) - No added dependencies that are not pip installable  - have t [...] he screen shots not be blurry (common problem) - draw boxes around various sections.   Conduc
-- title: Remove Python 2 utilities and little used utilities
-  - number: #3481
-  - labels: f:prompt, f:help
-  - comments_count: 7
-  - unique_commenters_count: 3
-  - maintainer_comment_ratio: 1.0
-  - bot_comment_count: 0
-  - bike_shedding_possible: NO
-  - updated_at: 2026-07-08T05:57:39Z
-  - signal_tags: feature_signal
-  - body_sample: Python2-centric utilities:   - `get_binary_stream` - `get_text_stream`  Little used Utilities:   - `wrap_text` - `getchar`  In the interest of making more time to focus on core click details, these utilities are planned to be deprecated in the next feature release, and removed from the public api in one after. If any of these are critical to your us
-[증거 패킷이 길이 제한으로 잘렸습니다]
+(없음)
+
+### Recent Closed Issues
+(없음)
+
+## PR Signal
+status: MISSING
+
+### Recent Human PRs
+(없음)
+
+### Excluded Bot / Dependency PRs
+(없음)
+
+## Structure Signal
+status: OK
+
+### File Tree Depth 2
+```
+.env.example
+.gitignore
+README.md
+RIM_FANAL.md
+RIM저장소재검수및보완요구서.md
+SCOPE.md
+checklist.md
+pyproject.toml
+repo_idea_miner/
+repo_idea_miner/__init__.py
+repo_idea_miner/__main__.py
+repo_idea_miner/ceiling.py
+repo_idea_miner/cli.py
+repo_idea_miner/config.py
+repo_idea_miner/errors.py
+repo_idea_miner/evidence.py
+repo_idea_miner/github_api.py
+repo_idea_miner/jsonutil.py
+repo_idea_miner/key_pool.py
+repo_idea_miner/llm_client.py
+repo_idea_miner/pipeline.py
+repo_idea_miner/preflight.py
+repo_idea_miner/redaction.py
+repo_idea_miner/renderer.py
+repo_idea_miner/sampler.py
+repo_idea_miner/schemas.py
+repo_idea_miner/search_pipeline.py
+repo_idea_miner/signals.py
+repo_idea_miner/truncation.py
+repo_idea_miner/url_parser.py
+repo_idea_miner/validate_run.py
+repo_idea_miner/workers.py
+samples/
+samples/search_live/
+samples/single_repo_live/
+tests/
+tests/conftest.py
+tests/test_ceiling.py
+tests/test_collector.py
+tests/test_dependency.py
+tests/test_followup.py
+tests/test_json_repair.py
+tests/test_key_pool.py
+tests/test_llm_client.py
+tests/test_pipeline_mock.py
+tests/test_preflight.py
+tests/test_redaction.py
+tests/test_renderer.py
+tests/test_sampler.py
+tests/test_schema_validation.py
+tests/test_signals.py
+tests/test_truncation.py
+tests/test_url_parser.py
+```
+
+### Docs / Examples / Demo Paths
+(없음)
+
+## Dependency / Runtime Evidence
+status: OK
+- files_found: pyproject.toml
+- entries:
+  - [RUNTIME] google-genai>=1.0.0 (pyproject.toml)
+  - [RUNTIME] pydantic>=2.5 (pyproject.toml)
+  - [RUNTIME] python-dotenv>=1.0 (pyproject.toml)
+  - [RUNTIME] requests>=2.31 (pyproject.toml)
+  - [DEV_TEST] pytest>=8 (pyproject.toml)
+- risk_keyword_hits:
+  - docker @ README (origin=README_ONLY)
+  - worker @ README (origin=README_ONLY)
+
+## Missing Data
+(없음)
+
+## Collector Notes
+(없음)
+

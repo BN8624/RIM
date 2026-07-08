@@ -1,37 +1,37 @@
 # Run Report
 
 ## Input
-- repo: https://github.com/pallets/click
+- repo: https://github.com/BN8624/RIM
 - mode: live
 - input_mode: direct
-- timestamp: 20260708_062704
+- timestamp: 20260708_073247
 
 ## Preflight
-- status: PROCEED
-- reason: 정상 진행
+- status: LOW_SIGNAL_PROCEED
+- reason: 낮은 신호로 계속 진행: star 수 낮음, fork 수 낮음, issue 적음
 
 ## Collector Status
 - metadata: OK
 - readme: OK
-- issues: OK
-- prs: OK
+- issues: MISSING
+- prs: MISSING
 - file_tree: OK
 - dependency: OK
 
 ## Issue Sampler
-- sampled_issue_count: 8
+- sampled_issue_count: 0
 - sample_max_chars: 1500
 - template_sections_compressed: YES
-- defect_count: 5
-- feature_request_count: 6
-- workflow_pain_count: 5
-- confusion_count: 4
-- noise_count: 1
-- uncertain_count: 1
+- defect_count: 0
+- feature_request_count: 0
+- workflow_pain_count: 0
+- confusion_count: 0
+- noise_count: 0
+- uncertain_count: 0
 
 ## Comments Signal
-- high_comment_issue_count: 3
-- unique_commenters_available: YES
+- high_comment_issue_count: 0
+- unique_commenters_available: NO
 - bike_shedding_possible_count: 0
 
 ## LLM Key Pool
@@ -42,7 +42,7 @@
 - strategy: round_robin
 - used_key_indexes: [1, 2, 3, 4, 5, 6]
 - disabled_key_indexes: []
-- temp_failed_key_indexes: [1]
+- temp_failed_key_indexes: [5]
 - retry_count: 1
 - failover_count: 1
 - retry_backoff_strategy: exponential_jitter
