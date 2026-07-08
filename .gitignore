@@ -9,3 +9,6 @@ build/
 dist/
 .pytest_cache/
 .serena/
+challenge.db
+challenge.db-wal
+challenge.db-shm

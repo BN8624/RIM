@@ -87,6 +87,63 @@ def load_google_keys(env) -> dict[int, str]:
     return keys
 
 
+# ---------------------------------------------------------------- Challenge Mode
+
+def _get_float_list(env, key: str, default: list[float]) -> list[float]:
+    raw = (env.get(key) or "").strip()
+    if not raw:
+        return list(default)
+    try:
+        return [float(x.strip()) for x in raw.split(",") if x.strip()]
+    except ValueError:
+        return list(default)
+
+
+@dataclass
+class ChallengeMinerSettings:
+    """Challenge Miner(daemon)와 11-key controlled parallel pool 설정 (§17~§19)."""
+
+    seed_interval_minutes: int = 60
+    queue_refill_threshold: int = 100
+    queue_refill_target: int = 500
+    max_in_flight_per_key: int = 1
+    max_concurrent_keys: int = 11
+    key_min_interval_seconds: float = 1.0
+    key_daily_rpd_limit: int = 1500
+    transient_backoff_sequence: list[float] = field(default_factory=lambda: [30.0, 60.0, 120.0, 300.0])
+    timeout_backoff_sequence: list[float] = field(default_factory=lambda: [60.0, 120.0, 300.0])
+    backoff_reset_after_success: int = 3
+    respect_retry_after: bool = False
+    daily_usage_reset_hour: int = 0
+    daily_usage_timezone: str = "local"
+
+
+def load_challenge_miner_settings(env=None) -> ChallengeMinerSettings:
+    if env is None:
+        if load_dotenv is not None:
+            load_dotenv(Path.cwd() / ".env")
+        env = os.environ
+    return ChallengeMinerSettings(
+        seed_interval_minutes=_get_int(env, "RIM_SEED_INTERVAL_MINUTES", 60),
+        queue_refill_threshold=_get_int(env, "RIM_QUEUE_REFILL_THRESHOLD", 100),
+        queue_refill_target=_get_int(env, "RIM_QUEUE_REFILL_TARGET", 500),
+        max_in_flight_per_key=_get_int(env, "RIM_MAX_IN_FLIGHT_PER_KEY", 1),
+        max_concurrent_keys=_get_int(env, "RIM_MAX_CONCURRENT_KEYS", 11),
+        key_min_interval_seconds=_get_float(env, "RIM_KEY_MIN_INTERVAL_SECONDS", 1.0),
+        key_daily_rpd_limit=_get_int(env, "RIM_KEY_DAILY_RPD_LIMIT", 1500),
+        transient_backoff_sequence=_get_float_list(
+            env, "RIM_TRANSIENT_ERROR_BACKOFF_SEQUENCE_SECONDS", [30.0, 60.0, 120.0, 300.0]
+        ),
+        timeout_backoff_sequence=_get_float_list(
+            env, "RIM_TIMEOUT_BACKOFF_SEQUENCE_SECONDS", [60.0, 120.0, 300.0]
+        ),
+        backoff_reset_after_success=_get_int(env, "RIM_BACKOFF_RESET_AFTER_SUCCESS", 3),
+        respect_retry_after=_get_bool(env, "RIM_RESPECT_RETRY_AFTER", False),
+        daily_usage_reset_hour=_get_int(env, "RIM_DAILY_USAGE_RESET_HOUR", 0),
+        daily_usage_timezone=_get_str(env, "RIM_DAILY_USAGE_TIMEZONE", "local"),
+    )
+
+
 def load_settings(env=None, dotenv_path: str | Path | None = None) -> Settings:
     if env is None:
         if load_dotenv is not None:

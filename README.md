@@ -126,6 +126,103 @@ python -m repo_idea_miner serve runs/<timestamp>/ --host 0.0.0.0 --port 8787
 # → iPhone Safari: http://<TAILSCALE_IP>:8787/
 ```
 
+## Challenge Mode
+
+Challenge Mode는 GitHub 레포를 "제품 아이디어"가 아니라 **구현 도전 과제**로 변환하는 기능입니다. 기존 idea mode(run/search)의 KEEP/MAYBE/DROP 판정과는 목적이 다릅니다.
+
+- idea mode — 이 레포에서 아이디어를 가져올 만한가?
+- Challenge Mode — 이 레포의 핵심 상호작용과 어려운 구조를, Gemma/Codex/Claude가 쉬운 앱으로 축소하지 못하는 과제로 바꿀 수 있는가?
+
+핵심 필드는 두 개입니다.
+
+- **Difficulty Anchors** — 작게 줄여도 절대 삭제하면 안 되는 원본 레포의 핵심 난이도
+- **Forbidden Simplifications** — 구현자가 단순 검색창/링크 모음/TODO 앱으로 도망가지 못하게 막는 금지 목록
+
+판정 라벨은 `GOOD_CHALLENGE / TOO_EASY / TOO_BIG / NOT_MY_TASTE / STEAL_ONLY / UNCLEAR_TO_OWNER / DROP`입니다.
+
+- `GOOD_CHALLENGE` — 작게 만들 수 있지만 핵심 난이도가 살아 있음 (최우선)
+- `TOO_EASY` — 핵심 앵커가 약한 뻔한 과제 (낮은 우선순위)
+- `UNCLEAR_TO_OWNER` — 바이브코더가 읽어도 뭘 만들라는 건지 감이 안 옴 (owner_clarity_score < 3이면 자동 적용)
+
+### 단일 레포 Challenge 생성
+
+```bash
+python -m repo_idea_miner challenge --repo https://github.com/OWNER/REPO --mode live
+```
+
+출력 (`runs/<timestamp>/`):
+
+```text
+snapshot.json                 ← 수집 스냅샷
+owner_brief.{json,md}         ← 바이브코더용 쉬운 설명 (뭔지/왜 좋은지/뭘 훔칠지)
+screen_story.{json,md}        ← 실제 화면·조작 흐름 (첫 화면/누르는 것/30초 데모/실패 화면)
+challenge_card.{json,md}      ← 과제 정의 (Anchors/Forbidden/PoC~3일 확장/Pass·Fail 기준)
+implementation_prompt.md      ← 구현자(Claude/Codex/Gemma/외주)에게 그대로 복사해 넘기는 지시문
+validation_report.json        ← 스키마/산출물/secret 검증 결과
+viewer.html                   ← 모바일 정적 뷰어
+```
+
+**Owner Brief 읽는 법** — "이게 쉽게 말해 뭐냐"부터 "쉬운 버전과 뭐가 다르냐"까지 8개 질문에 답합니다. 30초 안에 감이 안 오면 그 과제는 UNCLEAR_TO_OWNER입니다. **Screen Story**는 추상 설명 없이 첫 화면과 누르는 순서, 실패한 화면(이렇게 되면 실패)을 설명합니다.
+
+**Implementation Prompt 넘기는 법** — `implementation_prompt.md`(또는 Dashboard의 COPY IMPLEMENTATION PROMPT 버튼)를 그대로 복사해 구현자에게 붙여넣으면 됩니다. 구현 목표/산출 파일/기술 제약/Difficulty Anchors/Forbidden Simplifications/Pass·Failure Criteria가 모두 포함돼 있습니다.
+
+repo 하나당 LLM 호출은 기본 1회(통합 ChallengePackage JSON)이고, markdown 4종은 로컬 renderer가 생성합니다.
+
+### 검색 기반 Challenge 생성
+
+```bash
+python -m repo_idea_miner challenge-search \
+  --query "stars:>10000 language:TypeScript" \
+  --limit 50 --top 20 --mode live
+```
+
+- `--limit` — GitHub Search에서 가져올 최대 repo 후보 수
+- `--top` — 중복 제거/필터(fork skip, archived 후순위)/정렬 후 실제 Challenge 생성 대상 수
+
+출력: `challenge_index.json`, `search_report.json`, `viewer.html`, `repos/OWNER__REPO/…`. 목록은 GOOD_CHALLENGE → STEAL_ONLY → … → TOO_EASY → DROP 순으로 정렬됩니다.
+
+### Challenge Miner (daemon)
+
+```bash
+python -m repo_idea_miner daemon              # 계속 실행
+python -m repo_idea_miner daemon --once       # 한 사이클만 (검증용)
+python -m repo_idea_miner status              # queue/완료/에러/key 상태
+python -m repo_idea_miner pause               # 새 작업 배정 중단 (진행 중 작업은 완료)
+python -m repo_idea_miner resume              # 재개
+```
+
+daemon은 seed query(기본 내장, `--seeds seeds.yaml`로 교체 가능)를 주기적으로 실행해 `repo_queue`를 보충하고, 가능한 key마다 작업을 배정해 ChallengePackage를 계속 생성합니다. 결과는 `challenge.db`와 `runs/`에 쌓입니다.
+
+**11-key controlled parallel pool** — key 1개당 동시 1작업, 최대 11개 key가 동시에 일합니다. 일부러 느리게 처리하지 않으며 전체 worker를 멈추지 않습니다.
+
+**429/500 처리** — 둘 다 짧은 일시 오류로 취급해 해당 key만 30초 cooldown하고, 같은 key에서 반복되면 60→120→300초로 늘립니다 (timeout은 60→120→300초). 다른 key들은 계속 작업합니다. 명확한 daily quota/RPD exhausted 메시지가 확인될 때만 exhausted 처리하며, 단순 429로 key를 장시간 정지시키지 않습니다. `daily_used`는 안전용 로컬 카운터로 로컬 날짜 00:00에 reset됩니다. 관련 설정은 `RIM_TRANSIENT_ERROR_BACKOFF_SEQUENCE_SECONDS` 등 환경변수로 조정합니다.
+
+### Challenge Dashboard
+
+```bash
+python -m repo_idea_miner dashboard --host 127.0.0.1 --port 8787
+```
+
+`challenge.db`를 읽는 로컬 웹 확인함입니다. Today 요약(오늘 생성/라벨별/에러/queue/key 상태), 필터(final_label/owner_status/language/날짜/score), 상세 탭(Owner Brief/Screen Story/Challenge Card/Implementation Prompt/Validation Report), 판정 버튼(SAVE/MAYBE/DROP/BUILD NEXT/MARK BUILT)과 COPY 버튼을 제공합니다. LLM 판정(final_label)과 사용자 판정(owner_status)은 분리 저장됩니다.
+
+특정 run의 `viewer.html`은 정적 artifact 확인용이고, Dashboard는 계속 쌓인 Challenge를 판정하는 확인함입니다 — 역할이 다릅니다.
+
+**보안 주의** — Dashboard에는 인증이 없습니다. 기본 host는 반드시 `127.0.0.1`이며, 아이폰 Safari 등에서 보려면 **Tailscale 등 사설망에서만** 명시적으로 `--host 0.0.0.0`을 사용하세요.
+
+### challenge.db
+
+Challenge Mode의 누적 저장소(SQLite)입니다. 기본 위치는 저장소 루트의 `challenge.db`(`--db`로 변경 가능, 커밋되지 않음)이고 `repos / repo_queue / challenges / owner_reviews / api_keys / events / settings` 테이블을 가집니다. `pause/resume`은 `settings.miner_paused`를 사용합니다.
+
+### Challenge 산출물 검증
+
+```bash
+python -m repo_idea_miner validate runs/<timestamp>/          # challenge run이면 자동으로 challenge 검증
+python -m repo_idea_miner validate-db --db challenge.db       # DB integrity/테이블/artifact_dir 정합성
+python -m repo_idea_miner validate runs/<timestamp>/ --db challenge.db  # 둘 다
+```
+
+스키마 통과, difficulty_anchors/forbidden_simplifications/pass·failure_criteria 비어 있지 않음, implementation_prompt.md에 Anchors/Forbidden 반영, viewer.html 존재·secret 미노출 등을 검사합니다.
+
 ## 테스트
 
 ```bash
