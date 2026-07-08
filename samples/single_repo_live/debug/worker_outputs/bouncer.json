@@ -1,0 +1,5 @@
+{
+  "bouncer_decision": "PROCEED",
+  "fast_drop": false,
+  "reason": "매우 유명하고 널리 사용되는 Python CLI 툴킷이며, 활발한 유지보수 상태와 명확한 문서화, 구체적인 이슈들이 존재하여 분석 가치가 매우 높음."
+}

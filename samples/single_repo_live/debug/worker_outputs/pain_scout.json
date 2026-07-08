@@ -1,0 +1,22 @@
+{
+  "user_pain": [
+    "도움말(help) 파라미터의 자동 해결(automatic resolution)이 문서와 다르게 작동하지 않는 버그",
+    "bash 및 zsh에서 롱 옵션 사용 시 '='를 사용하여 값을 구분할 때 쉘 완성(shell completion)이 제대로 작동하지 않음",
+    "isolated_filesystem() 유틸리티가 스레드 세이프(thread safe)하지 않아 발생하는 문제",
+    "Windows 환경에서 prompt() 및 confirm(err=True) 사용 시 일부 프롬프트 텍스트가 stdout으로 유출되어 JSON 파싱 등을 방해함"
+  ],
+  "feature_requests": [
+    "multiple=True 설정 시 메타변수에 자동으로 말줄임표(...)를 추가하여 사용자에게 반복 가능함을 시각적으로 알리는 기능",
+    "CLI 경험이 없는 개발자를 위한 기초 커맨드 라인 튜토리얼 제공"
+  ],
+  "workflow_pain": [
+    "문서 내에서 복잡한 CLI 구조(서브 커맨드, 옵션 등)를 직관적으로 설명하기 위한 스크린샷 및 시각적 가이드 생성 워크플로우 부족"
+  ],
+  "noise_issues": [
+    "Python 2 전용 유틸리티 및 사용 빈도가 낮은 유틸리티 제거 작업",
+    "AI 생성 스팸 PR"
+  ],
+  "bike_shedding_notes": [
+    "스크린샷 워크플로우 추가(#3081) 이슈에서 구현 도구, CI 연동 방식, 이미지 품질 등 세부 구현 방법론에 대한 논의가 많음"
+  ]
+}

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repo-idea-miner"
+version = "1.0.0"
+description = "GitHub 레포에서 KEEP/MAYBE/DROP 판단용 아이디어 카드를 생성하는 CLI"
+requires-python = ">=3.11"
+dependencies = [
+    "google-genai>=1.0.0",
+    "pydantic>=2.5",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+repo-idea-miner = "repo_idea_miner.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["repo_idea_miner*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

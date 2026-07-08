@@ -1,0 +1,9 @@
+{
+  "implementation_weight": "light",
+  "runtime_risk_level": "low",
+  "runtime_risk_reason": "외부 서비스 의존성이 없는 순수 파이썬 라이브러리로, 표준 라이브러리 기반의 CLI 파싱 기능을 수행하므로 런타임 리스크가 매우 낮음.",
+  "dev_vs_runtime_notes": [
+    "런타임 의존성은 거의 없으며, pyproject.toml을 통해 테스트 및 문서화 관련 dev dependency가 관리됨"
+  ],
+  "pattern_poc_feasibility": "가능"
+}

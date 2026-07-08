@@ -1,0 +1,427 @@
+{
+  "recent_open": [
+    {
+      "title": "help not resolving automatically",
+      "number": 2819,
+      "url": "https://github.com/pallets/click/issues/2819",
+      "state": "open",
+      "labels": [
+        "bug"
+      ],
+      "updated_at": "2026-07-08T05:59:50Z",
+      "created_at": "2024-12-15T02:14:28Z",
+      "closed_at": null,
+      "body_sample": "From the docs: \n\nThe help parameter is implemented in Click in a very special manner. Unlike regular parameters it’s automatically added by Click for any command and it performs automatic conflict resolution. By default it’s called --help, but this can be changed. If a command itself implements a parameter with the same name, the default help parameter stops accepting it. There is a context setting that can be used to override the names of the help parameters called [help_option_names](https://c\n[...]\nFrom the docs: \n\nThe help parameter is implemented in Click in a very special manner. Unlike regular parameters it’s automatically ad … and itself implements a parameter with the same name, the default help parameter stops accepting it. There is a context setting that can be used to override the names of the help parameters called [help_option_names](https://click.palletsprojects.com/en/stable/api/#click.Context.help_option_names).\n\nWhat is wrong: \nHelp does not automatically resolve if there is an\n[...]\nxt.help_option_names).\n\nWhat is wrong: \nHelp does not automatically resolve if there is an arg or kwarg called help. In the sample the file is called help.py\n\n``` \nimport click\n\n# This works \n@click.command()\n@click.argument('helps')\ndef this_works(helps):\n    print(helps)\n\n# > python -m help this\n# this\n\n# > python -m help --help\n# Usage: help\n[로그 압축됨]\n_ == '__main__':\n    #this_works()\n    #this_does_not_work()\n    this_does_not_work_also()\n\n```\n- Python version: 3.10.15\n- Cli",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal"
+      ],
+      "comments_count": 4,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Remove Python 2 utilities and little used utilities",
+      "number": 3481,
+      "url": "https://github.com/pallets/click/issues/3481",
+      "state": "open",
+      "labels": [
+        "f:prompt",
+        "f:help"
+      ],
+      "updated_at": "2026-07-08T05:57:39Z",
+      "created_at": "2026-05-19T19:05:29Z",
+      "closed_at": null,
+      "body_sample": "Python2-centric utilities: \n\n- `get_binary_stream`\n- `get_text_stream`\n\nLittle used Utilities: \n\n- `wrap_text`\n- `getchar`\n\nIn the interest of making more time to focus on core click details, these utilities are planned to be deprecated in the next feature release, and removed from the public api in one after. If any of these are critical to your uses, please explain below, and we may consider other options.",
+      "signal_tags": [
+        "feature_signal"
+      ],
+      "comments_count": 7,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Long option completion with = broken",
+      "number": 2847,
+      "url": "https://github.com/pallets/click/issues/2847",
+      "state": "open",
+      "labels": [
+        "bug"
+      ],
+      "updated_at": "2026-07-07T14:05:40Z",
+      "created_at": "2025-01-23T00:22:07Z",
+      "closed_at": null,
+      "body_sample": "When using Click shell completion in bash and zsh, long option completion is not working properly when = is used to separate the option from the value (e.g., `command --long-option=value` vs. `command --long-option value`). In zsh, the option being completed is replaced with the incomplete value or matched value, essentially \"gobbling\" up the option. In bash, the option isn't completed at all. I did not test fish.\n\n## Steps to reproduce the issue\n\n1. Create the following script and place it in t\n[...]\n-------------------------------|\n| gobble --color= | gobble --color= | auto always never| --color=auto --color=always --color=never |\n| gobble --color=a | gobble --color=a | auto always | --color=auto --color=always |\n| gobble --color=al | gobble --color=always | | |\n| gobble --color  | gobble --color | auto always never | |\n| gobble --color a | gobble --color a | auto always | |\n| gobble --color al | gobble --color always | | |\n\n\n## Environment:\n\n\n- Python version: 3.12.7\n- Click version: 8.1.8",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal"
+      ],
+      "comments_count": 0,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Automatically append ellipsis (`...`) to metavars when `multiple=True` in options",
+      "number": 3652,
+      "url": "https://github.com/pallets/click/issues/3652",
+      "state": "open",
+      "labels": [
+        "f:help"
+      ],
+      "updated_at": "2026-07-03T06:41:11Z",
+      "created_at": "2026-06-29T20:09:14Z",
+      "closed_at": null,
+      "body_sample": "When building a command-line interface with `click.option(..., multiple=True)`, the auto-generated usage string does not visually signal to the user that the option can be repeated. For instance, an option --foo=FOO looks identical whether it accepts single or multiple arguments. This is different from the common convention for multi-value items in shell interfaces often suggests adding an ellipsis like `--foo=FOO...`\n\nExpected behavior if option \"foo\" has `multiple=True`:\n```\nUsage: script.py [\n[...]\nOPTIONS]\n\nOptions:\n  --foo TEXT...  A list of foo strings.\n  --help         Show this message and exit.\n```",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal"
+      ],
+      "comments_count": 4,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Add Screenshot workflow",
+      "number": 3081,
+      "url": "https://github.com/pallets/click/issues/3081",
+      "state": "open",
+      "labels": [
+        "docs",
+        "good first issue"
+      ],
+      "updated_at": "2026-06-27T08:33:50Z",
+      "created_at": "2025-09-22T20:35:24Z",
+      "closed_at": null,
+      "body_sample": "In a few places in the docs, it would be really nice to be able to run some code take a screen shot, and draw boxes around different parts. For example setup an example click app with multiple sub commands, options, epilog help, and arguments and then draw boxes and label the various blocks. Requirements: \n- run locally  for doc generation (actually locally not calling out to api)\n- run in ci job (not calling out to external service)\n- No added dependencies that are not pip installable \n- have t\n[...]\nhe screen shots not be blurry (common problem)\n- draw boxes around various sections. \n\nConduct some research and propose some options. A maintainer will pick from the options. and you can implement it. Here is an example of what I was thinking is in the comments below.",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal",
+        "noise_signal"
+      ],
+      "comments_count": 15,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    }
+  ],
+  "high_comment_open": [
+    {
+      "title": "Introduction to the command line tutorial",
+      "number": 3076,
+      "url": "https://github.com/pallets/click/issues/3076",
+      "state": "open",
+      "labels": [
+        "docs",
+        "good first issue"
+      ],
+      "updated_at": "2026-06-22T13:33:02Z",
+      "created_at": "2025-09-21T18:40:56Z",
+      "closed_at": null,
+      "body_sample": "Developers coming to Click docs may or may not have command line experience. The command line is a big subject with a lot of cross platform differences. A tutorial which targets basic things you can do would be very helpful. The goal is the minimal amount to get started. \n\nRequirements \n- Written in myst\n- uses Diataxis principles \n- Uses docs tabs so can eventually add multiple oses and shells\n- roughly 15 minutes for user to complete tutorial \n- shows getting operating system information, dire\n[...]\nctory vs file, file path, moving around, making a directory, making a file, editing a file, printing file contents to the terminal, greping something, showing help for a cli \n- good quality links to deeper information on the subject",
+      "signal_tags": [
+        "confusion_signal"
+      ],
+      "comments_count": 16,
+      "unique_commenters_count": 5,
+      "maintainer_comment_ratio": 0.38,
+      "bot_comment_count": 0,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Add Screenshot workflow",
+      "number": 3081,
+      "url": "https://github.com/pallets/click/issues/3081",
+      "state": "open",
+      "labels": [
+        "docs",
+        "good first issue"
+      ],
+      "updated_at": "2026-06-27T08:33:50Z",
+      "created_at": "2025-09-22T20:35:24Z",
+      "closed_at": null,
+      "body_sample": "In a few places in the docs, it would be really nice to be able to run some code take a screen shot, and draw boxes around different parts. For example setup an example click app with multiple sub commands, options, epilog help, and arguments and then draw boxes and label the various blocks. Requirements: \n- run locally  for doc generation (actually locally not calling out to api)\n- run in ci job (not calling out to external service)\n- No added dependencies that are not pip installable \n- have t\n[...]\nhe screen shots not be blurry (common problem)\n- draw boxes around various sections. \n\nConduct some research and propose some options. A maintainer will pick from the options. and you can implement it. Here is an example of what I was thinking is in the comments below.",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal",
+        "noise_signal"
+      ],
+      "comments_count": 15,
+      "unique_commenters_count": 5,
+      "maintainer_comment_ratio": 0.8,
+      "bot_comment_count": 0,
+      "bike_shedding_possible": true
+    },
+    {
+      "title": "Remove Python 2 utilities and little used utilities",
+      "number": 3481,
+      "url": "https://github.com/pallets/click/issues/3481",
+      "state": "open",
+      "labels": [
+        "f:prompt",
+        "f:help"
+      ],
+      "updated_at": "2026-07-08T05:57:39Z",
+      "created_at": "2026-05-19T19:05:29Z",
+      "closed_at": null,
+      "body_sample": "Python2-centric utilities: \n\n- `get_binary_stream`\n- `get_text_stream`\n\nLittle used Utilities: \n\n- `wrap_text`\n- `getchar`\n\nIn the interest of making more time to focus on core click details, these utilities are planned to be deprecated in the next feature release, and removed from the public api in one after. If any of these are critical to your uses, please explain below, and we may consider other options.",
+      "signal_tags": [
+        "feature_signal"
+      ],
+      "comments_count": 7,
+      "unique_commenters_count": 3,
+      "maintainer_comment_ratio": 1.0,
+      "bot_comment_count": 0,
+      "bike_shedding_possible": false
+    }
+  ],
+  "recent_closed": [
+    {
+      "title": "`isolated_filesystem()` is not thread safe",
+      "number": 3501,
+      "url": "https://github.com/pallets/click/issues/3501",
+      "state": "closed",
+      "labels": [
+        "bug",
+        "f:test runner"
+      ],
+      "updated_at": "2026-07-08T05:58:55Z",
+      "created_at": "2026-05-22T11:53:56Z",
+      "closed_at": "2026-05-29T20:05:05Z",
+      "body_sample": "This is a follow-up on https://github.com/pallets/click/issues/2899, to cover for @Rowlando13's concerns that `isolated_filesystem()` is not thread safe: https://github.com/pallets/click/issues/2899#issuecomment-2870786207",
+      "signal_tags": [
+        "uncertain_signal"
+      ],
+      "comments_count": 9,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "8.4.x: prompt/confirm(err=True) leaks prompt tail and CliRunner reply echo to stdout on Windows",
+      "number": 3662,
+      "url": "https://github.com/pallets/click/issues/3662",
+      "state": "closed",
+      "labels": [],
+      "updated_at": "2026-07-06T15:58:04Z",
+      "created_at": "2026-07-04T10:32:35Z",
+      "closed_at": "2026-07-06T15:58:04Z",
+      "body_sample": "On the stable 8.4.x line, `prompt()` / `confirm()` with `err=True` still write part of the prompt interaction to **stdout** on Windows, because `_readline_prompt`'s `WIN` branch bypasses the stderr redirect that the POSIX branch applies:\n\n```python\n# src/click/termui.py (8.4.2)\ndef _readline_prompt(func, text, err):\n    if WIN:\n        echo(text[:-1], nl=False, err=err)   # prompt body honors err ...\n        return func(text[-1:])               # ... but this call is NOT redirected\n    if err:\n \n[...]\nbecomes `\" n\\n\" + <payload>`. Any test doing `json.loads(result.stdout)` on a prompt-then-JSON flow passes on POSIX and fails on Windows with `Expecting value: line 1 column 2 (char 1)`.\n\n## Reproduction\n\nDeterministic on a Windows runner; on POSIX you can force the branch to see the exact same behavior:\n\n```python\nimport json\nimport click, click.termui\nfrom click.testing import CliRunner\n\n@click.command()\ndef cmd():\n    if not click.confirm(\"Continue?\", default=False, err=True):\n        click.e\n[...]\n. So this report is effectively a request to consider backporting the redirect part to the 8.4.x stable line (the `if WIN:` branch could keep the separate `echo` for coloring but wrap the `func` call in `redirect_stdout(sys.stderr)` when `err=True`).\n\nDownstream context, if useful: this surfaced as two Windows-only CI failures in memtomem (bisect + analysis in https://github.com/memtomem/memtomem/issues/1640); we've since worked around it by bypassing the prompt machinery for our `",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal"
+      ],
+      "comments_count": 2,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    }
+  ],
+  "all_records": [
+    {
+      "title": "help not resolving automatically",
+      "number": 2819,
+      "url": "https://github.com/pallets/click/issues/2819",
+      "state": "open",
+      "labels": [
+        "bug"
+      ],
+      "updated_at": "2026-07-08T05:59:50Z",
+      "created_at": "2024-12-15T02:14:28Z",
+      "closed_at": null,
+      "body_sample": "From the docs: \n\nThe help parameter is implemented in Click in a very special manner. Unlike regular parameters it’s automatically added by Click for any command and it performs automatic conflict resolution. By default it’s called --help, but this can be changed. If a command itself implements a parameter with the same name, the default help parameter stops accepting it. There is a context setting that can be used to override the names of the help parameters called [help_option_names](https://c\n[...]\nFrom the docs: \n\nThe help parameter is implemented in Click in a very special manner. Unlike regular parameters it’s automatically ad … and itself implements a parameter with the same name, the default help parameter stops accepting it. There is a context setting that can be used to override the names of the help parameters called [help_option_names](https://click.palletsprojects.com/en/stable/api/#click.Context.help_option_names).\n\nWhat is wrong: \nHelp does not automatically resolve if there is an\n[...]\nxt.help_option_names).\n\nWhat is wrong: \nHelp does not automatically resolve if there is an arg or kwarg called help. In the sample the file is called help.py\n\n``` \nimport click\n\n# This works \n@click.command()\n@click.argument('helps')\ndef this_works(helps):\n    print(helps)\n\n# > python -m help this\n# this\n\n# > python -m help --help\n# Usage: help\n[로그 압축됨]\n_ == '__main__':\n    #this_works()\n    #this_does_not_work()\n    this_does_not_work_also()\n\n```\n- Python version: 3.10.15\n- Cli",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal"
+      ],
+      "comments_count": 4,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Remove Python 2 utilities and little used utilities",
+      "number": 3481,
+      "url": "https://github.com/pallets/click/issues/3481",
+      "state": "open",
+      "labels": [
+        "f:prompt",
+        "f:help"
+      ],
+      "updated_at": "2026-07-08T05:57:39Z",
+      "created_at": "2026-05-19T19:05:29Z",
+      "closed_at": null,
+      "body_sample": "Python2-centric utilities: \n\n- `get_binary_stream`\n- `get_text_stream`\n\nLittle used Utilities: \n\n- `wrap_text`\n- `getchar`\n\nIn the interest of making more time to focus on core click details, these utilities are planned to be deprecated in the next feature release, and removed from the public api in one after. If any of these are critical to your uses, please explain below, and we may consider other options.",
+      "signal_tags": [
+        "feature_signal"
+      ],
+      "comments_count": 7,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Long option completion with = broken",
+      "number": 2847,
+      "url": "https://github.com/pallets/click/issues/2847",
+      "state": "open",
+      "labels": [
+        "bug"
+      ],
+      "updated_at": "2026-07-07T14:05:40Z",
+      "created_at": "2025-01-23T00:22:07Z",
+      "closed_at": null,
+      "body_sample": "When using Click shell completion in bash and zsh, long option completion is not working properly when = is used to separate the option from the value (e.g., `command --long-option=value` vs. `command --long-option value`). In zsh, the option being completed is replaced with the incomplete value or matched value, essentially \"gobbling\" up the option. In bash, the option isn't completed at all. I did not test fish.\n\n## Steps to reproduce the issue\n\n1. Create the following script and place it in t\n[...]\n-------------------------------|\n| gobble --color= | gobble --color= | auto always never| --color=auto --color=always --color=never |\n| gobble --color=a | gobble --color=a | auto always | --color=auto --color=always |\n| gobble --color=al | gobble --color=always | | |\n| gobble --color  | gobble --color | auto always never | |\n| gobble --color a | gobble --color a | auto always | |\n| gobble --color al | gobble --color always | | |\n\n\n## Environment:\n\n\n- Python version: 3.12.7\n- Click version: 8.1.8",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal"
+      ],
+      "comments_count": 0,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Automatically append ellipsis (`...`) to metavars when `multiple=True` in options",
+      "number": 3652,
+      "url": "https://github.com/pallets/click/issues/3652",
+      "state": "open",
+      "labels": [
+        "f:help"
+      ],
+      "updated_at": "2026-07-03T06:41:11Z",
+      "created_at": "2026-06-29T20:09:14Z",
+      "closed_at": null,
+      "body_sample": "When building a command-line interface with `click.option(..., multiple=True)`, the auto-generated usage string does not visually signal to the user that the option can be repeated. For instance, an option --foo=FOO looks identical whether it accepts single or multiple arguments. This is different from the common convention for multi-value items in shell interfaces often suggests adding an ellipsis like `--foo=FOO...`\n\nExpected behavior if option \"foo\" has `multiple=True`:\n```\nUsage: script.py [\n[...]\nOPTIONS]\n\nOptions:\n  --foo TEXT...  A list of foo strings.\n  --help         Show this message and exit.\n```",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal"
+      ],
+      "comments_count": 4,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Add Screenshot workflow",
+      "number": 3081,
+      "url": "https://github.com/pallets/click/issues/3081",
+      "state": "open",
+      "labels": [
+        "docs",
+        "good first issue"
+      ],
+      "updated_at": "2026-06-27T08:33:50Z",
+      "created_at": "2025-09-22T20:35:24Z",
+      "closed_at": null,
+      "body_sample": "In a few places in the docs, it would be really nice to be able to run some code take a screen shot, and draw boxes around different parts. For example setup an example click app with multiple sub commands, options, epilog help, and arguments and then draw boxes and label the various blocks. Requirements: \n- run locally  for doc generation (actually locally not calling out to api)\n- run in ci job (not calling out to external service)\n- No added dependencies that are not pip installable \n- have t\n[...]\nhe screen shots not be blurry (common problem)\n- draw boxes around various sections. \n\nConduct some research and propose some options. A maintainer will pick from the options. and you can implement it. Here is an example of what I was thinking is in the comments below.",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal",
+        "confusion_signal",
+        "noise_signal"
+      ],
+      "comments_count": 15,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "Introduction to the command line tutorial",
+      "number": 3076,
+      "url": "https://github.com/pallets/click/issues/3076",
+      "state": "open",
+      "labels": [
+        "docs",
+        "good first issue"
+      ],
+      "updated_at": "2026-06-22T13:33:02Z",
+      "created_at": "2025-09-21T18:40:56Z",
+      "closed_at": null,
+      "body_sample": "Developers coming to Click docs may or may not have command line experience. The command line is a big subject with a lot of cross platform differences. A tutorial which targets basic things you can do would be very helpful. The goal is the minimal amount to get started. \n\nRequirements \n- Written in myst\n- uses Diataxis principles \n- Uses docs tabs so can eventually add multiple oses and shells\n- roughly 15 minutes for user to complete tutorial \n- shows getting operating system information, dire\n[...]\nctory vs file, file path, moving around, making a directory, making a file, editing a file, printing file contents to the terminal, greping something, showing help for a cli \n- good quality links to deeper information on the subject",
+      "signal_tags": [
+        "confusion_signal"
+      ],
+      "comments_count": 16,
+      "unique_commenters_count": 5,
+      "maintainer_comment_ratio": 0.38,
+      "bot_comment_count": 0,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "`isolated_filesystem()` is not thread safe",
+      "number": 3501,
+      "url": "https://github.com/pallets/click/issues/3501",
+      "state": "closed",
+      "labels": [
+        "bug",
+        "f:test runner"
+      ],
+      "updated_at": "2026-07-08T05:58:55Z",
+      "created_at": "2026-05-22T11:53:56Z",
+      "closed_at": "2026-05-29T20:05:05Z",
+      "body_sample": "This is a follow-up on https://github.com/pallets/click/issues/2899, to cover for @Rowlando13's concerns that `isolated_filesystem()` is not thread safe: https://github.com/pallets/click/issues/2899#issuecomment-2870786207",
+      "signal_tags": [
+        "uncertain_signal"
+      ],
+      "comments_count": 9,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    },
+    {
+      "title": "8.4.x: prompt/confirm(err=True) leaks prompt tail and CliRunner reply echo to stdout on Windows",
+      "number": 3662,
+      "url": "https://github.com/pallets/click/issues/3662",
+      "state": "closed",
+      "labels": [],
+      "updated_at": "2026-07-06T15:58:04Z",
+      "created_at": "2026-07-04T10:32:35Z",
+      "closed_at": "2026-07-06T15:58:04Z",
+      "body_sample": "On the stable 8.4.x line, `prompt()` / `confirm()` with `err=True` still write part of the prompt interaction to **stdout** on Windows, because `_readline_prompt`'s `WIN` branch bypasses the stderr redirect that the POSIX branch applies:\n\n```python\n# src/click/termui.py (8.4.2)\ndef _readline_prompt(func, text, err):\n    if WIN:\n        echo(text[:-1], nl=False, err=err)   # prompt body honors err ...\n        return func(text[-1:])               # ... but this call is NOT redirected\n    if err:\n \n[...]\nbecomes `\" n\\n\" + <payload>`. Any test doing `json.loads(result.stdout)` on a prompt-then-JSON flow passes on POSIX and fails on Windows with `Expecting value: line 1 column 2 (char 1)`.\n\n## Reproduction\n\nDeterministic on a Windows runner; on POSIX you can force the branch to see the exact same behavior:\n\n```python\nimport json\nimport click, click.termui\nfrom click.testing import CliRunner\n\n@click.command()\ndef cmd():\n    if not click.confirm(\"Continue?\", default=False, err=True):\n        click.e\n[...]\n. So this report is effectively a request to consider backporting the redirect part to the 8.4.x stable line (the `if WIN:` branch could keep the separate `echo` for coloring but wrap the `func` call in `redirect_stdout(sys.stderr)` when `err=True`).\n\nDownstream context, if useful: this surfaced as two Windows-only CI failures in memtomem (bisect + analysis in https://github.com/memtomem/memtomem/issues/1640); we've since worked around it by bypassing the prompt machinery for our `",
+      "signal_tags": [
+        "defect_signal",
+        "feature_signal",
+        "workflow_signal"
+      ],
+      "comments_count": 2,
+      "unique_commenters_count": null,
+      "maintainer_comment_ratio": null,
+      "bot_comment_count": null,
+      "bike_shedding_possible": false
+    }
+  ],
+  "status": "OK"
+}

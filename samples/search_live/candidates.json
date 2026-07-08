@@ -1,0 +1,26 @@
+[
+  {
+    "full_name": "langgenius/dify",
+    "url": "https://github.com/langgenius/dify",
+    "description": "Production-ready platform for agentic workflow development.",
+    "stars": 148112,
+    "archived": false,
+    "fork": false
+  },
+  {
+    "full_name": "martinrusev/imbox",
+    "url": "https://github.com/martinrusev/imbox",
+    "description": "Python IMAP for Agentic Workflows",
+    "stars": 1218,
+    "archived": false,
+    "fork": false
+  },
+  {
+    "full_name": "blackholll/loonflow",
+    "url": "https://github.com/blackholll/loonflow",
+    "description": "A Intelligent and Visual Process Automation System,  ticket, workflow, MCP",
+    "stars": 2085,
+    "archived": false,
+    "fork": false
+  }
+]
