@@ -9,8 +9,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from repo_idea_miner.challenge_db import is_paused, open_db, queue_counts, set_owner_review
+from repo_idea_miner.challenge_db import is_paused, queue_counts, set_owner_review
 from repo_idea_miner.challenge_schemas import CHALLENGE_LABELS, LABEL_PRIORITY, OWNER_STATUSES
+from repo_idea_miner.factory_db import (
+    get_product_run,
+    list_product_runs,
+    log_product_event,
+    open_factory_db as open_db,  # challenge 스키마 + factory 스키마 보장 (기존 라우트 동작은 동일)
+    set_owner_decision,
+)
+from repo_idea_miner.factory_schemas import (
+    PRODUCT_OWNER_DECISIONS,
+    VERDICT_TO_RECOMMENDED_ACTION,
+)
 from repo_idea_miner.redaction import redact_text
 
 # 상세 화면에서 artifact_dir 내 이 파일들만 읽는다 (임의 경로 접근 금지)
@@ -58,6 +69,48 @@ _TAB_KO = [
     ("validation_report", "검증 결과"),
 ]
 
+# ---------------------------------------------------------------- Product Factory 화면 상수
+
+# 상세 화면에서 읽는 파일 화이트리스트 ("final"=final_artifact_dir, "run"=run 디렉터리)
+_PRODUCT_DETAIL_FILES = {
+    "product_verdict": ("final", "product_verdict.md", "최종 판정"),
+    "qa_report": ("final", "reports/qa_report.md", "QA 결과"),
+    "anchor_check": ("final", "reports/anchor_check.md", "앵커 확인"),
+    "forbidden_check": ("final", "reports/forbidden_simplification_check.md", "금지 축소 확인"),
+    "static_report": ("final", "reports/static_report.md", "구조 검사"),
+    "contract_report": ("final", "reports/contract_report.md", "계약 검사"),
+    "syntax_report": ("final", "reports/syntax_report.md", "문법 검사"),
+    "smoke_report": ("final", "reports/smoke_report.md", "실행 검사"),
+    "readme": ("final", "README.md", "README"),
+    "manifest": ("final", "manifest.json", "manifest"),
+    "events": ("run", "events.jsonl", "이벤트 로그"),
+}
+
+_VERDICT_KO = {
+    "PROMOTE_TO_CODEX": "Codex 승격 후보",
+    "KEEP_CANDIDATE": "보관 후보",
+    "NEEDS_MORE_GEMMA_LOOP": "루프 더 필요",
+    "TOO_WEAK": "너무 약함",
+    "DROP": "버림",
+}
+
+_DECISION_KO = {
+    "keep": "KEEP",
+    "drop": "DROP",
+    "productize": "PRODUCTIZE",
+    "retry": "RETRY",
+    "archive": "ARCHIVE",
+}
+
+# §15 verdict → 추천 버튼 강조용
+_DECISION_ACTIONS = [
+    ("keep", "KEEP"),
+    ("drop", "DROP"),
+    ("productize", "PRODUCTIZE"),
+    ("retry", "RETRY"),
+    ("archive", "ARCHIVE"),
+]
+
 _CSS = """
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -87,6 +140,9 @@ form.filters button { font-size: 1rem; padding: 10px 18px; border-radius: 12px; 
 .l-NOT_MY_TASTE { background: #b45309; } .l-TOO_BIG { background: #0e7490; }
 .l-UNCLEAR_TO_OWNER { background: #be185d; } .l-TOO_EASY { background: #52525b; }
 .l-DROP { background: #1f2937; }
+.v-PROMOTE_TO_CODEX { background: #15803d; } .v-KEEP_CANDIDATE { background: #2563eb; }
+.v-NEEDS_MORE_GEMMA_LOOP { background: #b45309; } .v-TOO_WEAK { background: #52525b; }
+.v-DROP { background: #1f2937; } .v-PENDING { background: #6b7280; }
 .ostatus { font-size: .8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px;
   background: #e5e7eb; color: #374151; white-space: nowrap; }
 .chead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -283,6 +339,7 @@ def render_index(conn: sqlite3.Connection, filters: dict) -> str:
   <button type="submit">필터 적용</button>
   <a class="chip-link" href="/">초기화</a>
   <a class="chip-link" href="/?owner_status=build_next">다음 구현만 보기</a>
+  <a class="chip-link" href="/products">제품 공장</a>
 </form>"""
 
     rows = query_challenges(conn, filters)
@@ -386,6 +443,136 @@ def render_detail(conn: sqlite3.Connection, challenge_id: int, tab: str, secrets
     return _page(f"챌린지 #{challenge_id}", body)
 
 
+# ---------------------------------------------------------------- Product Factory 화면 (§17: 최종 검수함)
+
+def _verdict_badge(verdict: str | None) -> str:
+    v = verdict or "PENDING"
+    label = _VERDICT_KO.get(v, "진행 중" if verdict is None else v)
+    return f'<span class="badge v-{_e(v)}">{_e(label)}</span>'
+
+
+def _run_root(run: dict) -> Path | None:
+    """workspace_dir(run_dir/workspace)에서 run 디렉터리를 얻는다."""
+    ws = run.get("workspace_dir")
+    if not ws:
+        return None
+    return Path(ws).parent
+
+
+def render_products_index(conn: sqlite3.Connection) -> str:
+    runs = list_product_runs(conn)
+    verdict_counts: dict[str, int] = {}
+    for r in runs:
+        key = r.get("verdict") or "PENDING"
+        verdict_counts[key] = verdict_counts.get(key, 0) + 1
+    summary = f"""
+<section class="summary">
+  <h2 class="sec-h">제품 공장 요약</h2>
+  <div class="sgrid">
+    <div class="sitem"><span class="k">전체 run</span><span class="val">{len(runs)}건</span></div>
+    <div class="sitem"><span class="k">Codex 승격 후보</span><span class="val">{verdict_counts.get('PROMOTE_TO_CODEX', 0)}건</span></div>
+    <div class="sitem"><span class="k">보관 후보</span><span class="val">{verdict_counts.get('KEEP_CANDIDATE', 0)}건</span></div>
+    <div class="sitem"><span class="k">루프 더 필요</span><span class="val">{verdict_counts.get('NEEDS_MORE_GEMMA_LOOP', 0)}건</span></div>
+    <div class="sitem"><span class="k">너무 약함/버림</span><span class="val">{verdict_counts.get('TOO_WEAK', 0) + verdict_counts.get('DROP', 0)}건</span></div>
+  </div>
+</section>"""
+    cards = []
+    for r in runs:
+        title = r.get("challenge_title") or "(sample challenge)"
+        decision = r.get("owner_decision")
+        decision_html = (
+            f'<span class="ostatus">{_e(_DECISION_KO.get(decision, decision))}</span>' if decision else ""
+        )
+        cards.append(
+            f"""  <article class="card">
+    <div class="chead">
+      <span class="repo"><a href="/product/{r['id']}">run #{r['id']}</a></span>
+      {_verdict_badge(r.get('verdict'))}
+      {decision_html}
+    </div>
+    <p class="title"><a href="/product/{r['id']}">{_e(title)}</a></p>
+    <p class="meta">상태 {_e(r.get('status'))} · 단계 {_e(r.get('current_stage'))} · 라인 {_e(r.get('line') or '-')}
+      · {_e((r.get('created_at') or '')[:10])}</p>
+  </article>"""
+        )
+    body = (
+        '<p class="back"><a href="/">← 챌린지 목록으로</a></p>'
+        + summary
+        + (f'<p class="count">{len(runs)}건 표시</p>' + "\n".join(cards) if cards else '<p class="muted">아직 product run이 없습니다.</p>')
+    )
+    return _page("RIM 제품 공장", body)
+
+
+def render_product_detail(conn: sqlite3.Connection, run_id: int, tab: str, secrets: list[str]) -> str | None:
+    run = get_product_run(conn, run_id)
+    if run is None:
+        return None
+    challenge_title = None
+    if run.get("challenge_id"):
+        row = conn.execute(
+            "SELECT challenge_title, repo_url FROM challenges WHERE id=?", (run["challenge_id"],)
+        ).fetchone()
+        if row:
+            challenge_title = row["challenge_title"]
+    tab = tab if tab in _PRODUCT_DETAIL_FILES else "product_verdict"
+
+    run_root = _run_root(run)
+    final_dir = Path(run["final_artifact_dir"]) if run.get("final_artifact_dir") else None
+    content = "(artifact 파일 없음)"
+    base_kind, rel, _ = _PRODUCT_DETAIL_FILES[tab]
+    base = final_dir if base_kind == "final" else run_root
+    if base and base.is_dir():
+        target = base / rel
+        if target.is_file():
+            content = redact_text(target.read_text(encoding="utf-8", errors="replace"), secrets)
+
+    tabs = "".join(
+        f'<a href="/product/{run_id}?tab={key}" class="{"active" if key == tab else ""}">{label}</a>'
+        for key, (_, _, label) in _PRODUCT_DETAIL_FILES.items()
+    )
+
+    recommended = VERDICT_TO_RECOMMENDED_ACTION.get(run.get("verdict") or "", None)
+    decision = run.get("owner_decision")
+    action_buttons = "".join(
+        f"""<form method="post" action="/product/{run_id}/decision" style="display:inline">
+<input type="hidden" name="decision" value="{d}">
+<button type="submit" class="{'primary' if d == recommended else ''}{' on' if decision == d else ''}">{label}{' (추천)' if d == recommended else ''}</button></form>"""
+        for d, label in _DECISION_ACTIONS
+    )
+
+    export_row = conn.execute(
+        "SELECT path FROM product_artifacts WHERE product_run_id=? AND artifact_type='codex_export' "
+        "ORDER BY id DESC LIMIT 1",
+        (run_id,),
+    ).fetchone()
+    export_line = (
+        f'<p class="meta">Codex export: {_e(export_row["path"])}</p>' if export_row else ""
+    )
+
+    body = f"""
+<p class="back"><a href="/products">← 제품 공장 목록으로</a></p>
+<section class="summary">
+  <div class="chead">
+    <span class="repo">run #{run_id}</span>
+    {_verdict_badge(run.get('verdict'))}
+    {f'<span class="ostatus">{_e(_DECISION_KO.get(decision, decision))}</span>' if decision else ''}
+  </div>
+  <p class="title">{_e(challenge_title or '(sample challenge)')}</p>
+  <p class="meta">상태 {_e(run.get('status'))} · 단계 {_e(run.get('current_stage'))} · 라인 {_e(run.get('line') or '-')}</p>
+  <p class="meta">workspace: {_e(run.get('workspace_dir') or '-')}</p>
+  <p class="meta">final artifact: {_e(run.get('final_artifact_dir') or '(미생성)')}</p>
+  {export_line}
+</section>
+<section class="panel">
+  <h2 class="sec-h">내 판정 (최종 검수)</h2>
+  <div class="actions">{action_buttons}</div>
+</section>
+<div class="tabs">{tabs}</div>
+<section class="panel"><pre>{_e(content)}</pre></section>
+"""
+    return _page(f"제품 run #{run_id}", body)
+
+
 # ---------------------------------------------------------------- HTTP 서버
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -433,6 +620,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     return
                 self._send_html(page)
                 return
+            if parts.path == "/products":
+                self._send_html(render_products_index(conn))
+                return
+            if parts.path.startswith("/product/"):
+                try:
+                    run_id = int(parts.path.split("/")[2])
+                except (IndexError, ValueError):
+                    self.send_error(404)
+                    return
+                page = render_product_detail(conn, run_id, query.get("tab", "product_verdict"), self.secrets)
+                if page is None:
+                    self.send_error(404, "product run not found")
+                    return
+                self._send_html(page)
+                return
             self.send_error(404)
         finally:
             conn.close()
@@ -463,6 +665,31 @@ class DashboardHandler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             self._redirect(f"/challenge/{challenge_id}")
+            return
+        if len(segs) == 3 and segs[0] == "product" and segs[2] == "decision":
+            try:
+                run_id = int(segs[1])
+            except ValueError:
+                self.send_error(404)
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length).decode("utf-8", errors="replace")
+            form = {k: v[0] for k, v in parse_qs(body).items()}
+            decision = form.get("decision") or ""
+            if decision not in PRODUCT_OWNER_DECISIONS:
+                self.send_error(400, "invalid decision")
+                return
+            conn = open_db(self.db_path)
+            try:
+                run = get_product_run(conn, run_id)
+                if run is None:
+                    self.send_error(404, "product run not found")
+                    return
+                set_owner_decision(conn, run_id, decision)
+                log_product_event(conn, run_id, "owner_decision", f"decision={decision}")
+            finally:
+                conn.close()
+            self._redirect(f"/product/{run_id}")
             return
         self.send_error(404)
 

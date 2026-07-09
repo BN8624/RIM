@@ -93,6 +93,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     vdb_p = sub.add_parser("validate-db", help="challenge.db integrity/테이블/artifact_dir 정합성 검증")
     vdb_p.add_argument("--db", default="challenge.db")
+
+    # ---------------------------------------------------------- Product Factory
+    f_p = sub.add_parser("factory", help="승격 대상 Challenge를 자동으로 Product Factory에 흘려보냄")
+    f_p.add_argument("--mode", choices=["mock", "live"], default="mock")
+    f_p.add_argument("--db", default="challenge.db")
+    f_p.add_argument("--output-dir", default="runs")
+    f_p.add_argument("--once", action="store_true", help="1건만 처리하고 종료")
+    f_p.add_argument("--max-runs", type=int, default=None, help="최대 처리 건수 (기본 1, 안전 모드)")
+    f_p.add_argument("--continuous", action="store_true", help="명시한 경우에만 계속 실행")
+
+    fb_p = sub.add_parser("factory-build", help="단일 Challenge로 Product Factory 실행")
+    fb_p.add_argument("--challenge-id", type=int, default=None, help="challenge.db의 challenge id (source of truth)")
+    fb_p.add_argument("--challenge-dir", default=None, help="DB 없이 run artifact 디렉터리로 실행 (fallback)")
+    fb_p.add_argument("--sample", choices=["mock"], default=None, help="고정 sample challenge로 실행")
+    fb_p.add_argument("--mode", choices=["mock", "live"], default="mock")
+    fb_p.add_argument("--db", default="challenge.db")
+    fb_p.add_argument("--output-dir", default="runs")
+    fb_p.add_argument("--no-db", action="store_true", help="DB 저장 생략")
+
+    fs_p = sub.add_parser("factory-status", help="Product Factory 상태 표시")
+    fs_p.add_argument("--db", default="challenge.db")
+
+    fv_p = sub.add_parser("factory-validate", help="product run 디렉터리의 Final Artifact 검증")
+    fv_p.add_argument("product_run_dir")
     return parser
 
 
@@ -301,6 +325,107 @@ def main(argv: list[str] | None = None) -> int:
             ok, problems = validate_db(args.db)
             if ok:
                 print("DB VALIDATION PASS")
+                return 0
+            for p in problems:
+                print(f"FAIL: {p}")
+            return 1
+
+        if args.command == "factory":
+            from repo_idea_miner.factory_runner import run_factory
+
+            # 기본 실행은 안전 모드: --continuous를 명시하지 않으면 max_runs 제한 (§19.1)
+            if args.once and args.max_runs:
+                print("오류: --once와 --max-runs는 동시에 쓸 수 없습니다.", file=sys.stderr)
+                return 1
+            max_runs = 1 if args.once else (args.max_runs if args.max_runs else 1)
+            summary = run_factory(
+                db_path=args.db,
+                mode=args.mode,
+                output_dir=args.output_dir,
+                max_runs=max_runs,
+                continuous=args.continuous,
+            )
+            print(f"processed: {summary['processed']} / errors: {summary['errors']}")
+            for r in summary["runs"]:
+                status = r["verdict"] or r["error"] or "(진행 실패)"
+                print(f"  challenge {r['challenge_id']}: {status} → {r['run_dir']}")
+            return 0 if summary["errors"] == 0 else 1
+
+        if args.command == "factory-build":
+            from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler
+            from repo_idea_miner.config import load_challenge_miner_settings
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_pipeline import (
+                load_challenge_from_db,
+                load_challenge_from_dir,
+                run_product_factory,
+                sample_challenge,
+            )
+
+            if not (args.challenge_id or args.challenge_dir or args.sample):
+                print("오류: --challenge-id / --challenge-dir / --sample 중 하나가 필요합니다.", file=sys.stderr)
+                return 1
+            db_conn = None if args.no_db else open_factory_db(args.db)
+            try:
+                # source of truth 우선순위: --challenge-id > --challenge-dir > --sample (§19.2)
+                if args.challenge_id is not None:
+                    if db_conn is None:
+                        print("오류: --challenge-id는 DB가 필요합니다 (--no-db와 함께 쓸 수 없음).", file=sys.stderr)
+                        return 1
+                    challenge = load_challenge_from_db(db_conn, args.challenge_id)
+                elif args.challenge_dir:
+                    challenge = load_challenge_from_dir(args.challenge_dir)
+                else:
+                    challenge = sample_challenge()
+                scheduler = None
+                if args.mode == "live" and db_conn is not None:
+                    settings = load_settings()
+                    if settings.google_keys:
+                        scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys, load_challenge_miner_settings())
+                result = run_product_factory(
+                    challenge, mode=args.mode, output_dir=args.output_dir,
+                    db_conn=db_conn, scheduler=scheduler,
+                )
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            print(f"run_dir: {result.get('run_dir')}")
+            if result.get("error"):
+                print(f"실패: {result['error']}")
+                return 1
+            print(f"line: {result.get('line')} / verdict: {result.get('verdict')} "
+                  f"(추천: {result.get('recommended_action')})")
+            gates = result.get("gate_summary") or {}
+            print("gates: " + " ".join(f"{g}={'PASS' if ok else 'FAIL'}" for g, ok in gates.items()))
+            if result.get("codex_export_dir"):
+                print(f"codex_export: {result['codex_export_dir']}")
+            if result.get("product_run_id"):
+                print(f"product_run_id: {result['product_run_id']} (db: {args.db})")
+            return 0
+
+        if args.command == "factory-status":
+            from repo_idea_miner.factory_db import factory_status
+
+            s = factory_status(args.db)
+            print(f"product_runs: {s['total_runs']}")
+            for st, n in sorted(s["status_counts"].items()):
+                print(f"  status {st}: {n}")
+            for v, n in sorted(s["verdict_counts"].items()):
+                print(f"  verdict {v}: {n}")
+            for r in s["recent_runs"]:
+                print(
+                    f"recent: run {r['id']} [{r['verdict'] or r['current_stage']}] "
+                    f"{r['challenge_title'] or '(sample)'} owner={r['owner_decision'] or '-'}"
+                )
+            return 0
+
+        if args.command == "factory-validate":
+            from repo_idea_miner.factory_validate import validate_product_run_dir
+
+            settings = load_settings()
+            ok, problems = validate_product_run_dir(args.product_run_dir, settings.secret_values())
+            if ok:
+                print("FACTORY VALIDATION PASS")
                 return 0
             for p in problems:
                 print(f"FAIL: {p}")
