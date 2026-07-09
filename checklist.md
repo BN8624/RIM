@@ -146,3 +146,20 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] factory-validate 072220 PASS (2C-0 + 2C-1 marker 모두 인식). 폴리시된 viewer는 edge.from/ev.type/node.x 리터럴 0개, source_id/target_id/node_id/.event 읽음.
 - [x] pytest — 기존 673 + 2C-1 신규 29 (test_factory_product_polish_2c1.py) = 702. 2C-0 E2E는 on-disk polish 무관하게 mismatch viewer로 리셋해 결정적.
 - [ ] Phase 2C 잔여 = 다수 run 검수/polish 자동화, 조작 가능한 product experience(node editor)는 별도 큰 작업
+
+# Phase 2C-2 #47 Minimal Interactive Node Draft Editor — 2026-07-10
+
+## 구현
+- [x] factory_product_editor.py — product viewer에만 최소 node draft editor mode를 **추가 주입**(기존 폴리시 <script> 보존, </body> 앞에 editor DOM+script, 마커로 감싸 재주입 안전). 새 명령 **factory-product-editor --run-dir|--run-id --dry-run(기본)|--apply**. 사전조건: 2C-1 fitness=NEEDS_PRODUCT_POLISH + verdict REVIEW_READY + green_base + user_review_decision.md의 "[x] Phase 2C-2 진행". supported_node_types 추출(contract 명시→replay node types 순, 실패 시 add node 차단·CANNOT_EDIT). 보호 hash에 **replay + review/phase2c0 + review/phase2c1 포함**(product 제외). editor JS는 edge.from/ev.type/.type/node.x/Math.random/Date.now 금지(bracket nd["type"]+delegation)로 smoke mismatch [] 유지.
+- [x] EditorGraphModel(Python 미러) + run_model_level_smoke — load_replay→add/edit/delete node(incident edge 자동 삭제)→add/delete edge→validation(dup id/missing endpoint/unsupported type/cycle/self-loop/isolated)→export→schema compat→from/to-only edge 거부→roundtrip(displayModel 재생성)→원본 replay 불변, 전 단계 실증해 model_level_smoke_pass 산출.
+- [x] check_static_dom + check_handler_binding — 7개 핵심 control(toggle/add-node/add-edge/validation/draft-json/copy/type-selector) 존재 + data-action/onclick/handler 정의/delegation 근거로 ui_binding_evidence_pass 분리 기록. check_js_syntax — script 블록 추출 후 node --check(+필수 함수 존재).
+- [x] finalize_editor_fitness — build_fitness가 authoring 감지로 준 PRODUCT_CANDIDATE를 editor 조건(mode/types/add/edit/delete/validation/compat/roundtrip/js/dom/handler/model/ui/hash/no-critical/green/no-gate-fail) 미충족 시 NEEDS_PRODUCT_POLISH로 정직 하향. candidate라도 draft_editor_candidate + "runner-backed execution not included" 명시.
+- [x] factory_validate.py — detect_phase2c2_run(marker)+_check_phase2c2(core+continuation 양 route, marker 없으면 no-op): 산출물 13종/hash PASS/product 범위 밖·golden·replay·phase2c0·2c1 변경 차단/runner_backed_execution_included=true FAIL/original_replay_unchanged=false FAIL/PRODUCT_CANDIDATE 엄격(editor mode·add node·add edge·validation·compat·roundtrip·export·model·ui·js·dom·handler·no-critical·limitation·draft_editor_candidate).
+- [x] cli.py — factory-product-editor(dry-run/apply, 동시 지정 거부). challenge_dashboard.py — 목록 카드(2C-2>2C-1>2C-0 우선, 제품성/검수/editor 상태/다음 액션 4줄)+상세 Phase 2C-2 패널(editor 기능/JS/DOM/handler/model/ui/draft 호환·roundtrip)+report 탭 12종.
+
+## 검수
+- [x] #47(072220) editor dry-run(supported types 7종)+apply — 보호 대상 불변(hash PASS, replay/phase2c0/2c1 포함), product viewer 2개만 변경. model_level_smoke_pass·ui_binding_evidence_pass·JS syntax 모두 PASS, 두 viewer×2 script 블록 전부 node --check OK, smoke mismatch [], runner/viewer 일치 4필드.
+- [x] **#47 editor 후 recommended_fitness=PRODUCT_CANDIDATE (draft editor candidate)** — order §29 case A. authoring(노드/엣지 편집 UI) 감지로 조작 가능한 첫 경험 확보. limitation "runner-backed execution not included" 명시, 실제 graph 실행 후보는 Phase 2C-3 이후.
+- [x] factory-validate 072220 PASS (2C-0+2C-1+2C-2 marker 모두 인식). green_base/REVIEW_READY 유지, 원본 replay/golden/contract/core/runner 미변경.
+- [x] pytest — 기존 704 + 2C-2 신규 60 (test_factory_product_editor_2c2.py) = 764. secret scan은 validate 경로 통과.
+- [ ] Phase 2C-3 = Runner-backed Draft Execution(exported draft를 실제 runner에 투입) — 별도 단계. 그 전까지 #47은 draft editor candidate.

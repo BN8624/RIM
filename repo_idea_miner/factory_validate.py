@@ -232,6 +232,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_anti_hardcode_patch(run_dir)
     problems += _check_phase2c0(run_dir)
     problems += _check_phase2c1(run_dir)
+    problems += _check_phase2c2(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -674,6 +675,120 @@ def _check_phase2c1(run_dir: Path) -> list[str]:
     return p
 
 
+# ---------------------------------------------------------------- Phase 2C-2 Node Draft Editor 검증 (§24)
+
+PHASE2C2_SUBDIR = "review/phase2c2"
+PHASE2C2_REQUIRED = (
+    "phase2c2_editor_plan.json", "phase2c2_editor_report.json", "phase2c2_diff_summary.json",
+    "phase2c2_hash_check.json", "viewer_js_syntax_check.json", "viewer_static_dom_check.json",
+    "viewer_handler_binding_check.json", "viewer_smoke_after_editor.json",
+    "editor_smoke_review.json", "draft_schema_compatibility.json", "draft_roundtrip_check.json",
+    "product_fitness_report_after_editor.json", "phase2c2_dashboard_summary.json",
+)
+PHASE2C2_MARKERS = (
+    "phase2c2_dashboard_summary.json", "phase2c2_editor_report.json",
+    "product_fitness_report_after_editor.json",
+)
+
+
+def detect_phase2c2_run(run_dir: str | Path) -> bool:
+    """§24: Phase 2C-2 marker(review/phase2c2/ 아래 산출물)가 있는 run인지 감지한다."""
+    d = Path(run_dir) / PHASE2C2_SUBDIR
+    return any((d / m).is_file() for m in PHASE2C2_MARKERS)
+
+
+def _check_phase2c2(run_dir: Path) -> list[str]:
+    """§24: Phase 2C-2 marker가 있는 run만 editor 산출물/정합성을 검사한다."""
+    if not detect_phase2c2_run(run_dir):
+        return []
+    rd = run_dir / PHASE2C2_SUBDIR
+    p: list[str] = []
+    for rel in PHASE2C2_REQUIRED:
+        if not (rd / rel).is_file():
+            p.append(f"Phase 2C-2 산출물 없음: {PHASE2C2_SUBDIR}/{rel}")
+
+    hash_check = _load_json(rd / "phase2c2_hash_check.json") or {}
+    diff = _load_json(rd / "phase2c2_diff_summary.json") or {}
+    es = _load_json(rd / "editor_smoke_review.json") or {}
+    js = _load_json(rd / "viewer_js_syntax_check.json") or {}
+    dom = _load_json(rd / "viewer_static_dom_check.json") or {}
+    hb = _load_json(rd / "viewer_handler_binding_check.json") or {}
+    fitness = _load_json(rd / "product_fitness_report_after_editor.json") or {}
+    compat = _load_json(rd / "draft_schema_compatibility.json") or {}
+    roundtrip = _load_json(rd / "draft_roundtrip_check.json") or {}
+
+    # §24.2 보호 대상(src/golden/fixtures/contract/replay/phase2c0/2c1) 불변
+    if hash_check and hash_check.get("status") != "PASS":
+        detail = hash_check.get("changed") or hash_check.get("added") or hash_check.get("removed")
+        p.append(f"Phase 2C-2: 보호 대상 artifact 변경됨: {detail}")
+    if diff.get("core_golden_fixtures_contract_replay_changed"):
+        p.append("Phase 2C-2: golden/fixtures/contract/replay 변경 발생")
+    for changed in diff.get("product_files_changed") or []:
+        if "/product/" not in changed.replace("\\", "/"):
+            p.append(f"Phase 2C-2: 허용 범위 밖 파일 변경: {changed}")
+    # review/phase2c0·2c1 overwrite 금지 (§20 주의)
+    for changed in (hash_check.get("changed") or []):
+        if changed.startswith("review/phase2c0") or changed.startswith("review/phase2c1"):
+            p.append(f"Phase 2C-2: review/phase2c0·2c1 산출물 변경됨: {changed}")
+
+    rec = fitness.get("recommended_fitness")
+    if rec is None:
+        p.append("Phase 2C-2: recommended_fitness 없음")
+    elif rec not in FITNESS_GRADES:
+        p.append(f"Phase 2C-2: 알 수 없는 recommended_fitness: {rec}")
+
+    # §24.2 runner_backed_execution_included=true → FAIL
+    if es.get("runner_backed_execution_included") is True or \
+            fitness.get("runner_backed_execution_included") is True:
+        p.append("Phase 2C-2: runner_backed_execution_included=true (금지)")
+    # §24.1/§24.2 원본 replay 불변
+    if es.get("original_replay_unchanged") is False:
+        p.append("Phase 2C-2: original_replay_unchanged=false")
+
+    # §24.1 recommended_fitness ↔ editor smoke 모순
+    for c in fitness.get("criteria") or []:
+        if c.get("score", 0) >= 4 and not c.get("evidence"):
+            p.append(f"Phase 2C-2: evidence 없는 {c.get('score')}점 항목: {c.get('criterion')}")
+
+    # §24.2 PRODUCT_CANDIDATE 엄격 검증
+    if rec == "PRODUCT_CANDIDATE":
+        checks = {
+            "editor_mode_exists": es.get("editor_mode_exists"),
+            "supported_node_types_loaded": es.get("supported_node_types_loaded"),
+            "add_node_supported": es.get("add_node_supported"),
+            "add_edge_supported": es.get("add_edge_supported"),
+            "graph_validation_supported": es.get("graph_validation_supported"),
+            "draft_schema_compatible": es.get("draft_schema_compatible"),
+            "draft_roundtrip_pass": es.get("draft_roundtrip_pass"),
+            "draft_export_supported": es.get("draft_export_supported"),
+            "model_level_smoke_pass": es.get("model_level_smoke_pass"),
+            "ui_binding_evidence_pass": es.get("ui_binding_evidence_pass"),
+        }
+        for key, val in checks.items():
+            if val is not True:
+                p.append(f"Phase 2C-2: PRODUCT_CANDIDATE인데 {key} != true ({val})")
+        if js.get("status") == "FAIL":
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 JS syntax check FAIL")
+        if dom.get("status") == "FAIL":
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 static DOM evidence FAIL")
+        if hb.get("status") == "FAIL":
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 handler binding evidence FAIL")
+        if compat.get("compatible") is False:
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 draft schema compatibility FAIL")
+        if roundtrip.get("pass") is False:
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 draft roundtrip FAIL")
+        if es.get("critical_failures"):
+            p.append(f"Phase 2C-2: PRODUCT_CANDIDATE인데 critical failure 존재: {es.get('critical_failures')}")
+        # limitation에 runner-backed execution not included 기록 필수 (§22.1)
+        lims = " ".join(fitness.get("limitations") or [])
+        if "runner-backed execution not included" not in lims:
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 limitation에 'runner-backed execution not included' 없음")
+        if fitness.get("draft_editor_candidate") is not True:
+            p.append("Phase 2C-2: PRODUCT_CANDIDATE인데 draft_editor_candidate 명시 없음")
+
+    return p
+
+
 def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     """§7: spec repair proposal/review는 있으면 검사 — apply는 Phase 2A에서 무조건 금지."""
     p: list[str] = []
@@ -981,6 +1096,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_anti_hardcode_patch(run_dir)
     problems += _check_phase2c0(run_dir)
     problems += _check_phase2c1(run_dir)
+    problems += _check_phase2c2(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:

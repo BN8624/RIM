@@ -148,6 +148,19 @@ _PRODUCT_REPORT_TABS = [
     ("phase2c1_diff_summary", ("run", "review/phase2c1/phase2c1_diff_summary.json", "polish diff")),
     ("phase2c1_hash_check", ("run", "review/phase2c1/phase2c1_hash_check.json", "polish hash 검사")),
     ("phase2c1_dashboard_summary", ("run", "review/phase2c1/phase2c1_dashboard_summary.json", "phase2c1_dashboard_summary")),
+    # Phase 2C-2 node draft editor (review/phase2c2/ — 상세 페이지 전용)
+    ("phase2c2_editor_report", ("run", "review/phase2c2/phase2c2_editor_report.md", "editor 리포트")),
+    ("phase2c2_editor_plan", ("run", "review/phase2c2/phase2c2_editor_plan.md", "editor 계획")),
+    ("editor_smoke_review", ("run", "review/phase2c2/editor_smoke_review.json", "editor 스모크")),
+    ("viewer_js_syntax_check", ("run", "review/phase2c2/viewer_js_syntax_check.json", "JS 구문 검사")),
+    ("viewer_static_dom_check", ("run", "review/phase2c2/viewer_static_dom_check.json", "static DOM 검사")),
+    ("viewer_handler_binding_check", ("run", "review/phase2c2/viewer_handler_binding_check.json", "handler binding 검사")),
+    ("draft_schema_compatibility", ("run", "review/phase2c2/draft_schema_compatibility.json", "draft 호환성")),
+    ("draft_roundtrip_check", ("run", "review/phase2c2/draft_roundtrip_check.json", "draft roundtrip")),
+    ("viewer_smoke_after_editor", ("run", "review/phase2c2/viewer_smoke_after_editor.json", "editor 후 스모크")),
+    ("fitness_after_editor", ("run", "review/phase2c2/product_fitness_report_after_editor.md", "editor 후 제품성")),
+    ("phase2c2_hash_check", ("run", "review/phase2c2/phase2c2_hash_check.json", "editor hash 검사")),
+    ("phase2c2_dashboard_summary", ("run", "review/phase2c2/phase2c2_dashboard_summary.json", "phase2c2_dashboard_summary")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
@@ -838,6 +851,75 @@ def _phase2c1_panel(p2c1: dict | None) -> str:
 </section>"""
 
 
+_PHASE2C2_SUBDIR = "review/phase2c2"
+
+
+def _load_phase2c2(run_root: Path | None) -> dict | None:
+    """Phase 2C-2 node draft editor 요약(review/phase2c2/)을 읽는다. 없으면 None."""
+    if run_root is None:
+        return None
+    p = run_root / _PHASE2C2_SUBDIR / "phase2c2_dashboard_summary.json"
+    if not p.is_file():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _phase2c2_card_lines(p2c2: dict | None) -> str:
+    """목록 카드에 추가하는 4줄: 제품성 추천 · 검수 상태 · editor 상태 · 사용자 다음 액션 (§23)."""
+    if not p2c2:
+        return ""
+    rec = p2c2.get("recommended_fitness")
+    ko = _fitness_ko(rec)
+    cand = " · draft editor candidate" if p2c2.get("draft_editor_candidate") else ""
+    return (
+        f'<p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or "-")}){_e(cand)}</p>'
+        f'<p class="meta">검수 상태: {_e(p2c2.get("review_status") or "-")}</p>'
+        f'<p class="meta">editor 상태: {_e(p2c2.get("editor_status") or "-")}</p>'
+        f'<p class="meta">사용자 다음 액션: {_e(p2c2.get("user_next_action") or "-")}</p>'
+    )
+
+
+def _phase2c2_panel(p2c2: dict | None) -> str:
+    """상세 페이지 Phase 2C-2 패널: editor 기능/JS/DOM/handler/model/ui + draft 호환·roundtrip (§23)."""
+    if not p2c2:
+        return ""
+    rec = p2c2.get("recommended_fitness")
+    ko = _fitness_ko(rec)
+    flags = p2c2.get("critical_failures") or []
+    lims = p2c2.get("limitations") or []
+    types = p2c2.get("supported_node_types") or []
+
+    def _mark(v):
+        return "있음" if v else "없음"
+
+    def _pf(v):
+        return "PASS" if v else "FAIL"
+
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2C-2 Minimal Node Draft Editor (draft editor — runner-backed execution not included)</h2>
+  <p class="meta">editor mode: <b>{_mark(p2c2.get('editor_mode_exists'))}</b>
+    · supported node types({_e(p2c2.get('supported_node_types_source') or '-')}): {_e(', '.join(types) or '-')}</p>
+  <p class="meta">add node: {_mark(p2c2.get('add_node_supported'))}
+    · add edge: {_mark(p2c2.get('add_edge_supported'))}
+    · validation: {_mark(p2c2.get('graph_validation_supported'))}
+    · draft 호환: {_pf(p2c2.get('draft_schema_compatible'))}
+    · roundtrip: {_pf(p2c2.get('draft_roundtrip_pass'))}</p>
+  <p class="meta">JS syntax: <b>{_e(p2c2.get('js_syntax_status') or '-')}</b>
+    · model_level_smoke: {_pf(p2c2.get('model_level_smoke_pass'))}
+    · ui_binding_evidence: {_pf(p2c2.get('ui_binding_evidence_pass'))}
+    · 보호 대상 hash: {_e(p2c2.get('hash_status') or '-')}</p>
+  <p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or '-')})
+    · draft editor candidate: {_e(str(p2c2.get('draft_editor_candidate')))}
+    · 검수 상태: {_e(p2c2.get('review_status') or '-')}</p>
+  <div class="field"><span class="k">한계</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in lims) or '<li class="muted">없음</li>'}</ul></div>
+  <div class="field"><span class="k">critical failures</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in flags) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 def _match_product_filters(run: dict, rev: dict | None, filters: dict) -> bool:
     verdict = filters.get("verdict")
     status = filters.get("status")
@@ -1031,9 +1113,14 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<p class="meta">추천 {_e(recommended)}</p>'
                 f'{_lane_line(p2a, None)}'
             )
+        p2c2 = _load_phase2c2(run_root)
         p2c1 = _load_phase2c1(run_root)
-        body_lines += (_phase2c1_card_lines(p2c1) if p2c1
-                       else _phase2c0_card_lines(_load_phase2c0(run_root)))
+        if p2c2:
+            body_lines += _phase2c2_card_lines(p2c2)
+        elif p2c1:
+            body_lines += _phase2c1_card_lines(p2c1)
+        else:
+            body_lines += _phase2c0_card_lines(_load_phase2c0(run_root))
         cards.append(
             f"""  <article class="card">
     <div class="chead">
@@ -1294,6 +1381,7 @@ def render_product_detail(
         + '<p class="back"><a href="/products">← 목록으로</a></p>'
         + hero + ch_summary + p2a_html + _phase2c0_panel(_load_phase2c0(run_root))
         + _phase2c1_panel(_load_phase2c1(run_root))
+        + _phase2c2_panel(_load_phase2c2(run_root))
         + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )
