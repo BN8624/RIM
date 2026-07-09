@@ -309,11 +309,17 @@ def detect_viewer_mismatches(final_dir: Path) -> tuple[list[str], dict | None, P
 
 
 def patch_viewer(viewer_path: Path) -> bool:
-    """viewer의 <script> 블록만 폴리시된 스크립트로 교체한다. CSS/구조는 보존."""
+    """viewer의 <script> 블록만 폴리시된 스크립트로 교체한다. CSS/구조는 보존.
+
+    치환은 lambda로 넘긴다. re.sub의 문자열 replacement는 백슬래시 이스케이프(\\n 등)를
+    해석하므로, 스크립트의 JS `\\n` 이스케이프가 실제 개행으로 바뀌어 구문이 깨진다.
+    함수 replacement는 반환값을 그대로 삽입한다.
+    """
     text = viewer_path.read_text(encoding="utf-8", errors="replace")
     if not _SCRIPT_BLOCK_RE.search(text):
         return False
-    new_text = _SCRIPT_BLOCK_RE.sub("<script>\n" + _POLISHED_SCRIPT + "\n    </script>", text, count=1)
+    replacement = "<script>\n" + _POLISHED_SCRIPT + "\n    </script>"
+    new_text = _SCRIPT_BLOCK_RE.sub(lambda _m: replacement, text, count=1)
     if new_text == text:
         return False
     viewer_path.write_text(new_text, encoding="utf-8")

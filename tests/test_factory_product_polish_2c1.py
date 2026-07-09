@@ -70,6 +70,43 @@ def test_patch_viewer_replaces_script(tmp_path):
     assert "edge.from" not in src and "ev.type" not in src and "node.x" not in src
 
 
+def _extract_script(html: str) -> str:
+    import re
+    m = re.search(r"<script>(.*?)</script>", html, re.DOTALL)
+    return m.group(1) if m else ""
+
+
+def test_patch_viewer_preserves_js_escapes(tmp_path):
+    """re.sub 치환이 \\n 이스케이프를 실제 개행으로 바꾸면 JS 구문이 깨진다 — 백슬래시 보존 검증."""
+    v = tmp_path / "index.html"
+    v.write_text(_VIEWER_MISMATCH, encoding="utf-8")
+    patch_viewer(v)
+    script = _extract_script(v.read_text(encoding="utf-8"))
+    # alert 문자열의 \n은 실제 개행이 아니라 백슬래시-n 이스케이프여야 한다
+    assert "'Node: ' + id + '\\nType: '" in script
+    # single-quote 문자열 안에 실제 개행이 없어야 한다 (구문 오류 방지)
+    for line in script.splitlines():
+        s = line
+        # 단순 검사: alert 라인이 한 줄에 온전히 있어야 함
+        if "alert('Node:" in s:
+            assert s.count("'") % 2 == 0, f"unbalanced quotes: {s}"
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node 없음 (JS 구문 검사 스킵)")
+def test_patched_viewer_is_valid_js(tmp_path):
+    """node --check로 폴리시된 viewer 스크립트가 실제로 파싱 가능한지 검증(정규식 테스트가 못 잡는 부분)."""
+    import subprocess
+
+    v = tmp_path / "index.html"
+    v.write_text(_VIEWER_MISMATCH, encoding="utf-8")
+    patch_viewer(v)
+    js = tmp_path / "script.js"
+    js.write_text(_extract_script(v.read_text(encoding="utf-8")), encoding="utf-8")
+    r = subprocess.run([shutil.which("node"), "--check", str(js)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
 def test_analyze_polish_all_fixed(tmp_path):
     v = tmp_path / "index.html"
     v.write_text(_VIEWER_MISMATCH, encoding="utf-8")
