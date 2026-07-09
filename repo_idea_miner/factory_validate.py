@@ -225,9 +225,10 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     if final_ok:
         problems += _core_final_artifact_consistency(final_dir)
 
-    # Phase 2A: base run에 spec repair proposal/frozen hash guard 산출물이 있으면 함께 검증
+    # Phase 2A/2B-1: base run에 spec repair proposal/apply 산출물이 있으면 함께 검증
     problems += _check_frozen_hash_guard(run_dir)
     problems += _check_spec_repair_outputs(run_dir)
+    problems += _check_spec_repair_apply(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -328,15 +329,89 @@ def _check_frozen_hash_guard(run_dir: Path) -> list[str]:
         if cmp["status"] != "PASS" and (check is None or check.get("status") == "PASS"):
             detail = cmp["changed"] or cmp["removed"] or cmp["added"]
             p.append(f"frozen hash guard: before/after 불일치가 check에 반영되지 않음: {detail}")
-    if after:
+    # Phase 2B-1: 승인된 spec repair apply가 수행됐다면 apply 이후 hash가 새 기준이다 (§17)
+    after_apply = _load_json(run_dir / "frozen_hash_after_apply.json")
+    reference = after_apply if after_apply else after
+    if reference:
         ws = run_dir / "workspace"
         root = ws if ws.is_dir() else run_dir / "final_artifact"
         current = compute_frozen_hashes(root, run_dir)
-        for key, digest in after.items():
+        for key, digest in reference.items():
             if key not in current:
                 p.append(f"frozen hash guard: 기록 이후 spec 파일이 삭제됨: {key}")
             elif current[key] != digest:
                 p.append(f"frozen hash guard: 기록 이후 spec 파일이 수정됨: {key}")
+    return p
+
+
+# ---------------------------------------------------------------- Phase 2B-1 Spec Repair Apply 검증 (§17)
+
+SPEC_REPAIR_APPLY_REQUIRED = (
+    "spec_repair_apply_plan.json",
+    "spec_repair_apply_report.json",
+    "spec_repair_diff_summary.json",
+    "pre_apply_snapshot_manifest.json",
+    "rollback_plan.json",
+    "frozen_hash_before_apply.json",
+    "frozen_hash_after_apply.json",
+    "frozen_hash_apply_check.json",
+)
+
+
+def _check_spec_repair_apply(run_dir: Path) -> list[str]:
+    """§17: spec repair apply 산출물 정합성. apply 흔적이 없으면 검사하지 않는다."""
+    report = _load_json(run_dir / "spec_repair_apply_report.json")
+    if report is None or not report.get("applied"):
+        return []
+    p: list[str] = []
+    for rel in SPEC_REPAIR_APPLY_REQUIRED:
+        if not (run_dir / rel).is_file():
+            p.append(f"spec repair apply: 필수 산출물 없음: {rel}")
+
+    if report.get("review_result") != "APPROVE_FOR_PHASE2B":
+        p.append(f"spec repair apply: review result가 APPROVE_FOR_PHASE2B가 아님: {report.get('review_result')}")
+    if report.get("target_count") != 1:
+        p.append(f"spec repair apply: 단일 대상이 아님: target_count={report.get('target_count')}")
+    resolved = report.get("resolved_run_dir")
+    if resolved and Path(str(resolved).replace("\\", "/")).name != run_dir.name:
+        p.append(f"spec repair apply: resolved_run_dir 불일치: {resolved}")
+
+    check = _load_json(run_dir / "frozen_hash_apply_check.json") or {}
+    if check and check.get("status") != "PASS":
+        p.append(f"spec repair apply: 범위 밖 frozen 변경: {check.get('out_of_scope')}")
+
+    diff = _load_json(run_dir / "spec_repair_diff_summary.json") or {}
+    if diff:
+        if diff.get("comparison_mode_changes"):
+            p.append(f"spec repair apply: comparison_mode 변경 발생: {diff['comparison_mode_changes']}")
+        if diff.get("deleted_expected_fields"):
+            p.append(f"spec repair apply: golden expected field 삭제: {diff['deleted_expected_fields']}")
+        if diff.get("invariant_downgrades"):
+            p.append(f"spec repair apply: invariant warning화 발생: {diff['invariant_downgrades']}")
+        if diff.get("out_of_scope_changes"):
+            p.append(f"spec repair apply: proposal/review 범위 밖 변경: {diff['out_of_scope_changes']}")
+        sc = diff.get("scenario_count") or {}
+        if sc and sc.get("before") != sc.get("after"):
+            p.append(f"spec repair apply: scenario 수 변경: {sc}")
+
+    gate_rerun = _load_json(run_dir / "gate_rerun_after_spec_repair.json") or {}
+    promo = _load_json(run_dir / "green_base_promotion_after_spec_repair.json") or {}
+    gates = gate_rerun.get("gates") or {}
+    verdict = promo.get("new_verdict")
+    if promo:
+        if verdict in SUCCESS_VERDICTS and gates and not all(gates.values()):
+            failed = [g for g, ok in gates.items() if not ok]
+            p.append(f"spec repair apply: gate 실패({failed})인데 verdict={verdict}")
+        if promo.get("promoted_to_green_base"):
+            if gates and not all(gates.values()):
+                p.append("spec repair apply: gate fail인데 green_base 승격")
+            if promo.get("validate_ok") is False:
+                p.append("spec repair apply: validate fail인데 green_base 승격")
+            if check and check.get("status") != "PASS":
+                p.append("spec repair apply: frozen 범위 밖 변경인데 green_base 승격")
+            if diff and (diff.get("comparison_mode_changes") or diff.get("deleted_expected_fields")
+                         or diff.get("invariant_downgrades")):
+                p.append("spec repair apply: 금지 변경이 있는데 green_base 승격")
     return p
 
 
@@ -639,10 +714,11 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_green_promotion(promo, gate_rerun)
     problems += _check_dashboard_summary(dashboard)
     problems += _check_verdict_consistency(summary, promo, dashboard, gate_rerun, plan)
-    # Phase 2A: lane / frozen hash guard / spec repair proposal 정합성 (§10)
+    # Phase 2A/2B-1: lane / frozen hash guard / spec repair proposal·apply 정합성 (§10, §17)
     problems += _check_lane(run_dir, summary, plan, promo, info)
     problems += _check_frozen_hash_guard(run_dir)
     problems += _check_spec_repair_outputs(run_dir)
+    problems += _check_spec_repair_apply(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:

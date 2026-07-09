@@ -126,6 +126,17 @@ def build_parser() -> argparse.ArgumentParser:
     fc_p.add_argument("--no-db", action="store_true", help="DB 저장 생략")
     fc_p.add_argument("--max-patches", type=int, default=2, help="delta patch 최대 횟수 (기본 2, §11.2)")
 
+    fsr_p = sub.add_parser("factory-spec-repair-apply",
+                           help="단일 run Spec Repair Apply (Phase 2B-1, 기본 dry-run)")
+    fsr_p.add_argument("--run-dir", default=None, help="apply 대상 run 디렉터리 (권장)")
+    fsr_p.add_argument("--run-id", type=int, default=None,
+                       help="보조: product run id (resolved run_dir를 출력)")
+    fsr_p.add_argument("--dry-run", action="store_true", help="apply 계획만 생성 (기본 동작)")
+    fsr_p.add_argument("--apply", action="store_true",
+                       help="review 승인(APPROVE_FOR_PHASE2B)된 변경을 단일 run에 적용")
+    fsr_p.add_argument("--mode", choices=["mock", "live"], default="mock")
+    fsr_p.add_argument("--db", default="challenge.db")
+
     fq_p = sub.add_parser("factory-continue-queue",
                           help="continuation queue 분류/라우팅 (Phase 2A, 기본 dry-run)")
     fq_p.add_argument("--lane", choices=["patch", "spec-repair"], default=None,
@@ -486,6 +497,63 @@ def main(argv: list[str] | None = None) -> int:
             if result.get("green_base_path"):
                 print(f"green_base: {result['green_base_path']}")
             return 0
+
+        if args.command == "factory-spec-repair-apply":
+            from pathlib import Path as _Path
+
+            from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler
+            from repo_idea_miner.config import load_challenge_miner_settings
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_spec_repair import run_spec_repair_apply
+
+            if not (args.run_dir or args.run_id):
+                print("오류: --run-dir 또는 --run-id가 필요합니다.", file=sys.stderr)
+                return 1
+            if args.dry_run and args.apply:
+                print("오류: --dry-run과 --apply는 동시에 쓸 수 없습니다.", file=sys.stderr)
+                return 1
+            db_conn = open_factory_db(args.db) if _Path(args.db).exists() else None
+            if args.run_id and db_conn is None:
+                print("오류: --run-id는 DB가 필요합니다.", file=sys.stderr)
+                return 1
+            try:
+                scheduler = None
+                if args.apply and args.mode == "live" and db_conn is not None:
+                    settings = load_settings()
+                    if settings.google_keys:
+                        scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys,
+                                                          load_challenge_miner_settings())
+                out = run_spec_repair_apply(
+                    run_dir=args.run_dir, run_id=args.run_id, apply=args.apply,
+                    mode=args.mode, db_conn=db_conn, scheduler=scheduler,
+                )
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            print("SPEC REPAIR APPLY" + (" (apply)" if args.apply else " (dry-run)"))
+            print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
+            print(f"- base_run_id: {out.get('base_run_id')} / challenge_id: {out.get('challenge_id')}")
+            if out.get("history_run_ids"):
+                print(f"- continuation/history run ids: {out['history_run_ids']}")
+            print(f"- status: {out.get('status')}")
+            for p in out.get("problems") or []:
+                print(f"  BLOCKED: {p}")
+            if out.get("error"):
+                print(f"오류: {out['error']}", file=sys.stderr)
+            if out.get("plan"):
+                print(f"- planned files: {out['plan']['planned_files']}")
+                print(f"- plan: {out['resolved_run_dir']}\\spec_repair_apply_plan.json")
+            if out.get("applied"):
+                print(f"- applied files: {out['applied_files']}")
+                print(f"- frozen hash apply check: {out['frozen_hash_apply_status']}")
+                gates = out.get("gates") or {}
+                print("- gates: " + " ".join(f"{g}={'PASS' if ok else 'FAIL'}" for g, ok in gates.items()))
+                print(f"- factory-validate: {'PASS' if out.get('validate_ok') else 'FAIL'}")
+                print(f"- promoted_to_green_base: {out['promoted_to_green_base']} "
+                      f"/ new_verdict: {out['new_verdict']}")
+            if out.get("rollback_executed"):
+                print("- rollback: 수행됨 (rollback_report.json)")
+            return 0 if out.get("ok") else 1
 
         if args.command == "factory-continue-queue":
             from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler

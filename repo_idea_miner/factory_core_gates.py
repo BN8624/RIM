@@ -549,6 +549,10 @@ _INV_CMP_RE = re.compile(r"^\s*([\w.]+)\s*(>=|<=|==|>|<)\s*(-?\d+(?:\.\d+)?)\s*$
 def _resolve_path(state, path: str):
     node = state
     for part in path.split("."):
+        # Phase 2B-1 §9 최소 보강: dict/list의 단순 length 해석 (missing path와 empty는 구분 유지)
+        if part == "length" and isinstance(node, (list, dict)):
+            node = len(node)
+            continue
         if not isinstance(node, dict) or part not in node:
             return None, False
         node = node[part]
@@ -592,13 +596,33 @@ def invariant_category(ok: bool | None, msg: str) -> str:
     return "INVARIANT_FAIL"
 
 
+def _entity_instances(entity: dict, final_state: dict) -> list[dict]:
+    """entity 필드를 모두 가진 인스턴스를 final_state의 top-level 컬렉션에서 찾는다 (Phase 2B-1 §9).
+
+    list-of-dicts와 dict-of-dicts(id 키 컬렉션)만 최소 해석한다. 못 찾으면 빈 리스트
+    (호출부가 INVARIANT_NOT_EXPOSED를 유지 — missing path 자동 PASS 금지).
+    """
+    fields = set(entity.get("fields") or [])
+    if not fields:
+        return []
+    out: list[dict] = []
+    for value in final_state.values():
+        if isinstance(value, list):
+            items = value
+        elif isinstance(value, dict) and value and all(isinstance(v, dict) for v in value.values()):
+            items = list(value.values())
+        else:
+            continue
+        if items and all(isinstance(e, dict) and fields <= set(e.keys()) for e in items):
+            out.extend(items)
+    return out
+
+
 def run_state_invariant_gate(
     core_contract: dict, replay_outputs: dict[str, dict]
 ) -> tuple[GateResult, dict]:
     r = GateResult(name="State Invariant Gate", ok=True)
-    invariants: list[str] = []
-    for entity in core_contract.get("state_entities") or []:
-        invariants += entity.get("invariants") or []
+    entities = core_contract.get("state_entities") or []
     violations = []
     not_exposed: list[dict] = []
     failed: list[dict] = []
@@ -615,18 +639,32 @@ def run_state_invariant_gate(
             violations.append(v)
             not_exposed.append(v)
             continue
-        for inv in invariants:
-            ok, msg = check_invariant(final_state, inv)
-            category = invariant_category(ok, msg)
-            if ok is None:
-                if msg not in unevaluated:
-                    unevaluated.append(msg)
-                continue
-            checked += 1
-            if not ok:
-                v = {"scenario_id": sid, "invariant": inv, "message": msg, "category": category}
-                violations.append(v)
-                (not_exposed if category == "INVARIANT_NOT_EXPOSED" else failed).append(v)
+        for entity in entities:
+            for inv in entity.get("invariants") or []:
+                ok, msg = check_invariant(final_state, inv)
+                category = invariant_category(ok, msg)
+                # Phase 2B-1 §9: top-level에 없으면 entity 인스턴스(컬렉션 원소) 기준으로 최소 해석.
+                # 인스턴스도 못 찾으면 NOT_EXPOSED 유지 (자동 PASS 금지), 값 위반은 FAIL로 구분.
+                if ok is False and category == "INVARIANT_NOT_EXPOSED":
+                    instances = _entity_instances(entity, final_state)
+                    if instances:
+                        bad = None
+                        for inst in instances:
+                            i_ok, i_msg = check_invariant(inst, inv)
+                            if i_ok is not True:
+                                bad = (i_ok, i_msg)
+                                break
+                        ok, msg = (True, "") if bad is None else bad
+                        category = invariant_category(ok, msg)
+                if ok is None:
+                    if msg not in unevaluated:
+                        unevaluated.append(msg)
+                    continue
+                checked += 1
+                if not ok:
+                    v = {"scenario_id": sid, "invariant": inv, "message": msg, "category": category}
+                    violations.append(v)
+                    (not_exposed if category == "INVARIANT_NOT_EXPOSED" else failed).append(v)
     for v in violations:
         r.problems.append(f"{v['scenario_id']}: {v['message']}")
     r.notes += unevaluated
