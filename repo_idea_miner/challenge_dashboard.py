@@ -112,6 +112,12 @@ _PRODUCT_REPORT_TABS = [
     ("determinism_summary", ("final", "determinism_summary.json", "determinism_summary.json")),
     ("anti_hardcode_summary", ("final", "anti_hardcode_summary.json", "anti_hardcode_summary.json")),
     ("green_base", ("run", "green_base.json", "green_base.json")),
+    # Phase 2A 산출물 (상세 페이지 전용)
+    ("phase2a_dashboard_summary", ("run", "phase2a_dashboard_summary.json", "phase2a_dashboard_summary.json")),
+    ("continuation_run_summary", ("run", "continuation_run_summary.json", "continuation_run_summary.json")),
+    ("spec_repair_proposal", ("run", "spec_repair_proposal.md", "spec_repair_proposal.md")),
+    ("spec_repair_review", ("run", "spec_repair_review.md", "spec_repair_review.md")),
+    ("frozen_hash_check", ("run", "frozen_hash_check.json", "frozen_hash_check.json")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
@@ -606,6 +612,22 @@ def _continuation_line(dsum: dict) -> str:
     )
 
 
+def _lane_line(p2a: dict | None, dsum: dict | None) -> str:
+    """Phase 2A 추천 경로 표시: 추천 경로/이유 한 줄/상태 (주문서 §9)."""
+    p2a = p2a or {}
+    dsum = dsum or {}
+    lane = p2a.get("lane") or p2a.get("recommended_lane") or dsum.get("recommended_lane")
+    if not lane:
+        return ""
+    reason = p2a.get("lane_reason") or dsum.get("lane_reason") or "-"
+    status = p2a.get("lane_status") or dsum.get("lane_status") or "-"
+    return (
+        f'<p class="meta">추천 경로: <b>{_e(L.format_lane_label(lane))}</b></p>'
+        f'<p class="meta">이유: {_e(reason)}</p>'
+        f'<p class="meta">상태: {_e(status)}</p>'
+    )
+
+
 def _base_line(dsum: dict) -> str:
     """Green Base / Continuation Base 구분 표시 (§6.4, §10)."""
     if dsum.get("green_base"):
@@ -818,6 +840,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
         final_dir, run_root = _product_dirs(r)
         psum = load_product_summary(final_dir, run_root)
         dsum = load_dashboard_summary(final_dir, run_root)
+        p2a = load_core_summary("phase2a_dashboard_summary.json", final_dir, run_root)
         rev = reviews.get(r["id"])
         title = _product_title(r, psum)
         if dsum:
@@ -834,6 +857,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'{"Replay 출력 사용 확인" if dsum.get("product_layer_consumes_core") else "Replay 출력 미확인"}'
                 f'{" · <b>실전 검증 실행</b>" if dsum.get("is_live_validation") else ""}</p>'
                 f'{_continuation_line(dsum)}'
+                f'{_lane_line(p2a, dsum)}'
             )
         else:
             gate = load_gate_summary(final_dir, run_root)
@@ -845,6 +869,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<div class="issue"><span class="k">문제</span> {_e(issue)}</div>'
                 f'<p class="meta">검사 {passed}/{total} 통과 · 품질 {_e(L.format_qa_status(_overall_qa_status(qa)))}</p>'
                 f'<p class="meta">추천 {_e(recommended)}</p>'
+                f'{_lane_line(p2a, None)}'
             )
         cards.append(
             f"""  <article class="card">
@@ -953,6 +978,26 @@ def render_product_detail(
 
     # 4. 검사 결과 (§6·§16) — Phase 1.6 run은 코어 시스템 검증 패널로 대체
     dsum = load_dashboard_summary(final_dir, run_root)
+    # Phase 2A: 추천 경로 상세 패널 (§9 — 상세 페이지에만 기술 정보 표시)
+    p2a = load_core_summary("phase2a_dashboard_summary.json", final_dir, run_root)
+    p2a_html = ""
+    if p2a:
+        ftypes = ", ".join(p2a.get("failure_types") or p2a.get("remaining_failures") or []) or "-"
+        prop = "생성됨" if p2a.get("proposal_generated") else "없음"
+        rev_res = p2a.get("review_result") or ("생성됨" if p2a.get("review_generated") else "없음")
+        p2a_html = f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2A 추천 경로</h2>
+  {_lane_line(p2a, dsum)}
+  <p class="meta">failure types: {_e(ftypes)}</p>
+  <p class="meta">위험도: {_e(p2a.get('risk_level') or '-')}
+    · 차단 사유: {_e(p2a.get('blocking_reason') or '-')}</p>
+  <p class="meta">spec repair 제안서: {_e(prop)} · 검토: {_e(rev_res)}
+    · 적용 여부: {"적용됨" if p2a.get("apply_performed") else "적용 안 함 (Phase 2A 금지)"}</p>
+  <p class="meta">frozen hash: {_e(p2a.get('frozen_hash_status') or '-')}
+    {f"· patch 결과: {_e(p2a.get('patch_result'))}" if p2a.get('patch_result') else ""}</p>
+</section>"""
+
     if dsum:
         gate_html = _core_harness_panel(dsum, final_dir, run_root)
     else:
@@ -1060,7 +1105,7 @@ def render_product_detail(
     body = (
         _nav("product")
         + '<p class="back"><a href="/products">← 목록으로</a></p>'
-        + hero + ch_summary + gate_html + qa_html + issues_html
+        + hero + ch_summary + p2a_html + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )
     return _page(f"제품 번호 {run_id}", body)

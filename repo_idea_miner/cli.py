@@ -126,6 +126,22 @@ def build_parser() -> argparse.ArgumentParser:
     fc_p.add_argument("--no-db", action="store_true", help="DB 저장 생략")
     fc_p.add_argument("--max-patches", type=int, default=2, help="delta patch 최대 횟수 (기본 2, §11.2)")
 
+    fq_p = sub.add_parser("factory-continue-queue",
+                          help="continuation queue 분류/라우팅 (Phase 2A, 기본 dry-run)")
+    fq_p.add_argument("--lane", choices=["patch", "spec-repair"], default=None,
+                      help="lane 필터 (patch=PATCH_CONTINUATION, spec-repair=SPEC_REPAIR)")
+    fq_p.add_argument("--dry-run", action="store_true",
+                      help="분류/queue 출력만 수행 (기본 동작과 동일)")
+    fq_p.add_argument("--execute", action="store_true",
+                      help="patch lane 실제 실행 (--lane patch 필수, limit 최대 1)")
+    fq_p.add_argument("--proposal-only", action="store_true",
+                      help="spec-repair lane proposal/review 생성 (read-only, apply 없음)")
+    fq_p.add_argument("--limit", type=int, default=None,
+                      help="dry-run 기본 20, execute/proposal-only 기본·최대 1")
+    fq_p.add_argument("--mode", choices=["mock", "live"], default="mock")
+    fq_p.add_argument("--db", default="challenge.db")
+    fq_p.add_argument("--output-dir", default="runs")
+
     fs_p = sub.add_parser("factory-status", help="Product Factory 상태 표시")
     fs_p.add_argument("--db", default="challenge.db")
 
@@ -471,6 +487,56 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"green_base: {result['green_base_path']}")
             return 0
 
+        if args.command == "factory-continue-queue":
+            from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler
+            from repo_idea_miner.config import load_challenge_miner_settings
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_queue import run_continuation_queue
+
+            from pathlib import Path as _Path
+
+            db_conn = open_factory_db(args.db) if _Path(args.db).exists() else None
+            try:
+                scheduler = None
+                if args.execute and args.mode == "live" and db_conn is not None:
+                    settings = load_settings()
+                    if settings.google_keys:
+                        scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys,
+                                                          load_challenge_miner_settings())
+                kwargs = {"scheduler": scheduler} if scheduler is not None else {}
+                out = run_continuation_queue(
+                    db_path=None, db_conn=db_conn, output_dir=args.output_dir,
+                    lane=args.lane, execute=args.execute, proposal_only=args.proposal_only,
+                    limit=args.limit, mode=args.mode, **kwargs,
+                )
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            if not out.get("ok"):
+                print(f"오류: {out.get('error')}", file=sys.stderr)
+                return 1
+            print(f"CONTINUATION QUEUE ({out['operation']})")
+            counts = out.get("lane_counts") or {}
+            print("lanes: " + " ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "-")
+            for e in out.get("entries") or []:
+                pr = e["priority"] if e["priority"] is not None else "-"
+                print(f"  [{pr}] run {e['run_id'] or '-'} ch{e['challenge_id'] or '-'} "
+                      f"{e['current_verdict'] or '-'} → {e['recommended_lane']} "
+                      f"(can_patch={e['can_patch']}, risk={e['risk_level']})")
+                print(f"      reason: {e['reason']}"
+                      + (f" / blocking: {e['blocking_reason']}" if e["blocking_reason"] else ""))
+            print(f"queue: {out['queue_json']}")
+            if out.get("status"):
+                print(f"status: {out['status']}")
+            for x in out.get("executed") or []:
+                print(f"  patch run {x['run_id']}: {x['patch_result']} verdict={x['verdict']} "
+                      f"frozen_hash={x['frozen_hash_status']} → {x['continuation_run_dir']}")
+            for x in out.get("proposals") or []:
+                print(f"  spec-repair run {x['run_id']}: review={x['review_result']} "
+                      f"apply_performed={x['apply_performed']} frozen_hash={x['frozen_hash_status']}")
+                print(f"      proposal: {x['proposal_path']}")
+            return 0
+
         if args.command == "factory-status":
             from repo_idea_miner.factory_db import factory_status
 
@@ -510,6 +576,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"- failure types: {', '.join(info['failure_types'])}")
                 print(f"- patch attempts: {info['patch_attempts']}")
                 print(f"- gate rerun: {info['gate_rerun']}")
+                print(f"- lane: {info.get('lane') or '-'}"
+                      + (f" (inferred: {info['inferred_lane']})" if info.get("inferred_lane") else ""))
+                if info.get("patch_result"):
+                    print(f"- patch result: {info['patch_result']}")
                 print(f"- validation: {'PASS' if ok else 'FAIL'}")
                 for p in problems:
                     print(f"FAIL: {p}")

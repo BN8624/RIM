@@ -84,6 +84,25 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] §15 산출물 전부 생성 확인 (normalized/classification/contract 4종/fixtures 3/golden 3/oracle risk/runner/replay/각 gate summary/product layer/dashboard_summary/green_base)
 - [x] pytest 466 passed (기존 378개 포함, Phase 1.6 신규 88개) / secret scan 통과(fake key 주입 테스트 포함)
 
+# Phase 2A Continuation Queue Routing + Safe Patch Lane — 2026-07-09
+
+## 구현
+- [x] factory_frozen.py — Frozen Hash Guard(§4.6~4.7): golden/fixtures/contract/oracle sha256 before/after/check
+- [x] factory_queue.py — Queue Manager: DB 우선 discovery(list_product_runs 재사용, 새 schema 없음) + runs/ fs fallback + run_id dedupe, lane 분류(PATCH_CONTINUATION/SPEC_REPAIR/EXCLUDED/REVIEW_ONLY, §3), 우선순위(§4.2), continuation_queue.json/md(§5.2), patch lane execute(limit 1), spec repair proposal/review read-only(§7, LLM 호출 없음)
+- [x] factory_continue.py — lane/phase=2a/patch_result(PATCH_GREEN/PROGRESS/BLOCKED_SPEC/FAILED) 기록, frozen hash guard, PATCH_BLOCKED_SPEC 시 proposal 생성(apply 없음, §4.8), phase2a_dashboard_summary.json
+- [x] factory_validate.py — lane 존재/verdict 정합(§10), 기존 1.7 run inferred_lane 호환(§4.10), frozen hash guard 검증(사후 spec 파일 수정 탐지 포함), proposal apply_allowed=false 강제, core run에도 phase2a 산출물 검사
+- [x] cli.py — factory-continue-queue(--lane/--dry-run/--execute/--proposal-only/--limit): 기본 dry-run limit 20, execute 기본·최대 1, spec-repair execute/apply 거부, --limit 999 거부
+- [x] challenge_dashboard.py + factory_labels.py — 목록 카드 추천 경로/이유/상태(§9), 상세 Phase 2A 패널(failure/risk/proposal/frozen hash), report 탭 5종 추가
+
+## 검수
+- [x] queue dry-run — run 5(#47) → SPEC_REPAIR priority 1 (reason: golden schema mismatch and invariant DSL issue)
+- [x] --lane patch --execute --limit 1 — NO_PATCH_ELIGIBLE (#47 patch 대상 제외, 파일 수정 없음)
+- [x] --lane spec-repair --proposal-only --limit 1 — proposal/review 생성(APPROVE_FOR_PHASE2B), apply 미수행, frozen hash PASS, 허용 8파일만 생성
+- [x] factory-validate 072220(base+phase2a 산출물) PASS / 100043(legacy continuation) inferred SPEC_REPAIR PASS
+- [x] spec-repair --execute, --execute --limit 2 거부 확인
+- [x] pytest 578 passed (기존 533 + Phase 2A 신규 45) / secret scan 통과
+- [ ] Phase 2B = Spec Repair Apply / golden 갱신 자동화 / limit≥3 (미착수)
+
 # Phase 1.7b Continuation Run Validation Routing Fix — 2026-07-09
 
 ## 구현

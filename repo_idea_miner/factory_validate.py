@@ -225,6 +225,10 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     if final_ok:
         problems += _core_final_artifact_consistency(final_dir)
 
+    # Phase 2A: base run에 spec repair proposal/frozen hash guard 산출물이 있으면 함께 검증
+    problems += _check_frozen_hash_guard(run_dir)
+    problems += _check_spec_repair_outputs(run_dir)
+
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
         problems.append(f"secret 노출 파일: {leaked}")
@@ -263,6 +267,106 @@ REQUIRED_GATE_NAMES = (
 
 SUCCESS_VERDICTS = ("REVIEW_READY", "PROMOTE_TO_CODEX")
 FROZEN_TOKENS = ("golden", "fixtures", "contract")
+
+# ---------------------------------------------------------------- Phase 2A lane / spec repair (§10)
+
+LANES = ("PATCH_CONTINUATION", "SPEC_REPAIR", "EXCLUDED", "REVIEW_ONLY")
+SPEC_REPAIR_REVIEW_RESULTS = (
+    "APPROVE_FOR_PHASE2B", "NEEDS_REVISION", "REJECT", "REQUIRES_HUMAN_REVIEW",
+)
+
+
+def infer_continuation_lane(verdict: str | None, requires_spec_repair: bool = False) -> str:
+    """lane 필드가 없는 기존 run의 inferred_lane을 verdict 기반으로 계산한다 (§4.10)."""
+    if verdict in ("REVIEW_READY", "PROMOTE_TO_CODEX", "KEEP_CANDIDATE"):
+        return "REVIEW_ONLY"
+    if verdict == "SPEC_REPAIR_REQUIRED":
+        return "SPEC_REPAIR"
+    if verdict == "NEEDS_MORE_GEMMA_LOOP":
+        return "SPEC_REPAIR" if requires_spec_repair else "PATCH_CONTINUATION"
+    return "EXCLUDED"
+
+
+def _check_lane(run_dir: Path, summary: dict, plan: dict, promo: dict, info: dict) -> list[str]:
+    """§10: lane 존재/정합성. Phase 2A 이후 run은 lane 필수, 기존 run은 inferred_lane 호환."""
+    p: list[str] = []
+    p2a = _load_json(run_dir / "phase2a_dashboard_summary.json") or {}
+    lane = summary.get("lane") or p2a.get("lane") or p2a.get("recommended_lane")
+    verdict = summary.get("verdict") or promo.get("new_verdict")
+    requires_spec = bool(plan.get("requires_spec_repair") or summary.get("requires_spec_repair"))
+    is_phase2a = summary.get("phase") == "2a" or bool(p2a)
+    if lane:
+        info["lane"] = lane
+        if lane not in LANES:
+            p.append(f"lane: 알 수 없는 lane 값: {lane}")
+        else:
+            expected = infer_continuation_lane(verdict, requires_spec)
+            ok = lane == expected or (
+                verdict == "NEEDS_MORE_GEMMA_LOOP" and lane in ("PATCH_CONTINUATION", "SPEC_REPAIR"))
+            if not ok:
+                p.append(f"lane: verdict={verdict}와 lane={lane} 불일치 (기대: {expected})")
+    elif is_phase2a:
+        p.append("lane: Phase 2A 이후 생성된 run인데 lane 필드 없음")
+    else:
+        info["inferred_lane"] = infer_continuation_lane(verdict, requires_spec)
+    return p
+
+
+def _check_frozen_hash_guard(run_dir: Path) -> list[str]:
+    """§4.6/§4.7: frozen hash before/after/check 정합성 + 기록 이후 spec 파일 수정 탐지."""
+    from repo_idea_miner.factory_frozen import compare_frozen_hashes, compute_frozen_hashes
+
+    before = _load_json(run_dir / "frozen_hash_before.json")
+    after = _load_json(run_dir / "frozen_hash_after.json")
+    check = _load_json(run_dir / "frozen_hash_check.json")
+    p: list[str] = []
+    if check is not None and check.get("status") != "PASS":
+        detail = check.get("changed") or check.get("removed") or check.get("added")
+        p.append(f"frozen hash guard: 전후 frozen 파일 변경됨: {detail}")
+    if before is not None and after is not None:
+        cmp = compare_frozen_hashes(before, after)
+        if cmp["status"] != "PASS" and (check is None or check.get("status") == "PASS"):
+            detail = cmp["changed"] or cmp["removed"] or cmp["added"]
+            p.append(f"frozen hash guard: before/after 불일치가 check에 반영되지 않음: {detail}")
+    if after:
+        ws = run_dir / "workspace"
+        root = ws if ws.is_dir() else run_dir / "final_artifact"
+        current = compute_frozen_hashes(root, run_dir)
+        for key, digest in after.items():
+            if key not in current:
+                p.append(f"frozen hash guard: 기록 이후 spec 파일이 삭제됨: {key}")
+            elif current[key] != digest:
+                p.append(f"frozen hash guard: 기록 이후 spec 파일이 수정됨: {key}")
+    return p
+
+
+def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
+    """§7: spec repair proposal/review는 있으면 검사 — apply는 Phase 2A에서 무조건 금지."""
+    p: list[str] = []
+    prop_path = run_dir / "spec_repair_proposal.json"
+    if prop_path.is_file():
+        prop = _load_json(prop_path)
+        if prop is None:
+            p.append("spec_repair_proposal.json 파싱 실패")
+        else:
+            if prop.get("apply_allowed_in_phase2a") is not False:
+                p.append("spec repair proposal: apply_allowed_in_phase2a가 false가 아님")
+            for field in ("repair_type", "problem", "proposed_change"):
+                if not prop.get(field):
+                    p.append(f"spec repair proposal: {field} 없음")
+    rev_path = run_dir / "spec_repair_review.json"
+    if rev_path.is_file():
+        rev = _load_json(rev_path)
+        if rev is None:
+            p.append("spec_repair_review.json 파싱 실패")
+        else:
+            if rev.get("result") not in SPEC_REPAIR_REVIEW_RESULTS:
+                p.append(f"spec repair review: 알 수 없는 result: {rev.get('result')}")
+            if rev.get("apply_performed") is True:
+                p.append("spec repair review: Phase 2A에서 apply가 수행됨 (금지)")
+    if (run_dir / "spec_repair_apply.json").is_file():
+        p.append("spec repair: Phase 2A에서 apply 산출물 존재 (금지)")
+    return p
 
 
 def detect_continuation_run(run_dir: Path) -> bool:
@@ -501,6 +605,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
         "run_type": RUN_TYPE_CONTINUATION, "base_run_id": None, "challenge_id": None,
         "verdict": None, "promoted_to_green_base": None, "failure_types": [],
         "patch_attempts": None, "gate_rerun": False,
+        "lane": None, "inferred_lane": None, "patch_result": None,
     }
     if not run_dir.is_dir():
         return False, [f"디렉터리 없음: {run_dir}"], info
@@ -524,6 +629,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     info["failure_types"] = summary.get("failure_types") or []
     info["patch_attempts"] = summary.get("patch_attempts")
     info["gate_rerun"] = bool(gate_rerun.get("gates"))
+    info["patch_result"] = summary.get("patch_result")
 
     problems += _check_continuation_summary(summary)
     problems += _check_failure_classification(failure)
@@ -533,6 +639,10 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_green_promotion(promo, gate_rerun)
     problems += _check_dashboard_summary(dashboard)
     problems += _check_verdict_consistency(summary, promo, dashboard, gate_rerun, plan)
+    # Phase 2A: lane / frozen hash guard / spec repair proposal 정합성 (§10)
+    problems += _check_lane(run_dir, summary, plan, promo, info)
+    problems += _check_frozen_hash_guard(run_dir)
+    problems += _check_spec_repair_outputs(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:

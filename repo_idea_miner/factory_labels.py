@@ -107,6 +107,22 @@ QA_FIELD_LABELS = {
     "known_issues": "알려진 문제",
 }
 
+# ---------------------------------------------------------------- Phase 2A 추천 경로 (lane)
+
+LANE_LABELS = {
+    "PATCH_CONTINUATION": "Patch Continuation",
+    "SPEC_REPAIR": "Spec Repair",
+    "EXCLUDED": "제외",
+    "REVIEW_ONLY": "검수 대상",
+}
+
+
+def format_lane_label(lane: str | None) -> str:
+    if not lane:
+        return "-"
+    return LANE_LABELS.get(lane, lane)
+
+
 # ---------------------------------------------------------------- 추천 액션 (§5)
 
 _RECOMMEND_BY_VERDICT = {

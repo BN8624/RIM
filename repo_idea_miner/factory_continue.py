@@ -27,6 +27,7 @@ from repo_idea_miner.factory_db import (
     update_product_run,
 )
 from repo_idea_miner.factory_desks import DeskError, DeskExecutor
+from repo_idea_miner.factory_frozen import compute_frozen_hashes, write_frozen_hash_guard
 from repo_idea_miner.factory_pipeline import FactorySettings, load_factory_settings, make_factory_run_dir
 from repo_idea_miner.factory_workspace import (
     list_workspace_files,
@@ -65,6 +66,40 @@ FROZEN_FILES = (
 FROZEN_PATH_PREFIXES = ("fixtures/", "golden/", "replay/")
 ALLOWED_TOUCH_PREFIXES = ("src/", "product/")
 ALLOWED_TOUCH_FILES = ("README.md", "run_instructions.md")
+
+# ---------------------------------------------------------------- Phase 2A Lane (주문서 §3)
+
+LANE_PATCH = "PATCH_CONTINUATION"
+LANE_SPEC_REPAIR = "SPEC_REPAIR"
+LANE_EXCLUDED = "EXCLUDED"
+LANE_REVIEW_ONLY = "REVIEW_ONLY"
+LANES = (LANE_PATCH, LANE_SPEC_REPAIR, LANE_EXCLUDED, LANE_REVIEW_ONLY)
+
+PATCH_RESULTS = ("PATCH_GREEN", "PATCH_PROGRESS", "PATCH_BLOCKED_SPEC",
+                 "PATCH_FAILED", "NO_PATCH_ELIGIBLE")
+
+
+def lane_for_verdict(verdict: str | None, requires_spec_repair: bool = False) -> str:
+    """verdict(+spec repair 필요 여부)에서 recommended lane을 계산한다 (§3, §4.10)."""
+    if verdict in ("REVIEW_READY", "PROMOTE_TO_CODEX", "KEEP_CANDIDATE"):
+        return LANE_REVIEW_ONLY
+    if verdict == "SPEC_REPAIR_REQUIRED":
+        return LANE_SPEC_REPAIR
+    if verdict == "NEEDS_MORE_GEMMA_LOOP":
+        return LANE_SPEC_REPAIR if requires_spec_repair else LANE_PATCH
+    return LANE_EXCLUDED
+
+
+def decide_patch_result(promoted: bool, verdict: str | None, resolved: dict) -> str:
+    """patch lane 결과 상태를 계산한다 (§6.5)."""
+    if promoted:
+        return "PATCH_GREEN"
+    if verdict == "SPEC_REPAIR_REQUIRED":
+        return "PATCH_BLOCKED_SPEC"
+    if any(resolved.values()):
+        return "PATCH_PROGRESS"
+    return "PATCH_FAILED"
+
 
 # patch 대상 파일과 연결되는 failure type (§9.1)
 _PATCHABLE_TARGET = {
@@ -354,6 +389,8 @@ def run_continuation(
     seed = _resolve_seed(base_run_dir, base["base_json"])
     shutil.copytree(seed, workspace)
     result["continuation_run_dir"] = str(cont_dir)
+    # Phase 2A §4.7: patch 전 frozen file hash 저장 (patch 후 비교)
+    frozen_before = compute_frozen_hashes(workspace)
 
     goldens = [
         _load_json(p) for p in sorted((workspace / "golden").glob("expected_*.json"))
@@ -490,11 +527,21 @@ def run_continuation(
         "build_review_status": (build_review or {}).get("status"),
     })
 
+    # Phase 2A §4.7: patch 후 frozen hash 비교 — 바뀌면 patch reject
+    frozen_check = write_frozen_hash_guard(cont_dir, frozen_before, compute_frozen_hashes(workspace))
+    result["frozen_hash_status"] = frozen_check["status"]
+
     # 10. Green Base Promotion Check (§17)
     hardcode_risk = _max_risk(gates["artifacts"]["anti_hardcode_summary"].get("hardcode_risk", "low"),
                               base["hardcode_risk"])
     promo = decide_promotion(gate_summary, product_consumes, hardcode_risk, base["oracle_risk"],
                              final_failures, base["base_json"].get("next_goal") or "")
+    if frozen_check["status"] == "FAIL":
+        # frozen file이 바뀐 patch는 결과와 무관하게 승격 금지 (§4.7 backstop)
+        result["rejected_patches"] = result["rejected_patches"] + frozen_check["changed"]
+        promo = {"promoted_to_green_base": False, "new_verdict": "NEEDS_MORE_GEMMA_LOOP",
+                 "remaining_failures": promo["remaining_failures"] or ["FROZEN_HASH_CHANGED"],
+                 "next_goal": promo["next_goal"]}
     result["verdict"] = promo["new_verdict"]
     result["promoted_to_green_base"] = promo["promoted_to_green_base"]
 
@@ -517,11 +564,48 @@ def run_continuation(
     }
     _write_json("green_base_promotion.json", green_promotion)
 
+    # Phase 2A: lane / patch 결과 상태 (§3, §4.10, §6.5)
+    lane = lane_for_verdict(promo["new_verdict"], plan["requires_spec_repair"])
+    patch_result = decide_patch_result(promo["promoted_to_green_base"], promo["new_verdict"],
+                                       result["resolved"])
+    result["lane"] = lane
+    result["patch_result"] = patch_result
+
+    # §4.8: patch 중 spec 문제로 판명되면 PATCH_BLOCKED_SPEC — proposal 생성 가능, apply 금지
+    if patch_result == "PATCH_BLOCKED_SPEC":
+        from repo_idea_miner.factory_queue import build_spec_repair_proposal, build_spec_repair_review
+
+        proposal = build_spec_repair_proposal(base_run_id, result["challenge_id"],
+                                              final_failures, hardcode_risk)
+        review = build_spec_repair_review(proposal)
+        _write_json("spec_repair_proposal.json", proposal)
+        _write_json("spec_repair_review.json", review)
+
     # 11. Dashboard / Report (§18)
     dashboard_summary = _continuation_dashboard_summary(
         base, result, gate_summary, product_consumes, promo, green_base_path is not None)
+    lane_reason = ", ".join(promo["remaining_failures"]) or promo["next_goal"] or "-"
+    lane_status = {
+        LANE_SPEC_REPAIR: "제안서 생성됨, 적용은 보류" if patch_result == "PATCH_BLOCKED_SPEC" else "spec repair 필요, 적용은 보류",
+        LANE_PATCH: "자동 patch 가능",
+        LANE_REVIEW_ONLY: "검수 대기",
+        LANE_EXCLUDED: "루프 대상 아님",
+    }[lane]
+    dashboard_summary.update({"recommended_lane": lane, "lane_reason": lane_reason,
+                              "lane_status": lane_status})
     _write_json("phase17_dashboard_summary.json", dashboard_summary)
     _write_json("dashboard_summary.json", dashboard_summary)
+    _write_json("phase2a_dashboard_summary.json", {
+        "lane": lane, "recommended_lane": lane,
+        "lane_reason": lane_reason, "lane_status": lane_status,
+        "base_run_id": base_run_id, "challenge_id": result["challenge_id"],
+        "verdict": promo["new_verdict"], "patch_result": patch_result,
+        "risk_level": _max_risk(hardcode_risk, base["oracle_risk"]),
+        "remaining_failures": promo["remaining_failures"],
+        "frozen_hash_status": frozen_check["status"],
+        "proposal_generated": patch_result == "PATCH_BLOCKED_SPEC",
+        "apply_performed": False,
+    })
 
     continuation_summary = {
         "base_run_id": base_run_id, "base_run_dir": str(base_run_dir),
@@ -531,6 +615,8 @@ def run_continuation(
         "patch_attempts": patch_attempts, "transient_retries": transient_total,
         "rejected_patches": result["rejected_patches"],
         "requires_spec_repair": plan["requires_spec_repair"],
+        "lane": lane, "patch_result": patch_result, "phase": "2a",
+        "frozen_hash_status": frozen_check["status"],
     }
     _write_json("continuation_run_summary.json", continuation_summary)
 
@@ -540,8 +626,9 @@ def run_continuation(
         shutil.rmtree(final_dir)
     shutil.copytree(workspace, final_dir)
     for name in ("dashboard_summary.json", "phase17_dashboard_summary.json",
-                 "green_base_promotion.json", "continuation_run_summary.json",
-                 "failure_classification.json", "product_layer_recheck.json"):
+                 "phase2a_dashboard_summary.json", "green_base_promotion.json",
+                 "continuation_run_summary.json", "failure_classification.json",
+                 "product_layer_recheck.json", "frozen_hash_check.json"):
         src = cont_dir / name
         if src.is_file():
             (final_dir / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
