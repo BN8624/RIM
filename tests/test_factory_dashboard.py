@@ -47,8 +47,8 @@ def test_products_index_shows_verdict(dashboard):
     """Dashboard에서 Product Verdict 표시 (§22-33)."""
     base, _, result = dashboard
     body = _get(base + "/products")
-    assert "제품 공장" in body
-    assert "Codex 승격 후보" in body  # PROMOTE_TO_CODEX 한글 라벨
+    assert "Product Runs" in body
+    assert "Codex 승격 후보" in body  # PROMOTE_TO_CODEX verdict 배지 한글 라벨
     assert f"/product/{result['product_run_id']}" in body
 
 

@@ -59,6 +59,12 @@ from repo_idea_miner.factory_schemas import (
     codex_promotion_problems,
     promotion_line,
 )
+from repo_idea_miner.factory_summary import (
+    build_gate_summary,
+    build_product_summary,
+    build_qa_summary,
+    write_summary_files,
+)
 from repo_idea_miner.factory_workspace import (
     apply_file_entries,
     latest_green_base,
@@ -444,7 +450,7 @@ def run_product_factory(
                        validation="PASS", next_state="static_gate")
 
         # 6. Gate 체인 + Debug 루프 (§7.5~§7.9)
-        gate_summary, debug_rounds = _run_gate_loop(
+        gate_summary, debug_rounds, gate_results = _run_gate_loop(
             run_dir, workspace, manifest, contract, secrets, executor, fset,
             context, db_conn, run_id, _stage, _desk_call,
         )
@@ -541,6 +547,21 @@ def run_product_factory(
             if db_conn is not None and run_id is not None:
                 add_product_artifact(db_conn, run_id, "codex_export", str(export_dir))
 
+        # 11.5 Structured summary json (§5·§6) — 대시보드 표시용, 기존 산출물은 그대로 둔다
+        qa_summary_json = build_qa_summary(qa, judge, verdict)
+        gate_summary_json = build_gate_summary(gate_results, manifest)
+        product_summary_json = build_product_summary(
+            run_id, challenge_id, card,
+            status="done",
+            stage="judge" if judge is not None else "gate",
+            verdict=verdict, judge=judge, gate_summary_bool=gate_summary,
+            qa_summary=qa_summary_json,
+            workspace_dir=str(workspace), final_artifact_dir=str(final_dir),
+            codex_export_dir=result.get("codex_export_dir"),
+        )
+        write_summary_files([run_dir, final_dir], product_summary_json,
+                            gate_summary_json, qa_summary_json, secrets)
+
         # 12. secret scan (전체 run_dir)
         leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
         if leaked:
@@ -596,8 +617,11 @@ def _run_gates(workspace: Path, manifest: dict, contract: dict, secrets: list[st
 
 
 def _run_gate_loop(run_dir, workspace, manifest, contract, secrets, executor, fset,
-                   context, db_conn, run_id, _stage, _desk_call) -> tuple[dict, int]:
-    """gate 실행 → 실패 시 Debug Desk → 재검증. 최대 fset.max_debug_rounds회 (§7.9)."""
+                   context, db_conn, run_id, _stage, _desk_call) -> tuple[dict, int, dict]:
+    """gate 실행 → 실패 시 Debug Desk → 재검증. 최대 fset.max_debug_rounds회 (§7.9).
+
+    반환: (summary bool dict, debug_rounds, 마지막 GateResult dict).
+    """
     debug_rounds = 0
     while True:
         _stage("static_gate")
@@ -610,7 +634,7 @@ def _run_gate_loop(run_dir, workspace, manifest, contract, secrets, executor, fs
                            next_state="next_gate" if summary[gate] else "debug")
         failed = [g for g in GATE_ORDER if not summary[g]]
         if not failed:
-            return summary, debug_rounds
+            return summary, debug_rounds, results
         if debug_rounds >= fset.max_debug_rounds:
             # 무한 루프 금지 (§7.9) — green base가 있으면 복원
             if latest_green_base(run_dir) is not None:
@@ -619,7 +643,7 @@ def _run_gate_loop(run_dir, workspace, manifest, contract, secrets, executor, fs
                                   {"event": "rollback_to_green_base", "reason": "debug 한도 초과"})
             log_debug_history(run_dir, secrets,
                               {"event": "debug_exhausted", "rounds": debug_rounds, "failed_gates": failed})
-            return summary, debug_rounds
+            return summary, debug_rounds, results
 
         # Debug Desk (§7.9)
         debug_rounds += 1
@@ -649,7 +673,7 @@ def _run_gate_loop(run_dir, workspace, manifest, contract, secrets, executor, fs
             )
         except DeskError as exc:
             log_debug_history(run_dir, secrets, {"event": "debug_desk_error", "error": str(exc)[:300]})
-            return summary, debug_rounds
+            return summary, debug_rounds, results
         debug_out = debug_model.model_dump()
         written = apply_file_entries(workspace, debug_out["files"], secrets)
         write_workspace_file(workspace, "reports/debug_report.md",

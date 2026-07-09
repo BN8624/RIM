@@ -15,6 +15,9 @@ FACTORY_TABLES = (
     "product_artifacts",
 )
 
+# product_reviews는 Phase 1.5에서 추가된 append-only 검수 기록 테이블이다.
+# 기존 DB(구버전)에서도 factory-validate가 깨지지 않도록 필수 검증 대상에는 넣지 않는다.
+
 # worker_key_id는 실제 API key가 아니라 KEY_01 형식 내부 ID만 저장한다 (§9, §18.2).
 _FACTORY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS product_runs (
@@ -59,6 +62,16 @@ CREATE TABLE IF NOT EXISTS product_artifacts (
     product_run_id INTEGER,
     artifact_type TEXT,
     path TEXT,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS product_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_run_id INTEGER,
+    action TEXT,
+    note TEXT,
+    selected_next_goal TEXT,
+    reviewer_source TEXT DEFAULT 'dashboard',
     created_at TEXT
 );
 """
@@ -140,6 +153,52 @@ def set_owner_decision(conn: sqlite3.Connection, run_id: int, decision: str) -> 
 def get_product_run(conn: sqlite3.Connection, run_id: int) -> dict | None:
     row = conn.execute("SELECT * FROM product_runs WHERE id=?", (run_id,)).fetchone()
     return dict(row) if row else None
+
+
+# ---------------------------------------------------------------- product_reviews (§26, append-only)
+
+def add_product_review(
+    conn: sqlite3.Connection,
+    run_id: int,
+    action: str,
+    note: str | None = None,
+    selected_next_goal: str | None = None,
+    reviewer_source: str = "dashboard",
+) -> int:
+    """사람 검수 판단을 append-only로 기록한다. 이전 기록은 지우지 않는다 (§26).
+
+    호환성: product_runs.owner_decision도 최신 값으로 갱신해 challenge_has_run 등 기존
+    로직이 그대로 동작하게 한다.
+    """
+    if action not in PRODUCT_OWNER_DECISIONS:
+        raise ValueError(f"잘못된 review action: {action}")
+    now = utcnow_iso()
+    cur = conn.execute(
+        "INSERT INTO product_reviews(product_run_id, action, note, selected_next_goal, "
+        "reviewer_source, created_at) VALUES(?,?,?,?,?,?)",
+        (run_id, action, note, selected_next_goal, reviewer_source, now),
+    )
+    conn.execute(
+        "UPDATE product_runs SET owner_decision=?, updated_at=? WHERE id=?", (action, now, run_id)
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def latest_review(conn: sqlite3.Connection, run_id: int) -> dict | None:
+    """해당 run의 가장 최근 review 한 건 (§26: 최신 review만 표시)."""
+    row = conn.execute(
+        "SELECT * FROM product_reviews WHERE product_run_id=? ORDER BY id DESC LIMIT 1", (run_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def latest_reviews_map(conn: sqlite3.Connection) -> dict[int, dict]:
+    """run_id → 최신 review dict. 목록 화면에서 한 번에 조회하기 위한 헬퍼."""
+    out: dict[int, dict] = {}
+    for row in conn.execute("SELECT * FROM product_reviews ORDER BY id ASC"):
+        out[row["product_run_id"]] = dict(row)  # id 오름차순이므로 마지막이 최신
+    return out
 
 
 def list_product_runs(conn: sqlite3.Connection, limit: int = 200) -> list[dict]:

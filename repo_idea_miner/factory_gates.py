@@ -26,6 +26,8 @@ class GateResult:
     ok: bool
     problems: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # Smoke Gate에서 실행한 sandbox 결과(들). Dashboard Smoke Output Preview용 (§19).
+    sandbox_runs: list = field(default_factory=list)
 
     def report_md(self) -> str:
         lines = [f"# {self.name} Report", "", f"결과: {'PASS' if self.ok else 'FAIL'}", ""]
@@ -348,6 +350,7 @@ def run_smoke_gate(
             workspace, install_command, phase="install", project_type=project_type,
             timeout_seconds=timeout_seconds, use_docker=use_docker, secrets=secrets,
         )
+        r.sandbox_runs.append(res)
         r.notes.append(f"install ({'docker' if res.used_docker else 'local'}): {install_command}")
         if not res.ok:
             r.problems.append(f"의존성 설치 실패: {res.error or res.stderr[:300]}")
@@ -376,6 +379,7 @@ def run_smoke_gate(
                 workspace, run_command, phase="execute", project_type=project_type,
                 timeout_seconds=timeout_seconds, use_docker=use_docker, secrets=secrets,
             )
+            r.sandbox_runs.append(res)
             r.notes.append(f"run ({'docker' if res.used_docker else 'local'}): {run_command}")
             if not res.ok:
                 detail = res.error or (res.stderr or res.stdout)[:300]
@@ -387,6 +391,7 @@ def run_smoke_gate(
             workspace, check_cmd, phase="execute", project_type=project_type,
             timeout_seconds=timeout_seconds, use_docker=use_docker, secrets=secrets,
         )
+        r.sandbox_runs.append(res)
         r.notes.append(f"check ({'docker' if res.used_docker else 'local'}): {check_cmd}")
         if not res.ok:
             detail = res.error or (res.stderr or res.stdout)[:300]
