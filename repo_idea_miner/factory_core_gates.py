@@ -754,6 +754,81 @@ _SCENARIO_ID_RE = re.compile(r"scenario_\d+")
 _TODO_RE = re.compile(r"\b(TODO|FIXME|PLACEHOLDER)\b|coming soon", re.IGNORECASE)
 _SERIALIZED_OK_PATTERNS = ('\'{"ok"', '"{\\"ok\\"', "'{\\'ok\\'")
 
+# summary 리터럴이 이 그래프-실행 상태 토큰들을 읽는 함수 안에서 나오면 state 파생으로 본다 (Phase 2B-1b §8).
+# errors/len 단독은 파생 근거로 인정하지 않는다 — 실행 상태가 아니라 예외 개수일 뿐이다.
+_SUMMARY_STATE_TOKENS = ("final_state", "execution_order", "executed_nodes", "failed_nodes",
+                         "nodes", "edges", "status", "global_tick")
+_SUMMARY_EVENT_TOKENS = ("events",)
+_SUMMARY_ASSIGN_RE = re.compile(r"""["']summary["']\s*:|(?<![\w.])summary\s*=""")
+
+
+def _enclosing_scope(text: str, lineno: int) -> str:
+    """lineno(0-base)를 포함하는 def 블록 텍스트를 추출한다. 감싸는 def가 없으면 모듈 전체."""
+    lines = text.splitlines()
+    start, indent = None, None
+    for i in range(min(lineno, len(lines) - 1), -1, -1):
+        m = re.match(r"(\s*)def\s+\w+", lines[i])
+        if m:
+            start, indent = i, len(m.group(1))
+            break
+    if start is None:
+        return text  # 모듈 스코프
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        stripped = lines[j].strip()
+        if stripped and (len(lines[j]) - len(lines[j].lstrip())) <= indent \
+                and re.match(r"\s*(def|class)\s", lines[j]):
+            end = j
+            break
+    return "\n".join(lines[start:end])
+
+
+def classify_summary_source(code: dict[str, str], goldens: list[dict]) -> dict:
+    """golden expected_summary 리터럴이 코드에 어떻게 존재하는지 분류한다 (Phase 2B-1b §8).
+
+    - summary 대입식에 리터럴이 직접 결합 → hardcoded(high)
+    - 리터럴이 그래프-실행 상태/events를 읽는 formatter 함수 안의 결과 상수 → state/event_derived(low)
+    - 그 외(모듈 상수 등 파생 근거 없음) → hardcoded(high)
+    리터럴이 아예 없으면 n/a(low). anti_hardcode를 느슨하게 만들지 않고 오탐만 줄인다.
+    """
+    src = {k: v for k, v in code.items() if k.startswith("src/")}
+    src_blob = "\n".join(src.values())
+    literals = sorted({(g.get("expected_summary") or "").strip() for g in goldens})
+    literals = [s for s in literals if len(s) >= 8]
+    problems: list[str] = []
+    evidence: list[str] = []
+    source, risk = "n/a", "low"
+    for lit in literals:
+        if lit not in src_blob:
+            continue
+        direct, derived, derived_kind = False, False, "state_derived"
+        for rel, text in src.items():
+            if lit not in text:
+                continue
+            for i, line in enumerate(text.splitlines()):
+                if lit not in line:
+                    continue
+                if _SUMMARY_ASSIGN_RE.search(line):
+                    direct = True
+                    evidence.append(f"{rel}:{i + 1}: summary 대입에 리터럴 직접 결합")
+                scope = _enclosing_scope(text, i)
+                has_state = any(t in scope for t in _SUMMARY_STATE_TOKENS)
+                has_event = any(t in scope for t in _SUMMARY_EVENT_TOKENS)
+                if (has_state or has_event) and not _SCENARIO_ID_RE.search(scope):
+                    derived = True
+                    derived_kind = "event_derived" if has_event and not has_state else "state_derived"
+                    evidence.append(f"{rel}:{i + 1}: state/events 파생 formatter 결과 상수")
+        if direct:
+            problems.append(f"expected_summary 리터럴이 summary 대입에 직접 하드코딩됨: {lit!r}")
+            source, risk = "hardcoded", "high"
+        elif derived:
+            source = derived_kind
+        else:
+            problems.append(f"expected_summary 리터럴이 코드에 하드코딩됨(state/events 파생 근거 없음): {lit!r}")
+            source, risk = "hardcoded", "high"
+    return {"problems": problems, "summary_source": source,
+            "summary_hardcode_risk": risk, "summary_evidence": evidence}
+
 
 def run_anti_hardcode_gate(
     workspace: Path,
@@ -781,11 +856,9 @@ def run_anti_hardcode_gate(
                 level1.append(f"{rel}: 미리 직렬화된 출력 문자열 의심 (hardcoded success)")
                 break
 
-    src_blob = "\n".join(v for k, v in code.items() if k.startswith("src/"))
-    for golden in goldens:
-        summary_text = (golden.get("expected_summary") or "").strip()
-        if len(summary_text) >= 8 and summary_text in src_blob:
-            level1.append(f"golden expected_summary 문자열이 코드에 직접 포함됨: {summary_text!r}")
+    # golden summary 리터럴이 하드코딩인지 state/events 파생인지 분류 (Phase 2B-1b §8)
+    summary_class = classify_summary_source(code, goldens)
+    level1 += summary_class["problems"]
 
     # Level 2: scenario id/title 변형 후 재실행 → final_state가 달라지면 fixture 의존 (§8.5)
     variant_ran = False
@@ -833,6 +906,9 @@ def run_anti_hardcode_gate(
         "medium_signals": medium_only,
         "hardcode_risk": hardcode_risk,
         "level2_ran": variant_ran,
+        "summary_source": summary_class["summary_source"],
+        "summary_hardcode_risk": summary_class["summary_hardcode_risk"],
+        "summary_evidence": summary_class["summary_evidence"],
     }
     r.ok = not r.problems
     return r, summary

@@ -124,6 +124,13 @@ _PRODUCT_REPORT_TABS = [
     ("spec_repair_diff_summary", ("run", "spec_repair_diff_summary.json", "spec_repair_diff_summary.json")),
     ("gate_rerun_after_spec_repair", ("run", "gate_rerun_after_spec_repair.json", "gate_rerun_after_spec_repair.json")),
     ("phase2b1_dashboard_summary", ("run", "phase2b1_dashboard_summary.json", "phase2b1_dashboard_summary.json")),
+    # Phase 2B-1b 산출물 (상세 페이지 전용)
+    ("anti_hardcode_patch_plan", ("run", "anti_hardcode_patch_plan.md", "anti_hardcode_patch_plan.md")),
+    ("anti_hardcode_patch_report", ("run", "anti_hardcode_patch_report.md", "anti_hardcode_patch_report.md")),
+    ("anti_hardcode_diff_summary", ("run", "anti_hardcode_diff_summary.json", "anti_hardcode_diff_summary.json")),
+    ("gate_rerun_after_anti_hardcode_patch", ("run", "gate_rerun_after_anti_hardcode_patch.json", "gate_rerun_after_anti_hardcode_patch.json")),
+    ("summary_repair_rule_update", ("run", "summary_repair_rule_update.md", "summary_repair_rule_update.md")),
+    ("phase2b1b_dashboard_summary", ("run", "phase2b1b_dashboard_summary.json", "phase2b1b_dashboard_summary.json")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
@@ -627,8 +634,10 @@ def _lane_line(p2a: dict | None, dsum: dict | None) -> str:
         return ""
     reason = p2a.get("lane_reason") or dsum.get("lane_reason") or "-"
     status = p2a.get("lane_status") or dsum.get("lane_status") or "-"
+    # Phase 2B-1b는 명시 추천 경로(Anti-Hardcode Patch)를 lane 라벨보다 우선 표시한다 (§15)
+    path_label = p2a.get("recommended_path") or L.format_lane_label(lane)
     return (
-        f'<p class="meta">추천 경로: <b>{_e(L.format_lane_label(lane))}</b></p>'
+        f'<p class="meta">추천 경로: <b>{_e(path_label)}</b></p>'
         f'<p class="meta">이유: {_e(reason)}</p>'
         f'<p class="meta">상태: {_e(status)}</p>'
     )
@@ -846,7 +855,8 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
         final_dir, run_root = _product_dirs(r)
         psum = load_product_summary(final_dir, run_root)
         dsum = load_dashboard_summary(final_dir, run_root)
-        p2a = load_core_summary("phase2b1_dashboard_summary.json", final_dir, run_root) \
+        p2a = load_core_summary("phase2b1b_dashboard_summary.json", final_dir, run_root) \
+            or load_core_summary("phase2b1_dashboard_summary.json", final_dir, run_root) \
             or load_core_summary("phase2a_dashboard_summary.json", final_dir, run_root)
         rev = reviews.get(r["id"])
         title = _product_title(r, psum)
@@ -985,19 +995,30 @@ def render_product_detail(
 
     # 4. 검사 결과 (§6·§16) — Phase 1.6 run은 코어 시스템 검증 패널로 대체
     dsum = load_dashboard_summary(final_dir, run_root)
-    # Phase 2A/2B-1: 추천 경로 상세 패널 (§9, 2B-1 §16 — 상세 페이지에만 기술 정보 표시)
+    # Phase 2A/2B: 추천 경로 상세 패널 (§9, 2B-1 §16, 2B-1b §15 — 상세 페이지에만 기술 정보 표시)
+    p2b1b = load_core_summary("phase2b1b_dashboard_summary.json", final_dir, run_root)
     p2b1 = load_core_summary("phase2b1_dashboard_summary.json", final_dir, run_root)
     p2a = load_core_summary("phase2a_dashboard_summary.json", final_dir, run_root)
     p2a_html = ""
-    if p2b1 or p2a:
-        disp = p2b1 or p2a
+    if p2b1b or p2b1 or p2a:
+        disp = p2b1b or p2b1 or p2a
         ftypes = ", ".join(disp.get("failure_types") or disp.get("remaining_failures") or []) or "-"
         prop = "생성됨" if (p2a or {}).get("proposal_generated") else "없음"
         rev_res = (p2a or {}).get("review_result") or ("생성됨" if (p2a or {}).get("review_generated") else "없음")
         apply_line = ""
+        if p2b1b:
+            g = f"{p2b1b.get('gates_passed', 0)}/{p2b1b.get('gates_total', 0)} 통과"
+            apply_line += (
+                f'<p class="meta">Anti-Hardcode Patch: <b>{_e(p2b1b.get("patch_status") or "-")}</b>'
+                f' · summary 출처: {_e(p2b1b.get("summary_source") or "-")}'
+                f' · gate 재검증 {g}'
+                f' · validate {"PASS" if p2b1b.get("validate_ok") else "FAIL"}</p>'
+                f'<p class="meta">green 승격: {"됨" if p2b1b.get("promoted_to_green_base") else "안 됨"}'
+                f' · 남은 실패: {_e(", ".join(p2b1b.get("remaining_failures") or []) or "없음")}</p>'
+            )
         if p2b1:
             gates_line = f"{p2b1.get('gates_passed', 0)}/{p2b1.get('gates_total', 0)} 통과"
-            apply_line = (
+            apply_line += (
                 f'<p class="meta">Spec Repair Apply: <b>{_e(p2b1.get("apply_status") or "-")}</b>'
                 f' · 적용 파일 {len(p2b1.get("applied_files") or [])}개'
                 f' · gate 재검증 {gates_line}'

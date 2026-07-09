@@ -46,7 +46,8 @@ def compute_frozen_hashes(workspace: Path | None, run_dir: Path | None = None) -
             d = root / prefix.rstrip("/")
             if d.is_dir():
                 for p in sorted(d.rglob("*")):
-                    if p.is_file():
+                    # anti_hardcode gate가 만드는 변형 fixture는 spec이 아니라 임시 scratch다 — frozen 대상 제외
+                    if p.is_file() and "_variants" not in p.parts:
                         rel = p.relative_to(root).as_posix()
                         out.setdefault(f"{tag}{rel}", _sha256(p))
 

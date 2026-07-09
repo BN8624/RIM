@@ -181,8 +181,12 @@ def _key_paths(obj, prefix="") -> set:
     return out
 
 
-def plan_scenario_repair(golden: dict, replay: dict | None, contract_fields: set) -> dict:
-    """golden 1건의 보정안을 만든다. §8 엄격 기준을 어기면 blocked_reasons에 기록하고 new_golden=None."""
+def plan_scenario_repair(golden: dict, replay: dict | None, contract_fields: set,
+                         summary_hardcoded: bool = False) -> dict:
+    """golden 1건의 보정안을 만든다. §8 엄격 기준을 어기면 blocked_reasons에 기록하고 new_golden=None.
+
+    summary_hardcoded=True면(runner summary가 state/events 파생이 아니라 하드코딩) expected_summary
+    보정을 차단한다 — 하드코딩된 runner 출력을 golden에 그대로 반영하지 못하게 한다 (Phase 2B-1b §7)."""
     sid = golden.get("scenario_id") or "(없음)"
     mode = golden.get("comparison_mode") or "exact"
     entry = {"scenario_id": sid, "comparison_mode": {"old": mode, "new": mode},
@@ -246,6 +250,10 @@ def plan_scenario_repair(golden: dict, replay: dict | None, contract_fields: set
     if old_summary and old_summary != new_summary:
         if not new_summary:
             blocked.append("runner summary가 비어 있음 — expected_summary 비우기 금지 (§8)")
+        elif summary_hardcoded:
+            blocked.append(
+                "runner summary가 state/events 파생이 아니라 하드코딩됨 — expected_summary 보정 차단 "
+                "(SUMMARY_REPAIR_BLOCKED_HARDCODE_RISK, Phase 2B-1b §7.2)")
         else:
             new_golden["expected_summary"] = new_summary
             entry["changes"].append(f"expected_summary 정합: {old_summary!r} → {new_summary!r}")
@@ -273,6 +281,12 @@ def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
         contract_fields |= set(entity.get("fields") or [])
 
     golden_files = sorted((workspace / "golden").glob("expected_*.json"))
+    goldens_all = [_load_json(g) or {} for g in golden_files]
+    # runner summary가 하드코딩이면 expected_summary 보정을 차단한다 (Phase 2B-1b §7)
+    from repo_idea_miner.factory_core_gates import _src_code_files, classify_summary_source
+    summary_class = classify_summary_source(_src_code_files(workspace), goldens_all)
+    summary_hardcoded = summary_class["summary_hardcode_risk"] == "high"
+
     scenarios: list[dict] = []
     planned_files: list[str] = []
     blocked: list[str] = []
@@ -280,7 +294,7 @@ def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
         golden = _load_json(gpath) or {}
         sid = golden.get("scenario_id") or gpath.stem.replace("expected_", "scenario_")
         replay = _load_json(workspace / "replay" / f"replay_{sid}.json")
-        entry = plan_scenario_repair(golden, replay, contract_fields)
+        entry = plan_scenario_repair(golden, replay, contract_fields, summary_hardcoded)
         entry["golden_file"] = f"golden/{gpath.name}"
         scenarios.append(entry)
         if entry["blocked_reasons"]:
@@ -309,6 +323,8 @@ def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
         "scenario_count": {"before": len(golden_files), "after": len(golden_files)},
         "comparison_mode_changes": [],  # plan 단계에서 mode 변경은 생성되지 않음 (§7.2)
         "risk_level": proposal.get("risk_level"),
+        "summary_source": summary_class["summary_source"],
+        "summary_hardcode_risk": summary_class["summary_hardcode_risk"],
         "edges_decision": edges_note,
         "invariant_dsl_note": (
             "invariant 평가기는 factory_core_gates의 length/entity 인스턴스 최소 해석으로 보강됨 "

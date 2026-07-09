@@ -229,6 +229,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_frozen_hash_guard(run_dir)
     problems += _check_spec_repair_outputs(run_dir)
     problems += _check_spec_repair_apply(run_dir)
+    problems += _check_anti_hardcode_patch(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -337,6 +338,8 @@ def _check_frozen_hash_guard(run_dir: Path) -> list[str]:
         root = ws if ws.is_dir() else run_dir / "final_artifact"
         current = compute_frozen_hashes(root, run_dir)
         for key, digest in reference.items():
+            if "_variants" in key:
+                continue  # anti_hardcode gate scratch — frozen 대상 아님(구 기록 호환)
             if key not in current:
                 p.append(f"frozen hash guard: 기록 이후 spec 파일이 삭제됨: {key}")
             elif current[key] != digest:
@@ -412,6 +415,62 @@ def _check_spec_repair_apply(run_dir: Path) -> list[str]:
             if diff and (diff.get("comparison_mode_changes") or diff.get("deleted_expected_fields")
                          or diff.get("invariant_downgrades")):
                 p.append("spec repair apply: 금지 변경이 있는데 green_base 승격")
+    return p
+
+
+ANTI_HARDCODE_PATCH_REQUIRED = (
+    "anti_hardcode_patch_plan.json",
+    "anti_hardcode_patch_report.json",
+    "anti_hardcode_diff_summary.json",
+    "frozen_hash_anti_hardcode_check.json",
+    "gate_rerun_after_anti_hardcode_patch.json",
+    "green_base_promotion_after_anti_hardcode_patch.json",
+)
+
+
+def _check_anti_hardcode_patch(run_dir: Path) -> list[str]:
+    """§16: anti_hardcode patch(Phase 2B-1b) 산출물 정합성. patch 흔적이 없으면 검사하지 않는다."""
+    report = _load_json(run_dir / "anti_hardcode_patch_report.json")
+    if report is None or not report.get("applied"):
+        return []
+    p: list[str] = []
+    for rel in ANTI_HARDCODE_PATCH_REQUIRED:
+        if not (run_dir / rel).is_file():
+            p.append(f"anti_hardcode patch: 필수 산출물 없음: {rel}")
+
+    if report.get("target_count") != 1:
+        p.append(f"anti_hardcode patch: 단일 대상이 아님: target_count={report.get('target_count')}")
+    if report.get("summary_source") is None:
+        p.append("anti_hardcode patch: summary_source 기록 없음")
+    if report.get("summary_hardcode_risk") is None:
+        p.append("anti_hardcode patch: summary_hardcode_risk 기록 없음")
+
+    check = _load_json(run_dir / "frozen_hash_anti_hardcode_check.json") or {}
+    if check and check.get("status") != "PASS":
+        p.append(f"anti_hardcode patch: frozen 파일 변경됨: {check.get('out_of_scope')}")
+
+    promo = _load_json(run_dir / "green_base_promotion_after_anti_hardcode_patch.json") or {}
+    gate_rerun = _load_json(run_dir / "gate_rerun_after_anti_hardcode_patch.json") or {}
+    gates = gate_rerun.get("gates") or report.get("gates") or {}
+    verdict = promo.get("new_verdict") or report.get("new_verdict")
+    summary_risk = report.get("summary_hardcode_risk") or promo.get("summary_hardcode_risk")
+    if verdict in SUCCESS_VERDICTS:
+        if gates and not all(gates.values()):
+            failed = [g for g, ok in gates.items() if not ok]
+            p.append(f"anti_hardcode patch: gate 실패({failed})인데 verdict={verdict}")
+        if summary_risk == "high":
+            p.append(f"anti_hardcode patch: summary_hardcode_risk high인데 verdict={verdict}")
+        if check and check.get("status") != "PASS":
+            p.append(f"anti_hardcode patch: frozen 변경인데 verdict={verdict}")
+    if promo.get("promoted_to_green_base"):
+        if gates and not all(gates.values()):
+            p.append("anti_hardcode patch: gate fail인데 green_base 승격")
+        if promo.get("validate_ok") is False:
+            p.append("anti_hardcode patch: validate fail인데 green_base 승격")
+        if summary_risk == "high":
+            p.append("anti_hardcode patch: summary_hardcode_risk high인데 green_base 승격")
+        if check and check.get("status") != "PASS":
+            p.append("anti_hardcode patch: frozen 변경인데 green_base 승격")
     return p
 
 
@@ -719,6 +778,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_frozen_hash_guard(run_dir)
     problems += _check_spec_repair_outputs(run_dir)
     problems += _check_spec_repair_apply(run_dir)
+    problems += _check_anti_hardcode_patch(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
