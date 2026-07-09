@@ -148,6 +148,13 @@ def build_parser() -> argparse.ArgumentParser:
     fah_p.add_argument("--mode", choices=["mock", "live"], default="mock")
     fah_p.add_argument("--db", default="challenge.db")
 
+    frv_p = sub.add_parser("factory-review",
+                           help="단일 green run no-code-change smoke review + 제품성 추천 (Phase 2C-0)")
+    frv_p.add_argument("--run-dir", default=None, help="review 대상 run 디렉터리 (권장)")
+    frv_p.add_argument("--run-id", type=int, default=None,
+                       help="보조: product run id (resolved run_dir를 출력)")
+    frv_p.add_argument("--db", default="challenge.db")
+
     fq_p = sub.add_parser("factory-continue-queue",
                           help="continuation queue 분류/라우팅 (Phase 2A, 기본 dry-run)")
     fq_p.add_argument("--lane", choices=["patch", "spec-repair"], default=None,
@@ -618,6 +625,44 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"- factory-validate: {'PASS' if out.get('validate_ok') else 'FAIL'}")
                 print(f"- promoted_to_green_base: {out['promoted_to_green_base']} "
                       f"/ new_verdict: {out['new_verdict']}")
+            return 0 if out.get("ok") else 1
+
+        if args.command == "factory-review":
+            from pathlib import Path as _Path
+
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_review import run_review_package
+
+            if not (args.run_dir or args.run_id):
+                print("오류: --run-dir 또는 --run-id가 필요합니다.", file=sys.stderr)
+                return 1
+            db_conn = open_factory_db(args.db) if _Path(args.db).exists() else None
+            if args.run_id and db_conn is None:
+                print("오류: --run-id는 DB가 필요합니다.", file=sys.stderr)
+                return 1
+            try:
+                out = run_review_package(run_dir=args.run_dir, run_id=args.run_id, db_conn=db_conn)
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            print("PHASE 2C-0 REVIEW")
+            print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
+            print(f"- challenge_id: {out.get('challenge_id')}")
+            if out.get("error"):
+                print(f"오류: {out['error']}", file=sys.stderr)
+                return 1
+            smoke = out.get("smoke") or {}
+            print(f"- runner executable: {smoke.get('runner_executable')} "
+                  f"(exit={smoke.get('runner_exit_code')})")
+            print(f"- product viewer reads replay: {smoke.get('product_viewer_reads_replay')} "
+                  f"({len(smoke.get('product_viewer_reads_replay_evidence') or [])} evidence)")
+            print(f"- runner/viewer consistent: {smoke.get('runner_viewer_consistent')} "
+                  f"{smoke.get('runner_viewer_consistency_fields')}")
+            print(f"- no-code-change: {out.get('no_code_change_status')}")
+            print(f"- recommended_fitness: {out.get('recommended_fitness')}")
+            for r in out.get("critical_red_flags") or []:
+                print(f"  red flag: {r}")
+            print(f"- review dir: {out.get('review_dir')}")
             return 0 if out.get("ok") else 1
 
         if args.command == "factory-continue-queue":

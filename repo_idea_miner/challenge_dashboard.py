@@ -131,6 +131,15 @@ _PRODUCT_REPORT_TABS = [
     ("gate_rerun_after_anti_hardcode_patch", ("run", "gate_rerun_after_anti_hardcode_patch.json", "gate_rerun_after_anti_hardcode_patch.json")),
     ("summary_repair_rule_update", ("run", "summary_repair_rule_update.md", "summary_repair_rule_update.md")),
     ("phase2b1b_dashboard_summary", ("run", "phase2b1b_dashboard_summary.json", "phase2b1b_dashboard_summary.json")),
+    # Phase 2C-0 검수 패키지 (review/phase2c0/ — 상세 페이지 전용)
+    ("review_package", ("run", "review/phase2c0/review_package.md", "검수 패키지")),
+    ("product_fitness_report", ("run", "review/phase2c0/product_fitness_report.md", "제품성 리포트")),
+    ("artifact_smoke_review", ("run", "review/phase2c0/artifact_smoke_review.md", "스모크 리뷰")),
+    ("human_review_checklist", ("run", "review/phase2c0/human_review_checklist.md", "검수 체크리스트")),
+    ("sixty_second_review_script", ("run", "review/phase2c0/sixty_second_review_script.md", "60초 검수")),
+    ("demo_manifest", ("run", "review/phase2c0/demo_manifest.json", "demo_manifest")),
+    ("phase2c0_dashboard_summary", ("run", "review/phase2c0/phase2c0_dashboard_summary.json", "phase2c0_dashboard_summary")),
+    ("review_no_code_hash_check", ("run", "review/phase2c0/review_no_code_hash_check.json", "no-code-change 검사")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
@@ -695,6 +704,71 @@ def _core_harness_panel(dsum: dict, final_dir: Path | None, run_root: Path | Non
 </section>"""
 
 
+_PHASE2C0_SUBDIR = "review/phase2c0"
+_FITNESS_KO = {
+    "PRODUCT_CANDIDATE": "제품화 후보",
+    "NEEDS_PRODUCT_POLISH": "제품 다듬기 필요",
+    "NEEDS_CORE_PATCH": "코어 보강 필요",
+    "NEEDS_SPEC_REPAIR": "사양 수리 필요",
+    "ARCHIVE": "아카이브",
+}
+
+
+def _load_phase2c0(run_root: Path | None) -> dict | None:
+    """Phase 2C-0 제품성 추천 요약(review/phase2c0/)을 읽는다. 없으면 None(기존 표시 유지)."""
+    if run_root is None:
+        return None
+    p = run_root / _PHASE2C0_SUBDIR / "phase2c0_dashboard_summary.json"
+    if not p.is_file():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _fitness_ko(rec: str | None) -> str:
+    return _FITNESS_KO.get(rec or "", rec or "-")
+
+
+def _phase2c0_card_lines(p2c: dict | None) -> str:
+    """목록 카드에 추가하는 3줄: 제품성 추천 · 검수 상태 · 사용자 다음 액션 (§16)."""
+    if not p2c:
+        return ""
+    rec = p2c.get("recommended_fitness")
+    ko = p2c.get("recommended_fitness_ko") or _fitness_ko(rec)
+    return (
+        f'<p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or "-")})</p>'
+        f'<p class="meta">검수 상태: {_e(p2c.get("review_status") or "-")}</p>'
+        f'<p class="meta">사용자 다음 액션: {_e(p2c.get("user_next_action") or "-")}</p>'
+    )
+
+
+def _phase2c0_panel(p2c: dict | None) -> str:
+    """상세 페이지 Phase 2C-0 패널 (§16 상세). 추천/검수 상태/점수/red flag 표시."""
+    if not p2c:
+        return ""
+    rec = p2c.get("recommended_fitness")
+    ko = p2c.get("recommended_fitness_ko") or _fitness_ko(rec)
+    scores = p2c.get("scores") or {}
+    score_line = " · ".join(f"{_e(k)} {v}" for k, v in scores.items()) or "-"
+    flags = p2c.get("critical_red_flags") or []
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2C-0 제품성 추천 (사용자 최종 결정 대기)</h2>
+  <p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or '-')}) · 평균 {_e(p2c.get('average_score'))}/5</p>
+  <p class="meta">검수 상태: <b>{_e(p2c.get('review_status') or '-')}</b>
+    · 사용자 다음 액션: {_e(p2c.get('user_next_action') or '-')}</p>
+  <p class="meta">smoke: runner {"실행 가능" if p2c.get('runner_executable') else "미확인"}
+    · viewer가 replay 소비 {"확인" if p2c.get('product_viewer_reads_replay') else "미확인"}
+    · runner/viewer 일치 {_e(str(p2c.get('runner_viewer_consistent')))}
+    · no-code-change {_e(p2c.get('no_code_change_status') or '-')}</p>
+  <div class="field"><span class="k">제품성 점수</span>{score_line}</div>
+  <div class="field"><span class="k">주의 신호</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in flags) or '<li class="muted">없음</li>'}</ul></div>
+  <p class="meta">상세 문서: 아래 '리포트 미리보기'에서 검수 패키지 / 제품성 리포트 / 스모크 리뷰 확인</p>
+</section>"""
+
+
 def _match_product_filters(run: dict, rev: dict | None, filters: dict) -> bool:
     verdict = filters.get("verdict")
     status = filters.get("status")
@@ -888,6 +962,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<p class="meta">추천 {_e(recommended)}</p>'
                 f'{_lane_line(p2a, None)}'
             )
+        body_lines += _phase2c0_card_lines(_load_phase2c0(run_root))
         cards.append(
             f"""  <article class="card">
     <div class="chead">
@@ -1146,7 +1221,8 @@ def render_product_detail(
     body = (
         _nav("product")
         + '<p class="back"><a href="/products">← 목록으로</a></p>'
-        + hero + ch_summary + p2a_html + gate_html + qa_html + issues_html
+        + hero + ch_summary + p2a_html + _phase2c0_panel(_load_phase2c0(run_root))
+        + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )
     return _page(f"제품 번호 {run_id}", body)

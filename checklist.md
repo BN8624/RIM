@@ -116,3 +116,18 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] mock core build validate — CORE_FACTORY_RUN PASS / legacy run validate — LEGACY_FACTORY_RUN PASS / live-validation run(072220) — CORE_FACTORY_RUN PASS (계속 유지)
 - [x] pytest 533 passed (기존 508개 + Phase 1.7b 신규 25개) / secret scan 통과
 - [ ] Phase 2 = 여러 run/challenge continuation 일반화 (미착수)
+
+# Phase 2C-0 Review Package + Product Fitness Recommendation — 2026-07-09
+
+## 구현
+- [x] factory_review.py — no-code-change smoke review(원본→temp copy 실행, 보호 대상 hash before/after/check) + product fitness scoring(7항목 evidence 기반) + recommended_fitness(PRODUCT_CANDIDATE/NEEDS_PRODUCT_POLISH/NEEDS_CORE_PATCH/NEEDS_SPEC_REPAIR/ARCHIVE) + review_package/artifact_smoke_review/product_fitness_report/human_review_checklist/sixty_second_review_script/demo_manifest/phase2c0_dashboard_summary 생성 (runs/<run>/review/phase2c0/)
+- [x] factory_review.py — product_viewer_reads_replay(단순 fetch 1개 불가, >=2 근거) + runner_viewer_consistent(>=2 필드, 확인불가시 unknown) + viewer 필드 스키마 불일치 감지 + product_interactive_authoring 감지
+- [x] factory_validate.py — detect_phase2c0_run(marker) + _check_phase2c0(§17: 산출물/no-code-change/recommended_fitness 정합/PRODUCT_CANDIDATE 엄격/NEEDS_SPEC_REPAIR next_goal/evidence 없는 4·5점 차단), core+continuation 양 경로에 hook (marker 없으면 no-op)
+- [x] cli.py — factory-review(--run-dir/--run-id/--db)
+- [x] challenge_dashboard.py — 목록 카드 3줄(제품성 추천/검수 상태/사용자 다음 액션) + 상세 Phase 2C-0 패널 + report 탭 8종(review/phase2c0/*)
+
+## 검수
+- [x] #47(072220) factory-review — runner exit=0, viewer reads replay(근거 6), runner/viewer 일치(4필드), no-code-change PASS, recommended_fitness=NEEDS_PRODUCT_POLISH(viewer 필드 스키마 불일치 edge/event/좌표 + 결과 뷰어 중심)
+- [x] factory-validate 072220 PASS (Phase 2C-0 marker 인식, 보호 대상 artifact 미변경)
+- [x] pytest — 기존 641 + Phase 2C-0 신규 32 (test_factory_review_2c0.py) / secret scan은 validate 경로 통과
+- [ ] Phase 2C 잔여 = 다수 run 검수 자동화 (미착수)

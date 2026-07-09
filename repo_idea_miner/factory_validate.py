@@ -230,6 +230,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_spec_repair_outputs(run_dir)
     problems += _check_spec_repair_apply(run_dir)
     problems += _check_anti_hardcode_patch(run_dir)
+    problems += _check_phase2c0(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -471,6 +472,100 @@ def _check_anti_hardcode_patch(run_dir: Path) -> list[str]:
             p.append("anti_hardcode patch: summary_hardcode_risk high인데 green_base 승격")
         if check and check.get("status") != "PASS":
             p.append("anti_hardcode patch: frozen 변경인데 green_base 승격")
+    return p
+
+
+# ---------------------------------------------------------------- Phase 2C-0 Review Package 검증 (§17)
+
+PHASE2C0_SUBDIR = "review/phase2c0"
+PHASE2C0_REQUIRED = (
+    "review_package.md", "review_package.json",
+    "artifact_smoke_review.md", "artifact_smoke_review.json",
+    "product_fitness_report.md", "product_fitness_report.json",
+    "human_review_checklist.md", "sixty_second_review_script.md",
+    "demo_manifest.json", "phase2c0_dashboard_summary.json",
+    "review_no_code_hash_before.json", "review_no_code_hash_after.json",
+    "review_no_code_hash_check.json",
+)
+PHASE2C0_MARKERS = (
+    "phase2c0_dashboard_summary.json", "product_fitness_report.json", "review_package.json",
+)
+FITNESS_GRADES = (
+    "PRODUCT_CANDIDATE", "NEEDS_PRODUCT_POLISH", "NEEDS_CORE_PATCH", "NEEDS_SPEC_REPAIR", "ARCHIVE",
+)
+PHASE2C0_CRITICAL_CRITERIA = (
+    "Product layer usefulness", "Demo understandability", "Evidence quality", "Anti-hardcode confidence",
+)
+
+
+def detect_phase2c0_run(run_dir: str | Path) -> bool:
+    """Phase 2C-0 marker(review/phase2c0/ 아래 요약 산출물)가 있는 run인지 감지한다 (§17)."""
+    d = Path(run_dir) / PHASE2C0_SUBDIR
+    return any((d / m).is_file() for m in PHASE2C0_MARKERS)
+
+
+def _check_phase2c0(run_dir: Path) -> list[str]:
+    """§17: Phase 2C-0 marker가 있는 run만 review 산출물/추천 정합성을 검사한다."""
+    if not detect_phase2c0_run(run_dir):
+        return []
+    rd = run_dir / PHASE2C0_SUBDIR
+    p: list[str] = []
+    for rel in PHASE2C0_REQUIRED:
+        if not (rd / rel).is_file():
+            p.append(f"Phase 2C-0 산출물 없음: {PHASE2C0_SUBDIR}/{rel}")
+
+    fitness = _load_json(rd / "product_fitness_report.json") or {}
+    smoke = _load_json(rd / "artifact_smoke_review.json") or {}
+    hash_check = _load_json(rd / "review_no_code_hash_check.json") or {}
+    dash = _load_json(rd / "phase2c0_dashboard_summary.json") or {}
+
+    # no-code-change guard: review 과정에서 보호 대상 artifact가 바뀌면 FAIL (§3.4, §17.2)
+    if hash_check and hash_check.get("status") != "PASS":
+        detail = hash_check.get("changed") or hash_check.get("added") or hash_check.get("removed")
+        p.append(f"Phase 2C-0: 검수 패키지 외 보호 대상 artifact 변경됨: {detail}")
+
+    rec = fitness.get("recommended_fitness") or dash.get("recommended_fitness")
+    if rec is None:
+        p.append("Phase 2C-0: recommended_fitness 없음")
+    elif rec not in FITNESS_GRADES:
+        p.append(f"Phase 2C-0: 알 수 없는 recommended_fitness: {rec}")
+
+    gate_rerun = _load_json(run_dir / "gate_rerun_after_anti_hardcode_patch.json") or {}
+    gates = gate_rerun.get("gates") or {}
+    gate_fail = bool(gates) and not all(gates.values())
+    green_base = fitness.get("green_base")
+    if green_base is None:
+        green_base = (_load_json(run_dir / "green_base.json") or {}).get("base_type") == "green_base"
+    scores = fitness.get("scores") or {}
+    red_flags = fitness.get("critical_red_flags") or []
+
+    # §17.2 PRODUCT_CANDIDATE 엄격 검증
+    if rec == "PRODUCT_CANDIDATE":
+        if gate_fail:
+            p.append("Phase 2C-0: PRODUCT_CANDIDATE인데 gate fail 존재")
+        if green_base is False:
+            p.append("Phase 2C-0: PRODUCT_CANDIDATE인데 green_base false")
+        if red_flags:
+            p.append(f"Phase 2C-0: PRODUCT_CANDIDATE인데 critical red flag 존재: {red_flags}")
+        for c in PHASE2C0_CRITICAL_CRITERIA + ("Core usefulness",):
+            if scores.get(c, 0) < 4:
+                p.append(f"Phase 2C-0: PRODUCT_CANDIDATE인데 핵심 항목 4점 미만: {c}={scores.get(c)}")
+        for key in ("runner_executable", "product_viewer_reads_replay", "runner_viewer_consistent"):
+            val = smoke.get(key)
+            if val is None:
+                val = fitness.get(key)
+            if val is not True:
+                p.append(f"Phase 2C-0: PRODUCT_CANDIDATE인데 {key} != true ({val})")
+
+    # §17.2 NEEDS_SPEC_REPAIR는 next_goal 필수
+    if rec == "NEEDS_SPEC_REPAIR" and not (fitness.get("next_goal") or fitness.get("next_steps")):
+        p.append("Phase 2C-0: NEEDS_SPEC_REPAIR인데 next_goal 없음")
+
+    # §12.1 evidence 없는 4/5점 금지
+    for c in fitness.get("criteria") or []:
+        if c.get("score", 0) >= 4 and not c.get("evidence"):
+            p.append(f"Phase 2C-0: evidence 없는 {c.get('score')}점 항목: {c.get('criterion')}")
+
     return p
 
 
@@ -779,6 +874,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_spec_repair_outputs(run_dir)
     problems += _check_spec_repair_apply(run_dir)
     problems += _check_anti_hardcode_patch(run_dir)
+    problems += _check_phase2c0(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
