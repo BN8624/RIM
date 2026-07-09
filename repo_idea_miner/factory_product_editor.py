@@ -842,14 +842,24 @@ def build_editor_block(supported_types: list[str], base_run_dir: str, challenge_
     return _EDITOR_DOM + "<script>\n" + script + "\n</script>\n"
 
 
+_MAIN_CONTAINER_RE = re.compile(r'<div\b[^>]*\bid=["\']main-container["\']')
+
+
 def inject_editor(viewer_path: Path, supported_types: list[str],
                   base_run_dir: str, challenge_id) -> bool:
-    """viewer의 </body> 앞에 editor block을 주입한다. 기존 폴리시 script는 보존한다."""
+    """viewer 상단(main-container 앞, 없으면 </body> 앞)에 editor block을 주입한다.
+
+    editor 진입 토글이 화면 상단에서 바로 보이도록 결과 뷰(main-container) 위에 넣는다.
+    기존 폴리시 script는 보존한다.
+    """
     text = viewer_path.read_text(encoding="utf-8", errors="replace")
     # 이전 주입 제거(재적용 안전)
     text = _INJECT_RE.sub("", text)
     block = build_editor_block(supported_types, base_run_dir, challenge_id)
-    if "</body>" in text:
+    m = _MAIN_CONTAINER_RE.search(text)
+    if m:
+        new_text = text[:m.start()] + block + text[m.start():]
+    elif "</body>" in text:
         new_text = text.replace("</body>", block + "</body>", 1)
     else:
         new_text = text + block
