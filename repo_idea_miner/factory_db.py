@@ -84,8 +84,21 @@ def worker_key_label(key_id: int | None) -> str:
     return f"KEY_{int(key_id):02d}"
 
 
+# Phase 1.6 권장 최소 필드 (§14): 기존 DB를 파괴하지 않고 컬럼만 추가한다.
+_PRODUCT_RUN_EXTRA_COLUMNS = (
+    ("artifact_class", "TEXT"),
+    ("harness_summary_path", "TEXT"),
+    ("core_system_summary_path", "TEXT"),
+    ("green_base_path", "TEXT"),
+)
+
+
 def ensure_factory_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_FACTORY_SCHEMA)
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(product_runs)")}
+    for col, col_type in _PRODUCT_RUN_EXTRA_COLUMNS:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE product_runs ADD COLUMN {col} {col_type}")
     conn.commit()
 
 
@@ -121,6 +134,10 @@ def update_product_run(
     current_stage: str | None = None,
     final_artifact_dir: str | None = None,
     verdict: str | None = None,
+    artifact_class: str | None = None,
+    harness_summary_path: str | None = None,
+    core_system_summary_path: str | None = None,
+    green_base_path: str | None = None,
 ) -> None:
     if status is not None and status not in PRODUCT_RUN_STATUSES:
         raise ValueError(f"잘못된 product_run status: {status}")
@@ -131,6 +148,10 @@ def update_product_run(
         ("current_stage", current_stage),
         ("final_artifact_dir", final_artifact_dir),
         ("verdict", verdict),
+        ("artifact_class", artifact_class),
+        ("harness_summary_path", harness_summary_path),
+        ("core_system_summary_path", core_system_summary_path),
+        ("green_base_path", green_base_path),
     ):
         if val is not None:
             sets.append(f"{col}=?")

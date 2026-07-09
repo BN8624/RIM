@@ -11,6 +11,9 @@ VERDICT_LABELS = {
     "NEEDS_MORE_GEMMA_LOOP": "더 돌려야 함",
     "TOO_WEAK": "약함",
     "DROP": "버림",
+    # Phase 1.6 Core-first Harness verdict
+    "REVIEW_READY": "검수 가능",
+    "RUNS_BUT_WEAK": "코어 약함",
 }
 
 VERDICT_DESC = {
@@ -19,6 +22,20 @@ VERDICT_DESC = {
     "NEEDS_MORE_GEMMA_LOOP": "가능성은 있지만 아직 기능 연결이나 완성도가 부족해 한 번 더 개선해야 하는 후보",
     "TOO_WEAK": "실행은 되지만 제품 느낌이나 핵심 기능이 부족한 후보",
     "DROP": "더 진행할 가치가 낮은 후보",
+    "REVIEW_READY": "core 검증을 통과해 직접 실행해보고 판단할 만한 후보",
+    "RUNS_BUT_WEAK": "기본 실행은 되지만 core system이 약해 성장 가치가 낮은 후보",
+}
+
+# ---------------------------------------------------------------- Artifact Class (Phase 1.6 §5.6)
+
+ARTIFACT_CLASS_LABELS = {
+    "RULE_ENGINE": "룰 엔진",
+    "SIMULATION_ENGINE": "시뮬레이션 엔진",
+    "WORKFLOW_ENGINE": "워크플로 엔진",
+    "DATA_TRANSFORM_ENGINE": "데이터 변환 엔진",
+    "PLANNER_EVALUATOR": "계획/평가 엔진",
+    "INTERACTIVE_TOOL": "인터랙티브 도구",
+    "VIEWER_ONLY": "뷰어 전용",
 }
 
 # ---------------------------------------------------------------- Run Status (§3)
@@ -51,6 +68,17 @@ GATE_LABELS = {
     "contract": "구현 연결 검사",
     "syntax": "문법 검사",
     "smoke": "기본 실행 검사",
+}
+
+# Phase 1.6 Core Harness gate (§8.2)
+CORE_GATE_LABELS = {
+    "core_contract": "코어 계약 검사",
+    "runner": "러너 실행 검사",
+    "scenario_replay": "시나리오 재생",
+    "golden_output": "기대 출력 비교",
+    "state_invariant": "상태 불변조건",
+    "determinism": "결정성 검사",
+    "anti_hardcode": "하드코딩 탐지",
 }
 
 GATE_STATUS_LABELS = {
@@ -87,6 +115,8 @@ _RECOMMEND_BY_VERDICT = {
     "NEEDS_MORE_GEMMA_LOOP": "다시 돌리기",
     "TOO_WEAK": "보류 또는 버림",
     "DROP": "버림",
+    "REVIEW_READY": "실행해보고 판단",
+    "RUNS_BUT_WEAK": "보류 또는 버림",
 }
 
 

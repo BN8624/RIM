@@ -92,12 +92,67 @@ def validate_codex_export(export_dir: Path) -> list[str]:
     return problems
 
 
+# ---------------------------------------------------------------- Phase 1.6 Core Harness run 검증 (§15)
+
+def detect_core_run(run_dir: Path) -> bool:
+    """Phase 1.6 Core-first Harness run 디렉터리인지 감지한다 (harness_summary.json 존재)."""
+    return (run_dir / "harness_summary.json").is_file()
+
+
+def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list[str]]:
+    """Phase 1.6 완주 산출물(§15)을 검증한다. NEEDS_SPEC_REPAIR로 중단된 run은 최소 문서만 본다."""
+    from repo_idea_miner.factory_core_pipeline import (
+        CORE_ARTIFACT_REQUIRED_FILES,
+        CORE_RUN_REQUIRED_RUN_DOCS,
+    )
+
+    problems: list[str] = []
+    verdict_path = run_dir / "product_verdict.md"
+    verdict_text = verdict_path.read_text(encoding="utf-8", errors="replace") if verdict_path.is_file() else ""
+    if "NEEDS_SPEC_REPAIR" in verdict_text:
+        for rel in ("normalized_challenge.json", "core_artifact_classification.json",
+                    "harness_summary.json", "product_verdict.md"):
+            if not (run_dir / rel).is_file():
+                problems.append(f"run 문서 없음: {rel}")
+        return (not problems), problems
+
+    for rel in CORE_RUN_REQUIRED_RUN_DOCS:
+        if not (run_dir / rel).is_file():
+            problems.append(f"run 문서 없음: {rel}")
+    final_dir = run_dir / "final_artifact"
+    if not final_dir.is_dir():
+        problems.append("final_artifact/ 없음")
+        final_dir = run_dir / "workspace"
+    for rel in CORE_ARTIFACT_REQUIRED_FILES:
+        if not (final_dir / rel).is_file():
+            problems.append(f"core artifact 파일 없음: {rel}")
+    fixtures = list((final_dir / "fixtures").glob("scenario_*.json")) if (final_dir / "fixtures").is_dir() else []
+    if len(fixtures) < 3:
+        problems.append(f"scenario fixture 부족: {len(fixtures)}개 < 3")
+    goldens = list((final_dir / "golden").glob("expected_*.json")) if (final_dir / "golden").is_dir() else []
+    if not goldens:
+        problems.append("golden expected 없음")
+    if not (final_dir / "product").is_dir():
+        problems.append("product layer(product/) 없음")
+    if not (final_dir / "replay").is_dir():
+        problems.append("replay/ 없음")
+
+    leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
+    if leaked:
+        problems.append(f"secret 노출 파일: {leaked}")
+    return (not problems), problems
+
+
 def validate_product_run_dir(run_dir: str | Path, secrets: list[str]) -> tuple[bool, list[str]]:
     """product run 디렉터리 전체를 검증한다. (ok, problems) 반환."""
     run_dir = Path(run_dir)
     problems: list[str] = []
     if not run_dir.is_dir():
         return False, [f"디렉터리 없음: {run_dir}"]
+
+    # Phase 1.6 Core Harness run은 §15 기준으로 검증한다
+    if detect_core_run(run_dir):
+        return validate_core_run_dir(run_dir, secrets)
 
     final_dir = _final_artifact_dir(run_dir)
     if final_dir is None:

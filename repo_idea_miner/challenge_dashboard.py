@@ -30,6 +30,8 @@ from repo_idea_miner.factory_summary import (
     GATE_KEYS,
     gate_pass_count,
     head_lines,
+    load_core_summary,
+    load_dashboard_summary,
     load_gate_summary,
     load_product_summary,
     load_qa_summary,
@@ -100,12 +102,25 @@ _PRODUCT_REPORT_TABS = [
     ("product_summary", ("final", "product_summary.json", "product_summary.json")),
     ("gate_summary", ("final", "gate_summary.json", "gate_summary.json")),
     ("qa_summary", ("final", "qa_summary.json", "qa_summary.json")),
+    # Phase 1.6 Core Harness 산출물 (§11.10 상세)
+    ("dashboard_summary", ("final", "dashboard_summary.json", "dashboard_summary.json")),
+    ("harness_summary", ("run", "harness_summary.json", "harness_summary.json")),
+    ("core_system_summary", ("run", "core_system_summary.json", "core_system_summary.json")),
+    ("runner_summary", ("final", "runner_summary.json", "runner_summary.json")),
+    ("scenario_replay_summary", ("final", "scenario_replay_summary.json", "scenario_replay_summary.json")),
+    ("golden_diff_summary", ("final", "golden_diff_summary.json", "golden_diff_summary.json")),
+    ("determinism_summary", ("final", "determinism_summary.json", "determinism_summary.json")),
+    ("anti_hardcode_summary", ("final", "anti_hardcode_summary.json", "anti_hardcode_summary.json")),
+    ("green_base", ("run", "green_base.json", "green_base.json")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
 # 허용된 Source Preview 범위 (§22). final_artifact 안에서만, 이 루트/파일만 읽는다.
-_SOURCE_PREVIEW_FILES = {"README.md", "run_instructions.md", "manifest.json", "contract.json"}
-_SOURCE_PREVIEW_PREFIXES = ("src/", "reports/")
+_SOURCE_PREVIEW_FILES = {
+    "README.md", "run_instructions.md", "manifest.json", "contract.json",
+    "core_contract.json", "state_contract.json", "action_contract.json", "runner_contract.json",
+}
+_SOURCE_PREVIEW_PREFIXES = ("src/", "reports/", "fixtures/", "golden/", "replay/", "product/", "validators/")
 
 # preview 길이 제한 (§30 large file truncate)
 _PREVIEW_MAX_BYTES = 60000
@@ -570,6 +585,43 @@ def _gate_pills(gate: dict) -> str:
     return '<div class="gaterow">' + "".join(out) + "</div>"
 
 
+def _core_harness_panel(dsum: dict, final_dir: Path | None, run_root: Path | None) -> str:
+    """Phase 1.6 상세: 코어 시스템 검증 결과 (§11.10 상세 페이지 표시)."""
+    gates = dsum.get("gates") or {}
+    pills = "".join(
+        f'<span class="gp gp-{"PASS" if gates.get(k) else "FAIL"}">'
+        f'<span class="lbl">{_e(L.CORE_GATE_LABELS.get(k, k))}</span>'
+        f'{"통과" if gates.get(k) else "실패"}</span>'
+        for k in L.CORE_GATE_LABELS
+    )
+    failed = dsum.get("failed_scenarios") or []
+    failed_html = (
+        "".join(f"<li>{_e(s)}</li>" for s in failed) or '<li class="muted">없음</li>'
+    )
+    replay = load_core_summary("scenario_replay_summary.json", final_dir, run_root) or {}
+    golden = load_core_summary("golden_diff_summary.json", final_dir, run_root) or {}
+    anti = load_core_summary("anti_hardcode_summary.json", final_dir, run_root) or {}
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">코어 시스템 검증</h2>
+  <p class="meta">산출물 유형: <b>{_e(dsum.get('artifact_class_ko') or '-')}</b>
+    · 코어: {"있음" if dsum.get('core_present') else "없음"}
+    · 검증: {dsum.get('gates_passed', 0)}/{dsum.get('gates_total', 0)} 통과</p>
+  <div class="gaterow">{pills}</div>
+  <p class="meta">결정성: <b>{_e(dsum.get('determinism') or '-')}</b>
+    · 위험: <b>{_e(dsum.get('risk_level') or '-')}</b>
+    (하드코딩 {_e(dsum.get('hardcode_risk') or '-')} / golden 신뢰 {_e(dsum.get('oracle_risk_level') or '-')})</p>
+  <p class="meta">시나리오 재생: {replay.get('passed', '-')}/{replay.get('total', '-')}
+    · 기대 출력 비교: 통과 {golden.get('passed', '-')} / 실패 {golden.get('failed', '-')}
+    / 참고용 제외 {golden.get('review_skipped', '-')} (exact {golden.get('exact_passed', '-')}/{golden.get('exact_total', '-')})</p>
+  <div class="field"><span class="k">실패 시나리오</span><ul class="evi">{failed_html}</ul></div>
+  <div class="field"><span class="k">실행 명령</span><span class="kv">{_e(dsum.get('runner_command') or '-')}</span></div>
+  <p class="meta">실행 안내: 상세 리포트 탭의 run_instructions
+    · 하드코딩 신호 {len((anti.get('level1_problems') or [])) + len((anti.get('level2_problems') or []))}건
+    · 추천: <b>{_e(dsum.get('recommendation') or '-')}</b></p>
+</section>"""
+
+
 def _match_product_filters(run: dict, rev: dict | None, filters: dict) -> bool:
     verdict = filters.get("verdict")
     status = filters.get("status")
@@ -625,12 +677,14 @@ def _source_files(final_dir: Path | None) -> list[str]:
     if not final_dir or not final_dir.is_dir():
         return []
     out: list[str] = []
-    for name in ("README.md", "run_instructions.md", "manifest.json", "contract.json"):
+    for name in sorted(_SOURCE_PREVIEW_FILES):
         if (final_dir / name).is_file():
             out.append(name)
-    for p in sorted((final_dir / "src").rglob("*")) if (final_dir / "src").is_dir() else []:
-        if p.is_file():
-            out.append(p.relative_to(final_dir).as_posix())
+    for root in ("src", "fixtures", "golden", "product", "validators"):
+        base = final_dir / root
+        for p in sorted(base.rglob("*")) if base.is_dir() else []:
+            if p.is_file():
+                out.append(p.relative_to(final_dir).as_posix())
     return out
 
 
@@ -727,13 +781,30 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
     for r in runs:
         final_dir, run_root = _product_dirs(r)
         psum = load_product_summary(final_dir, run_root)
-        gate = load_gate_summary(final_dir, run_root)
-        qa = load_qa_summary(final_dir, run_root)
+        dsum = load_dashboard_summary(final_dir, run_root)
         rev = reviews.get(r["id"])
         title = _product_title(r, psum)
-        passed, total = gate_pass_count(gate)
-        issue = L.humanize_issue((psum or {}).get("issue_summary") or qa.get("issue_summary") or "-")
-        recommended = L.format_recommended(r.get("verdict"), r.get("status"))
+        if dsum:
+            # Phase 1.6 Core Harness run: 검수용 카드 (§11.10 — 기술 로그 노출 금지)
+            body_lines = (
+                f'<p class="meta">산출물 유형: <b>{_e(dsum.get("artifact_class_ko") or "-")}</b>'
+                f' · 코어: {"있음" if dsum.get("core_present") else "없음"}'
+                f' · 검증: {dsum.get("gates_passed", 0)}/{dsum.get("gates_total", 0)} 통과</p>'
+                f'<p class="meta">결정성: {_e(dsum.get("determinism") or "-")}'
+                f' · 위험: {_e(dsum.get("risk_level") or "-")}'
+                f' · 추천: <b>{_e(dsum.get("recommendation") or "-")}</b></p>'
+            )
+        else:
+            gate = load_gate_summary(final_dir, run_root)
+            qa = load_qa_summary(final_dir, run_root)
+            passed, total = gate_pass_count(gate)
+            issue = L.humanize_issue((psum or {}).get("issue_summary") or qa.get("issue_summary") or "-")
+            recommended = L.format_recommended(r.get("verdict"), r.get("status"))
+            body_lines = (
+                f'<div class="issue"><span class="k">문제</span> {_e(issue)}</div>'
+                f'<p class="meta">검사 {passed}/{total} 통과 · 품질 {_e(L.format_qa_status(_overall_qa_status(qa)))}</p>'
+                f'<p class="meta">추천 {_e(recommended)}</p>'
+            )
         cards.append(
             f"""  <article class="card">
     <div class="chead">
@@ -743,9 +814,8 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
       {_review_badge((rev or {}).get('action'))}
     </div>
     <p class="title"><a href="/product/{r['id']}">{_e(title)}</a></p>
-    <div class="issue"><span class="k">문제</span> {_e(issue)}</div>
-    <p class="meta">검사 {passed}/{total} 통과 · 품질 {_e(L.format_qa_status(_overall_qa_status(qa)))}</p>
-    <p class="meta">추천 {_e(recommended)} · <a href="/product/{r['id']}">상세 보기 →</a></p>
+    {body_lines}
+    <p class="meta"><a href="/product/{r['id']}">상세 보기 →</a></p>
   </article>"""
         )
 
@@ -840,12 +910,16 @@ def render_product_detail(
     else:
         ch_summary = '<section class="panel"><h2 class="sec-h">원본 아이디어 요약</h2><p class="muted">원본 아이디어 정보 없음</p></section>'
 
-    # 4. 검사 결과 (§6·§16)
-    gate_lines = "".join(
-        f'<div class="field"><span class="k">{_e(L.format_gate_label(k))}</span>{_e(L.format_gate_status((gate.get(k) or {}).get("status", "UNKNOWN")))}</div>'
-        for k in GATE_KEYS
-    )
-    gate_html = f"""
+    # 4. 검사 결과 (§6·§16) — Phase 1.6 run은 코어 시스템 검증 패널로 대체
+    dsum = load_dashboard_summary(final_dir, run_root)
+    if dsum:
+        gate_html = _core_harness_panel(dsum, final_dir, run_root)
+    else:
+        gate_lines = "".join(
+            f'<div class="field"><span class="k">{_e(L.format_gate_label(k))}</span>{_e(L.format_gate_status((gate.get(k) or {}).get("status", "UNKNOWN")))}</div>'
+            for k in GATE_KEYS
+        )
+        gate_html = f"""
 <section class="panel">
   <h2 class="sec-h">검사 결과</h2>
   {_gate_pills(gate)}

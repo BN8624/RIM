@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     f_p.add_argument("--max-runs", type=int, default=None, help="최대 처리 건수 (기본 1, 안전 모드)")
     f_p.add_argument("--continuous", action="store_true", help="명시한 경우에만 계속 실행")
 
-    fb_p = sub.add_parser("factory-build", help="단일 Challenge로 Product Factory 실행")
+    fb_p = sub.add_parser("factory-build", help="단일 Challenge로 Product Factory 실행 (Phase 1.6 Core-first Harness)")
     fb_p.add_argument("--challenge-id", type=int, default=None, help="challenge.db의 challenge id (source of truth)")
     fb_p.add_argument("--challenge-dir", default=None, help="DB 없이 run artifact 디렉터리로 실행 (fallback)")
     fb_p.add_argument("--sample", choices=["mock"], default=None, help="고정 sample challenge로 실행")
@@ -111,6 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
     fb_p.add_argument("--db", default="challenge.db")
     fb_p.add_argument("--output-dir", default="runs")
     fb_p.add_argument("--no-db", action="store_true", help="DB 저장 생략")
+    fb_p.add_argument("--candidates", type=int, default=None,
+                      help="실험 옵션: build 후보 수 (live 기본 1, mock 최대 2, §2.4)")
 
     fs_p = sub.add_parser("factory-status", help="Product Factory 상태 표시")
     fs_p.add_argument("--db", default="challenge.db")
@@ -354,11 +356,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "factory-build":
             from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler
             from repo_idea_miner.config import load_challenge_miner_settings
+            from repo_idea_miner.factory_core_pipeline import run_core_factory
             from repo_idea_miner.factory_db import open_factory_db
             from repo_idea_miner.factory_pipeline import (
                 load_challenge_from_db,
                 load_challenge_from_dir,
-                run_product_factory,
                 sample_challenge,
             )
 
@@ -382,9 +384,9 @@ def main(argv: list[str] | None = None) -> int:
                     settings = load_settings()
                     if settings.google_keys:
                         scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys, load_challenge_miner_settings())
-                result = run_product_factory(
+                result = run_core_factory(
                     challenge, mode=args.mode, output_dir=args.output_dir,
-                    db_conn=db_conn, scheduler=scheduler,
+                    db_conn=db_conn, scheduler=scheduler, candidates=args.candidates,
                 )
             finally:
                 if db_conn is not None:
@@ -393,10 +395,16 @@ def main(argv: list[str] | None = None) -> int:
             if result.get("error"):
                 print(f"실패: {result['error']}")
                 return 1
-            print(f"line: {result.get('line')} / verdict: {result.get('verdict')} "
-                  f"(추천: {result.get('recommended_action')})")
+            if result.get("spec_status"):
+                print(f"line: {result.get('line')} / spec_status: {result['spec_status']} (Build 미진행)")
+                return 0
+            print(f"line: {result.get('line')} / artifact_class: {result.get('artifact_class')} "
+                  f"/ verdict: {result.get('verdict')} (추천: {result.get('recommended_action')})")
             gates = result.get("gate_summary") or {}
             print("gates: " + " ".join(f"{g}={'PASS' if ok else 'FAIL'}" for g, ok in gates.items()))
+            print(f"candidates: {result.get('candidates')} / patch_attempts: {result.get('patch_attempts')}")
+            if result.get("green_base_path"):
+                print(f"green_base: {result['green_base_path']}")
             if result.get("codex_export_dir"):
                 print(f"codex_export: {result['codex_export_dir']}")
             if result.get("product_run_id"):

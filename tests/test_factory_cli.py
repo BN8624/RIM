@@ -96,13 +96,15 @@ def test_factory_continuous_requires_explicit_flag(tmp_path):
 
 
 def test_factory_build_sample_mock_via_cli(tmp_path, monkeypatch, capsys):
-    """§22-8: factory-build --sample mock --mode mock."""
+    """§22-8: factory-build --sample mock --mode mock (Phase 1.6 Core Harness 완주)."""
     monkeypatch.setenv("RIM_FACTORY_USE_DOCKER", "off")
     code = main(["factory-build", "--sample", "mock", "--mode", "mock",
                  "--db", str(tmp_path / "challenge.db"), "--output-dir", str(tmp_path / "runs")])
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "verdict: PROMOTE_TO_CODEX" in out
+    assert "verdict: REVIEW_READY" in out  # §15 허용 결과 (PROMOTE 남발 금지)
+    assert "artifact_class: RULE_ENGINE" in out
+    assert "green_base:" in out
     assert "product_run_id: 1" in out
 
 
@@ -115,7 +117,17 @@ def test_factory_build_challenge_id_via_cli(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert code == 0, out
     assert "line: standard" in out
-    assert "gates: static=PASS" in out
+    assert "gates: core_contract=PASS" in out
+
+
+def test_factory_build_candidates_option_mock(tmp_path, monkeypatch, capsys):
+    """§13: --candidates는 실험 옵션. mock은 2까지 허용되고 결과에 기록된다."""
+    monkeypatch.setenv("RIM_FACTORY_USE_DOCKER", "off")
+    code = main(["factory-build", "--sample", "mock", "--mode", "mock", "--candidates", "2",
+                 "--db", str(tmp_path / "challenge.db"), "--output-dir", str(tmp_path / "runs")])
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "candidates: 2" in out
 
 
 def test_factory_build_requires_source(capsys):
@@ -132,7 +144,7 @@ def test_factory_status_via_cli(tmp_path, monkeypatch, capsys):
     assert main(["factory-status", "--db", str(db_path)]) == 0
     out = capsys.readouterr().out
     assert "product_runs: 1" in out
-    assert "PROMOTE_TO_CODEX" in out
+    assert "REVIEW_READY" in out
 
 
 def test_factory_validate_via_cli(tmp_path, monkeypatch, capsys):

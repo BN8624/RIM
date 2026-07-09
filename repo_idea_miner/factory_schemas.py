@@ -13,6 +13,9 @@ PRODUCT_VERDICT_LABELS = (
     "NEEDS_MORE_GEMMA_LOOP",
     "TOO_WEAK",
     "DROP",
+    # Phase 1.6 Core-first Harness verdict (§11.4)
+    "REVIEW_READY",
+    "RUNS_BUT_WEAK",
 )
 
 # §15 Dashboard 버튼 매핑: verdict → 추천 버튼
@@ -22,6 +25,8 @@ VERDICT_TO_RECOMMENDED_ACTION = {
     "NEEDS_MORE_GEMMA_LOOP": "retry",
     "TOO_WEAK": "archive",
     "DROP": "drop",
+    "REVIEW_READY": "keep",
+    "RUNS_BUT_WEAK": "archive",
 }
 
 # Dashboard 사람 버튼 (§17)

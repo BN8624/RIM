@@ -65,3 +65,21 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] factory --mode mock --once — 실제 challenge 47 처리, PROMOTE_TO_CODEX
 - [x] factory --mode live --max-runs 1 — runs/factory_20260709_000449 (challenge 14, KEY_01~04 회전, 4 gate PASS, QA가 실제 결함 검출 → NEEDS_MORE_GEMMA_LOOP, factory-validate PASS)
 - [x] pytest 342 passed (기존 254개 포함, factory 신규 88개)
+
+# Phase 1.6 Core-first Review-Repair Harness (RIMProductFactoryPhase1.6.md) — 2026-07-09
+
+## 구현
+- [x] factory_core_schemas.py — artifact class(§5.6)/core·runner contract/scenario·golden/review 스키마 + repair 제한 상수 + candidates 정책(§2.4) + PROMOTE 금지 조건(§6.7·§11.9) + decide_core_verdict(§11)
+- [x] factory_core_prompts.py — Stage별 prompt(정규화/분류/계약/시나리오·골든/빌드/리뷰/patch/product layer) + core-first build task packet 필수 문구(§7.5) + mock 고정 core workspace(결정적 python rule engine + runner + fixtures 3종 + golden exact/partial/invariant + replay viewer)
+- [x] factory_core_gates.py — Core Contract/Runner/Scenario Replay/Golden Output/State Invariant/Determinism(역순 재실행=fixture 순서 변경 겸용)/Anti-Hardcode L1+간단 L2(변형 fixture 실행) (§8)
+- [x] factory_core_pipeline.py — 7 Stage 오케스트레이터(§4): Draft→Review→Repair(계약 1회·시나리오 1회·patch 2회·product layer 1회 제한), NEEDS_SPEC_REPAIR 중단(§5.10·§6.9), patch의 fixtures/golden/contract 수정 거부(§9.5), product layer 필수+core output 기반 검사(§10), verdict/dashboard_summary/green_base/harness_summary(§11)
+- [x] factory_db.py — product_runs에 artifact_class/harness_summary_path/core_system_summary_path/green_base_path 컬럼 추가(마이그레이션, §14)
+- [x] cli.py — factory-build가 Phase 1.6 harness 실행 + --candidates 실험 옵션(live 1 강제, mock 최대 2, §13). factory(자동 배치)는 기존 파이프라인 유지
+- [x] factory_validate.py — harness_summary.json 감지 시 §15 완주 산출물 기준으로 검증
+- [x] challenge_dashboard.py — 목록 카드 §11.10 한국어 검수 형식(산출물 유형/코어/검증 n/7/결정성/위험/추천, 기술 로그 미노출) + 상세 코어 시스템 검증 패널 + core 요약 리포트 탭/소스 미리보기 확장
+- [x] factory_schemas.py·factory_labels.py — REVIEW_READY/RUNS_BUT_WEAK 라벨·추천 매핑·한국어 표기 + artifact class 한국어
+
+## 검수
+- [x] factory-build --sample mock --mode mock — REVIEW_READY, 7 gate 전부 PASS, green_base 저장, factory-validate PASS (§15 완주)
+- [x] §15 산출물 전부 생성 확인 (normalized/classification/contract 4종/fixtures 3/golden 3/oracle risk/runner/replay/각 gate summary/product layer/dashboard_summary/green_base)
+- [x] pytest 466 passed (기존 378개 포함, Phase 1.6 신규 88개) / secret scan 통과(fake key 주입 테스트 포함)

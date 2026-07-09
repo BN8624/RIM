@@ -381,6 +381,16 @@ def load_product_summary(final_dir: Path | None, run_dir: Path | None) -> dict |
     return _first_json(["product_summary.json"], final_dir, run_dir)
 
 
+def load_dashboard_summary(final_dir: Path | None, run_dir: Path | None) -> dict | None:
+    """Phase 1.6 Core Harness의 검수용 dashboard_summary.json (없으면 None → 기존 카드 표시)."""
+    return _first_json(["dashboard_summary.json"], final_dir, run_dir)
+
+
+def load_core_summary(name: str, final_dir: Path | None, run_dir: Path | None) -> dict | None:
+    """runner_summary 등 core gate 요약 json을 final_artifact → run 순서로 읽는다."""
+    return _first_json([name], final_dir, run_dir)
+
+
 def gate_pass_count(gate_summary: dict) -> tuple[int, int]:
     """PASS gate 수와 전체 gate 수 (§8: 'Gate 4/4 PASS')."""
     passed = sum(1 for g in GATE_KEYS if (gate_summary.get(g) or {}).get("status") == "PASS")
