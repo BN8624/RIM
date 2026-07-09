@@ -341,6 +341,74 @@ def promote_to_codex_problems(
     return problems
 
 
+# ---------------------------------------------------------------- Live Validation 정직성 검사 (Phase 1.6b §9)
+
+
+def verdict_consistency(
+    verdict: str,
+    gate_summary: dict,
+    hardcode_risk: str,
+    product_layer_status: str,
+    has_state_transitions: bool,
+    scenario_count: int,
+) -> tuple[bool, list[str]]:
+    """verdict가 gate 증거와 논리적으로 일치하는지 검사한다(정직성 heuristic, §2, §9).
+
+    "약한데 REVIEW_READY" 같은 부정직한 판정을 자동으로 잡아낸다. 반환: (일치 여부, 불일치 사유).
+    """
+    issues: list[str] = []
+    all_pass = all(gate_summary.get(g) for g in CORE_GATE_ORDER)
+    good_verdicts = ("REVIEW_READY", "PROMOTE_TO_CODEX")
+    if verdict in good_verdicts and not all_pass:
+        failed = [g for g in CORE_GATE_ORDER if not gate_summary.get(g)]
+        issues.append(f"{verdict}인데 gate 일부 실패: {', '.join(failed)}")
+    if verdict in good_verdicts and product_layer_status != "PASS":
+        issues.append(f"{verdict}인데 product layer 미통과({product_layer_status})")
+    if verdict == "PROMOTE_TO_CODEX" and hardcode_risk == "high":
+        issues.append("PROMOTE_TO_CODEX인데 hardcode risk high")
+    if verdict != "DROP" and not gate_summary.get("runner"):
+        issues.append("runner 실패인데 DROP이 아님")
+    if verdict != "DROP" and not has_state_transitions:
+        issues.append("state transition 없는데 DROP이 아님")
+    if verdict in good_verdicts and scenario_count < 3:
+        issues.append(f"{verdict}인데 scenario 빈약({scenario_count} < 3)")
+    return (not issues), issues
+
+
+def build_live_validation_summary(
+    challenge_id,
+    run_id,
+    verdict: str,
+    gate_summary: dict,
+    hardcode_risk: str,
+    product_layer_status: str,
+    has_state_transitions: bool,
+    scenario_count: int,
+    gate_hardening_applied: list[str],
+) -> dict:
+    """§9 live_validation 판정 검증표를 만든다. verdict_is_honest는 gate 증거 일치 heuristic."""
+    honest, issues = verdict_consistency(
+        verdict, gate_summary, hardcode_risk, product_layer_status,
+        has_state_transitions, scenario_count,
+    )
+    all_pass = all(gate_summary.get(g) for g in CORE_GATE_ORDER)
+    # overrated: 증거보다 verdict가 높음 / underrated: 전 gate 통과인데 DROP·WEAK
+    overrated = (not honest) and verdict in ("REVIEW_READY", "PROMOTE_TO_CODEX", "KEEP_CANDIDATE")
+    underrated = all_pass and product_layer_status == "PASS" and verdict in ("DROP", "RUNS_BUT_WEAK")
+    return {
+        "live_validation": {
+            "challenge_id": str(challenge_id) if challenge_id is not None else "",
+            "run_id": run_id,
+            "verdict": verdict,
+            "verdict_is_honest": honest,
+            "overrated": overrated,
+            "underrated": underrated,
+            "issues_found": issues,
+            "gate_hardening_applied": gate_hardening_applied,
+        }
+    }
+
+
 # ---------------------------------------------------------------- Verdict 판정 (§11)
 
 

@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 from repo_idea_miner.config import Settings, load_settings
-from repo_idea_miner.factory_core_gates import run_core_gates
+from repo_idea_miner.factory_core_gates import product_layer_consumes_core, run_core_gates
 from repo_idea_miner.factory_core_prompts import (
     build_build_review_prompt,
     build_classify_prompt,
@@ -45,10 +45,21 @@ from repo_idea_miner.factory_core_schemas import (
     ScenarioGoldenOutput,
     ScenarioGoldenReview,
     SpecReview,
+    build_live_validation_summary,
     decide_core_verdict,
     effective_candidates,
     golden_mode_stats,
     scenario_case_type_problems,
+)
+
+# Phase 1.6b에서 보강한 gate 목록 (live_validation_summary.gate_hardening_applied에 기록)
+GATE_HARDENING_APPLIED = (
+    "core_contract_gate_static_wiring",
+    "core_contract_gate_runtime_reflection",
+    "product_layer_consumes_core",
+    "green_vs_continuation_base",
+    "build_review_recompute_after_patch",
+    "factory_validate_final_artifact_consistency",
 )
 from repo_idea_miner.factory_db import (
     add_product_artifact,
@@ -150,6 +161,7 @@ def run_core_factory(
     run_dir: Path | None = None,
     force_line: str | None = None,
     candidates: int | None = None,
+    live_validation: bool = False,
 ) -> dict:
     """Challenge 하나를 Core-first Review-Repair Harness(§4)로 밀어붙인다.
 
@@ -176,6 +188,7 @@ def run_core_factory(
         "patch_attempts": 0,
         "candidates": None,
         "green_base_path": None,
+        "continuation_base_path": None,
         "final_artifact_dir": None,
         "codex_export_dir": None,
         "auto_adjustments": [],
@@ -512,26 +525,33 @@ def run_core_factory(
         gates = _run_and_record_gates()
         harness["stages"]["core_verification"] = {"gates": gates["summary"]}
 
-        # ---------------------------------------------------------- Stage 5: Repair (§9)
+        # ---------------------------------------------------------- Stage 5: Repair (§9, §7 재계산)
         _stage("repair")
-        gate_md = "\n\n".join(gates["results"][g].report_md() for g in CORE_GATE_ORDER)
-        review_model, _ = _desk_call("build_review", "build_review",
-                                     build_build_review_prompt(gate_md, _dump(core_contract),
-                                                               list_workspace_files(workspace)),
-                                     BuildReview)
-        build_review = review_model.model_dump()
-        _write_run_json("build_review.json", build_review)
-        _write_run_doc("build_review.md", "\n".join([
-            "# Build Review", "",
-            f"- 상태: {build_review['status']}",
-            f"- hardcode risk: {build_review['hardcode_risk']}",
-            f"- patch 가능: {build_review['patchable']}",
-            "## 차단 문제",
-            *[f"- {b}" for b in build_review["blocking_issues"] or ["(없음)"]],
-            "## Patch 지시",
-            *[f"- {p}" for p in build_review["patch_instructions"] or ["(없음)"]],
-            f"\n## 다음 목표\n{build_review['next_goal'] or '(없음)'}",
-        ]) + "\n")
+
+        def _compute_build_review(gate_state: dict) -> dict:
+            """현재 gate 결과로 Build Review를 (재)계산한다 (§7.2: patch 후에도 최신 gate 기준)."""
+            gate_md = "\n\n".join(gate_state["results"][g].report_md() for g in CORE_GATE_ORDER)
+            review_model, _ = _desk_call("build_review", "build_review",
+                                         build_build_review_prompt(gate_md, _dump(core_contract),
+                                                                   list_workspace_files(workspace)),
+                                         BuildReview)
+            review = review_model.model_dump()
+            _write_run_json("build_review.json", review)
+            _write_run_doc("build_review.md", "\n".join([
+                "# Build Review", "",
+                f"- 상태: {review['status']}",
+                f"- hardcode risk: {review['hardcode_risk']}",
+                f"- patch 가능: {review['patchable']}",
+                "## 차단 문제",
+                *[f"- {b}" for b in review["blocking_issues"] or ["(없음)"]],
+                "## Patch 지시",
+                *[f"- {p}" for p in review["patch_instructions"] or ["(없음)"]],
+                f"\n## 다음 목표\n{review['next_goal'] or '(없음)'}",
+            ]) + "\n")
+            return review
+
+        build_review = _compute_build_review(gates)
+        build_review_recomputes = 0
 
         patch_attempts = 0
         while (not all(gates["summary"].values())
@@ -563,6 +583,9 @@ def run_core_factory(
                            output_files=written, validation="APPLIED",
                            next_state="core_verification", attempt=patch_attempts)
             gates = _run_and_record_gates()
+            # §7.2: patch 후 gate가 바뀌었으므로 Build Review를 최신 gate 기준으로 재계산
+            build_review = _compute_build_review(gates)
+            build_review_recomputes += 1
 
         result["patch_attempts"] = patch_attempts
         gate_summary = gates["summary"]
@@ -574,6 +597,7 @@ def run_core_factory(
         result["failed_scenarios"] = failed_scenarios
         harness["stages"]["repair"] = {
             "patch_attempts": patch_attempts,
+            "build_review_recomputes": build_review_recomputes,
             "gates_after": gate_summary,
             "failed_scenarios": failed_scenarios,
             "build_review_status": build_review["status"],
@@ -608,13 +632,8 @@ def run_core_factory(
             }
 
         def _product_harness_problems() -> list[str]:
-            files = _product_files_text()
-            if not files:
-                return ["product/ 파일 없음 (Product Layer는 필수, §2.3)"]
-            blob = "\n".join(files.values())
-            if "replay" not in blob and "runner" not in blob:
-                return ["product layer가 core output(replay/runner 결과)을 참조하지 않음 (§10.4)"]
-            return []
+            # §5 보강: replay artifact 실제 접근 + final_state/events/summary 소비 + core 복제 금지
+            return product_layer_consumes_core(_product_files_text(), core_contract)
 
         written, rejected = _apply_product_files(product_out["files"])
         if rejected:
@@ -732,34 +751,45 @@ def run_core_factory(
         # regression 준비 (§8.2: Phase 1.6은 green_base 저장 중심으로 준비만)
         regression_suite = [_scenario_filename(sid) for sid in scenario_ids]
 
-        # Green Base (§11.11)
+        # Green Base vs Continuation Base (§6): 명칭·조건 분리 — 일부 gate 실패는 green이 아님
         green_base_path = None
+        continuation_base_path = None
         gates_all_pass = all(gate_summary.get(g) for g in CORE_GATE_ORDER)
-        partial_patchable = (gate_summary.get("core_contract") and gate_summary.get("runner")
-                             and build_review.get("patchable", True))
-        if ((gates_all_pass or partial_patchable)
-                and pl_status == "PASS"
-                and hardcode_risk in ("low", "medium")
-                and next_goal):
+        base_common = {
+            "verdict": verdict,
+            "failed_scenarios": failed_scenarios,
+            "golden_diff": gates["artifacts"]["golden_diff_summary"],
+            "next_goal": next_goal,
+            "allowed_touch_files": ["src/", "product/", "run_instructions.md", "README.md"],
+            "frozen_files": list(FROZEN_FILES) + ["fixtures/", "golden/"],
+            "regression_suite": regression_suite,
+        }
+        # green_base (§6.3): 모든 필수 core gate 통과 + product layer PASS + hardcode low/medium
+        green_ready = (gates_all_pass and pl_status == "PASS"
+                       and hardcode_risk in ("low", "medium") and bool(next_goal))
+        # continuation_base (§6.3): core_contract+runner는 통과, 일부 gate 실패, patch 가능, hardcode high 아님
+        continuation_ready = (bool(gate_summary.get("core_contract")) and bool(gate_summary.get("runner"))
+                              and build_review.get("patchable", True)
+                              and hardcode_risk != "high" and bool(next_goal))
+        if green_ready:
             snap = save_green_base(run_dir, workspace, f"green_core_{patch_attempts:02d}")
             green_base_path = str(snap)
-            green_base = {
-                "green_base_path": green_base_path,
-                "verdict": verdict,
-                "failed_scenarios": failed_scenarios,
-                "golden_diff": gates["artifacts"]["golden_diff_summary"],
-                "next_goal": next_goal,
-                "allowed_touch_files": ["src/", "product/", "run_instructions.md", "README.md"],
-                "frozen_files": list(FROZEN_FILES) + ["fixtures/", "golden/"],
-                "regression_suite": regression_suite,
-            }
-            _write_run_json("green_base.json", green_base)
+            _write_run_json("green_base.json", {"base_type": "green_base",
+                                                "green_base_path": green_base_path, **base_common})
+        elif continuation_ready:
+            snap = save_green_base(run_dir, workspace, f"continuation_core_{patch_attempts:02d}")
+            continuation_base_path = str(snap)
+            _write_run_json("continuation_base.json", {"base_type": "continuation_base",
+                                                       "continuation_base_path": continuation_base_path,
+                                                       **base_common})
         result["green_base_path"] = green_base_path
+        result["continuation_base_path"] = continuation_base_path
 
         write_workspace_file(workspace, "regression_summary.json", _dump({
             "status": "PREPARED",
-            "note": "본격적인 Regression Gate는 Phase 2 범위 (§8.2). green_base 저장까지만 준비.",
+            "note": "본격적인 Regression Gate는 Phase 2 범위 (§8.2). base 저장까지만 준비.",
             "green_base_path": green_base_path,
+            "continuation_base_path": continuation_base_path,
             "regression_suite": regression_suite,
         }), secrets)
 
@@ -777,8 +807,11 @@ def run_core_factory(
         }
         _write_run_json("core_system_summary.json", core_system_summary)
 
+        product_layer_consumes = pl_status == "PASS" and not pl_problems
         harness["stages"]["verdict"] = {"verdict": verdict, "recommended_action": recommended,
-                                        "green_base_saved": green_base_path is not None}
+                                        "green_base_saved": green_base_path is not None,
+                                        "continuation_base_saved": continuation_base_path is not None,
+                                        "product_layer_consumes_core": product_layer_consumes}
         harness["gate_summary"] = gate_summary
         harness["hardcode_risk"] = hardcode_risk
         harness["oracle_risk_level"] = oracle_risk_level
@@ -817,8 +850,23 @@ def run_core_factory(
             "run_instructions": "run_instructions.md",
             "product_layer_dir": "product/",
             "runner_command": runner_contract.get("runner_command"),
+            # Phase 1.6b 보강 표시 (§10)
+            "green_base": green_base_path is not None,
+            "continuation_base": continuation_base_path is not None,
+            "product_layer_consumes_core": product_layer_consumes,
+            "is_live_validation": bool(live_validation),
         }
         _write_run_json("dashboard_summary.json", dashboard_summary)
+
+        # Live Validation 판정 검증표 (§9): live 검증 run에서만 생성
+        if live_validation:
+            live_summary = build_live_validation_summary(
+                challenge_id=challenge_id, run_id=run_id, verdict=verdict,
+                gate_summary=gate_summary, hardcode_risk=hardcode_risk,
+                product_layer_status=pl_status, has_state_transitions=has_transitions,
+                scenario_count=len(scenario_ids), gate_hardening_applied=list(GATE_HARDENING_APPLIED),
+            )
+            _write_run_json("live_validation_summary.json", live_summary)
 
         # Product Dashboard 호환 요약 (기존 화면이 그대로 읽는 product_summary.json)
         issue = ("특이 결함 없음" if gates_all_pass
@@ -868,6 +916,8 @@ def run_core_factory(
             "oracle_risk_level": oracle_risk_level,
             "exact_golden_count": stats["exact_count"],
             "green_base_path": green_base_path,
+            "continuation_base_path": continuation_base_path,
+            "product_layer_consumes_core": product_layer_consumes,
             "next_goal": next_goal,
             "auto_adjustments": result["auto_adjustments"],
         }
@@ -879,6 +929,9 @@ def run_core_factory(
                            ("product_eval_summary.json", eval_summary)):
             (final_dir / name).write_text(redact_text(_dump(data), secrets), encoding="utf-8")
         _write_run_json("product_summary.json", product_summary)
+        if live_validation:
+            (final_dir / "live_validation_summary.json").write_text(
+                redact_text(_dump(live_summary), secrets), encoding="utf-8")
 
         # PROMOTE_TO_CODEX export bundle (자동 호출 아님, §3)
         if verdict == "PROMOTE_TO_CODEX":

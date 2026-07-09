@@ -585,6 +585,17 @@ def _gate_pills(gate: dict) -> str:
     return '<div class="gaterow">' + "".join(out) + "</div>"
 
 
+def _base_line(dsum: dict) -> str:
+    """Green Base / Continuation Base 구분 표시 (§6.4, §10)."""
+    if dsum.get("green_base"):
+        text = "성장 루프 기준점: <b>준비됨</b>"
+    elif dsum.get("continuation_base"):
+        text = "성장 루프 기준점: 아직 아님 · 수정 시작점: <b>있음</b>"
+    else:
+        text = "성장 루프 기준점: 없음 · 수정 시작점: 없음"
+    return f'<p class="meta">{text}</p>'
+
+
 def _core_harness_panel(dsum: dict, final_dir: Path | None, run_root: Path | None) -> str:
     """Phase 1.6 상세: 코어 시스템 검증 결과 (§11.10 상세 페이지 표시)."""
     gates = dsum.get("gates") or {}
@@ -616,6 +627,9 @@ def _core_harness_panel(dsum: dict, final_dir: Path | None, run_root: Path | Non
     / 참고용 제외 {golden.get('review_skipped', '-')} (exact {golden.get('exact_passed', '-')}/{golden.get('exact_total', '-')})</p>
   <div class="field"><span class="k">실패 시나리오</span><ul class="evi">{failed_html}</ul></div>
   <div class="field"><span class="k">실행 명령</span><span class="kv">{_e(dsum.get('runner_command') or '-')}</span></div>
+  {_base_line(dsum)}
+  <p class="meta">제품 레이어: <b>{"Replay 출력 사용 확인" if dsum.get('product_layer_consumes_core') else "Replay 출력 미확인"}</b>
+    {"· <b>실전 검증(Live Validation) 실행</b>" if dsum.get('is_live_validation') else ""}</p>
   <p class="meta">실행 안내: 상세 리포트 탭의 run_instructions
     · 하드코딩 신호 {len((anti.get('level1_problems') or [])) + len((anti.get('level2_problems') or []))}건
     · 추천: <b>{_e(dsum.get('recommendation') or '-')}</b></p>
@@ -793,6 +807,10 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<p class="meta">결정성: {_e(dsum.get("determinism") or "-")}'
                 f' · 위험: {_e(dsum.get("risk_level") or "-")}'
                 f' · 추천: <b>{_e(dsum.get("recommendation") or "-")}</b></p>'
+                f'{_base_line(dsum)}'
+                f'<p class="meta">제품 레이어: '
+                f'{"Replay 출력 사용 확인" if dsum.get("product_layer_consumes_core") else "Replay 출력 미확인"}'
+                f'{" · <b>실전 검증 실행</b>" if dsum.get("is_live_validation") else ""}</p>'
             )
         else:
             gate = load_gate_summary(final_dir, run_root)

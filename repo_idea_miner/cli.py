@@ -113,6 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
     fb_p.add_argument("--no-db", action="store_true", help="DB 저장 생략")
     fb_p.add_argument("--candidates", type=int, default=None,
                       help="실험 옵션: build 후보 수 (live 기본 1, mock 최대 2, §2.4)")
+    fb_p.add_argument("--live-validation", action="store_true",
+                      help="Phase 1.6b live 검증 run으로 표시하고 live_validation_summary.json 생성")
 
     fs_p = sub.add_parser("factory-status", help="Product Factory 상태 표시")
     fs_p.add_argument("--db", default="challenge.db")
@@ -387,6 +389,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = run_core_factory(
                     challenge, mode=args.mode, output_dir=args.output_dir,
                     db_conn=db_conn, scheduler=scheduler, candidates=args.candidates,
+                    live_validation=args.live_validation,
                 )
             finally:
                 if db_conn is not None:

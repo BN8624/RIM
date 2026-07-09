@@ -313,7 +313,7 @@ Schema (use exactly these keys):
 {_clip(contract_json, 5000)}
 
 === SCENARIOS / GOLDENS ===
-{_clip(scenario_golden_json, 9000)}
+{_clip(scenario_golden_json, 16000)}
 """
 
 
@@ -331,7 +331,7 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CURRENT SCENARIOS / GOLDENS ===
-{_clip(scenario_golden_json, 9000)}
+{_clip(scenario_golden_json, 16000)}
 
 === REVIEW ===
 {_clip(review_json, 4000)}

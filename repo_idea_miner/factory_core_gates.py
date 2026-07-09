@@ -119,9 +119,86 @@ def _src_code_files(workspace: Path, roots: tuple[str, ...] = ("src",)) -> dict[
     return out
 
 
-# ---------------------------------------------------------------- Core Contract Gate (§8.5)
+# ---------------------------------------------------------------- 정적 코드 분석 (Phase 1.6b §4)
+
+_C_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def strip_comments(text: str, suffix: str) -> str:
+    """주석만 제거한다(문자열 리터럴은 보존). '주석에만 등장'과 'dispatch 문자열'을 구분하기 위함 (§4.4)."""
+    suffix = suffix.lower()
+    if suffix == ".py":
+        return re.sub(r"(^|\s)#.*", r"\1", text, flags=re.MULTILINE)
+    if suffix in (".js", ".mjs", ".css"):
+        text = _C_BLOCK_COMMENT.sub(" ", text)
+        return re.sub(r"(^|\s)//.*", r"\1", text, flags=re.MULTILINE)
+    if suffix in (".html", ".htm"):
+        return _HTML_COMMENT.sub(" ", text)
+    return text
+
+
+def _stripped_blob(code: dict[str, str]) -> str:
+    return "\n".join(strip_comments(text, Path(rel).suffix) for rel, text in code.items())
+
+
+def action_wiring(stripped_blob: str, full_blob: str, name: str) -> str:
+    """action name이 코드에서 어떻게 나타나는지 분류한다.
+
+    반환: 'callable'(정의) | 'dispatch'(문자열 키/비교) | 'weak'(장식용 문자열) | 'comment_only' | 'absent'.
+    """
+    if not name or name not in full_blob:
+        return "absent"
+    if name not in stripped_blob:
+        return "comment_only"
+    esc = re.escape(name)
+    if (re.search(rf"\b(def|function|class)\s+{esc}\b", stripped_blob)
+            or re.search(rf"\b{esc}\s*[:=]\s*(function|\(|lambda|async)", stripped_blob)
+            or re.search(rf"\b{esc}\s*\([^\n)]*\)\s*(=>|\{{|:)", stripped_blob)):
+        return "callable"
+    if (re.search(rf"""(==|===|=>|case|:)\s*["']{esc}["']""", stripped_blob)
+            or re.search(rf"""["']{esc}["']\s*(==|===|=>|:|\])""", stripped_blob)
+            or re.search(rf"""\[\s*["']{esc}["']\s*\]""", stripped_blob)):
+        return "dispatch"
+    return "weak"
+
+
+def _runner_wiring_problem(script: str | None, code: dict[str, str]) -> str | None:
+    """runner가 별도 core 모듈을 import/require하는지 검사한다 (§4.2-2, §4.4). 단일파일 runner는 면제."""
+    if not script:
+        return None
+    runner_text = code.get(script)
+    if runner_text is None:
+        return None
+    other_stems: set[str] = set()
+    for rel in code:
+        if rel == script:
+            continue
+        stem = Path(rel).stem
+        other_stems.add(Path(rel).parent.name if stem == "__init__" else stem)
+    other_stems.discard("")
+    if not other_stems:
+        return None  # core 로직이 runner 한 파일에 들어있는 경우 import 요구 불가
+    import_lines = re.findall(
+        r"^\s*(?:from\s|import\s|const\s|let\s|var\s|require\b|importScripts).*$",
+        runner_text, re.MULTILINE,
+    )
+    import_blob = "\n".join(import_lines)
+    if any(re.search(rf"\b{re.escape(stem)}\b", import_blob) for stem in other_stems):
+        return None
+    if re.search(r"require\s*\(", runner_text) and any(stem in runner_text for stem in other_stems):
+        return None
+    return f"runner가 core 모듈을 import/require하지 않음 (dead core 의심): {script}"
+
+
+# ---------------------------------------------------------------- Core Contract Gate (§8.5, §4 보강)
 
 def run_core_contract_gate(workspace: Path, core_contract: dict, runner_contract: dict) -> GateResult:
+    """계약이 실제 실행 코드와 연결되는지 정적으로 검사한다.
+
+    단순 문자열 포함이 아니라 (1) action이 정의/dispatch로 연결, (2) runner가 core를 import,
+    (3) state entity가 코드에 반영되는지를 본다 (§4.2). 런타임 반영은 augment_core_contract_runtime.
+    """
     r = GateResult(name="Core Contract Gate", ok=True)
     for required in ("core_contract.json", "state_contract.json", "action_contract.json", "runner_contract.json"):
         if not (workspace / required).is_file():
@@ -138,22 +215,106 @@ def run_core_contract_gate(workspace: Path, core_contract: dict, runner_contract
         r.problems.append(f"runner 스크립트 없음: {script}")
 
     code = _src_code_files(workspace)
-    blob = "\n".join(code.values())
     if not code:
         r.problems.append("src/ 코드 파일 없음")
+    full_blob = "\n".join(code.values())
+    stripped_blob = _stripped_blob(code)
+
+    # §4.2-1: action이 실제 callable/dispatch로 존재 (주석·장식용 문자열만이면 실패)
     for action in core_contract.get("actions") or []:
         name = action.get("name") or ""
-        if name and name not in blob:
+        if not name:
+            continue
+        kind = action_wiring(stripped_blob, full_blob, name)
+        if kind == "absent":
             r.problems.append(f"contract action이 코드에 없음: {name}")
+        elif kind == "comment_only":
+            r.problems.append(f"contract action이 주석에만 있음(정의/dispatch 없음): {name}")
+        elif kind == "weak":
+            r.problems.append(f"contract action이 dispatch/정의로 연결되지 않음(장식용 문자열만): {name}")
+
+    # §4.2-2: runner가 core 모듈을 import/require
+    wiring = _runner_wiring_problem(script, code)
+    if wiring:
+        r.problems.append(wiring)
+
+    # §4.2-4: state entity가 코드(주석 제외)에 반영
     for entity in core_contract.get("state_entities") or []:
         name = entity.get("name") or ""
         fields = entity.get("fields") or []
-        if name and name not in blob and not any(f in blob for f in fields):
+        if name and name not in stripped_blob and not any(f in stripped_blob for f in fields):
             r.problems.append(f"contract state entity가 코드에 없음: {name}")
 
-    r.notes.append(f"src 코드 파일 {len(code)}개 검사")
+    r.notes.append(f"src 코드 파일 {len(code)}개 검사 (정적 wiring)")
     r.ok = not r.problems
     return r
+
+
+def _collect_keys(node, acc: set) -> None:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            acc.add(k)
+            _collect_keys(v, acc)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_keys(item, acc)
+
+
+def augment_core_contract_runtime(result: GateResult, core_contract: dict, replay_outputs: dict[str, dict]) -> None:
+    """replay 출력의 final_state에 contract state entity가 실제 반영됐는지 검사한다 (§4.2-3,4).
+
+    정적 wiring만으로는 dead code가 통과할 수 있어, runner 실행 결과로 반영 여부를 확인한다.
+    """
+    final_states = [
+        (run.get("parsed") or {}).get("final_state")
+        for run in replay_outputs.values()
+    ]
+    final_states = [fs for fs in final_states if isinstance(fs, dict)]
+    if not final_states:
+        return  # runner 실패 → 별도 gate가 처리
+    present: set = set()
+    for fs in final_states:
+        _collect_keys(fs, present)
+    for entity in core_contract.get("state_entities") or []:
+        name = entity.get("name") or ""
+        fields = entity.get("fields") or []
+        if name and name not in present and not any(f in present for f in fields):
+            result.problems.append(f"state entity가 runner 출력 final_state에 반영되지 않음: {name}")
+    result.ok = not result.problems
+
+
+# ---------------------------------------------------------------- Product Layer 소비 검사 (Phase 1.6b §5)
+
+def product_layer_consumes_core(
+    product_files: dict[str, str], core_contract: dict | None = None
+) -> list[str]:
+    """Product Layer가 core output(replay/runner 결과)을 실제로 소비하는지 정적 검사한다 (§5.2~5.4)."""
+    if not product_files:
+        return ["product/ 파일 없음 (Product Layer는 필수, §2.3)"]
+    problems: list[str] = []
+    stripped = "\n".join(
+        strip_comments(text, Path(rel).suffix) for rel, text in product_files.items()
+    )
+    # §5.2-1: replay/runner artifact를 실제로 읽는다 (경로 문자열 + 읽기 동작)
+    accesses = bool(
+        re.search(r"replay/(?:index\.json|[\w./-]*\.json)", stripped)
+        or re.search(r"(?:fetch|open|read|require|import|XMLHttpRequest|loadJSON)\b[^\n]*replay", stripped)
+    )
+    if not accesses:
+        problems.append("product layer가 replay/ 산출물을 실제로 읽지 않음(문자열 흔적만) (§5.4)")
+    # §5.2-2: final_state/events/summary 중 2개 이상 표시
+    used = [f for f in ("final_state", "events", "summary") if f in stripped]
+    if len(used) < 2:
+        problems.append(
+            f"core output 필드 사용 {len(used)}개({used or '없음'}) < 2 "
+            "(final_state/events/summary 중 2개 이상 필요, §5.2)"
+        )
+    # §5.2-4: core action 로직을 product 안에 복제하지 않는다
+    for action in (core_contract or {}).get("actions") or []:
+        name = action.get("name") or ""
+        if name and re.search(rf"\b(?:def|function)\s+{re.escape(name)}\b", stripped):
+            problems.append(f"product layer가 core action 로직을 복제함: {name} (§5.4)")
+    return problems
 
 
 # ---------------------------------------------------------------- Runner Gate (§8.5)
@@ -626,10 +787,6 @@ def run_core_gates(
     artifacts: dict[str, dict] = {}
 
     results["core_contract"] = run_core_contract_gate(workspace, core_contract, runner_contract)
-    artifacts["core_contract_summary"] = {
-        "status": "PASS" if results["core_contract"].ok else "FAIL",
-        "problems": results["core_contract"].problems,
-    }
 
     runner_result, runner_run = run_runner_gate(
         workspace, runner_contract, timeout_seconds, use_docker, secrets
@@ -666,6 +823,13 @@ def run_core_gates(
         "passed": len(replay_outputs) - len(replay_failed),
         "failed_scenarios": replay_failed,
         "problems": replay_result.problems,
+    }
+
+    # Core Contract Gate 런타임 반영 검사 (§4.2-3,4): replay 이후에만 가능
+    augment_core_contract_runtime(results["core_contract"], core_contract, replay_outputs)
+    artifacts["core_contract_summary"] = {
+        "status": "PASS" if results["core_contract"].ok else "FAIL",
+        "problems": results["core_contract"].problems,
     }
 
     if runner_result.ok:
