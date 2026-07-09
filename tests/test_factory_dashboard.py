@@ -48,7 +48,7 @@ def test_products_index_shows_verdict(dashboard):
     base, _, result = dashboard
     body = _get(base + "/products")
     assert "Product Runs" in body
-    assert "Codex 승격 후보" in body  # PROMOTE_TO_CODEX verdict 배지 한글 라벨
+    assert "제품화 후보" in body  # PROMOTE_TO_CODEX verdict 배지 한국어 라벨
     assert f"/product/{result['product_run_id']}" in body
 
 
@@ -56,11 +56,11 @@ def test_product_detail_shows_recommended_button(dashboard):
     """Dashboard 버튼과 Product Verdict 매핑 (§22-34, §15)."""
     base, _, result = dashboard
     body = _get(base + f"/product/{result['product_run_id']}")
-    assert "PRODUCTIZE (추천)" in body  # PROMOTE_TO_CODEX → PRODUCTIZE 추천
-    for label in ("KEEP", "DROP", "RETRY", "ARCHIVE"):
+    assert "제품화 (추천)" in body  # PROMOTE_TO_CODEX → 제품화 추천 (한국어 버튼)
+    for label in ("보관", "버림", "다시 돌리기", "보류"):
         assert label in body
-    assert "최종 판정" in body
-    assert "PROMOTE_TO_CODEX" in body  # product_verdict.md 내용 표시
+    assert "최종 판정" in body  # product_verdict.md 원문 (접힘 영역)
+    assert "PROMOTE_TO_CODEX" in body  # 원본 상태값 보기 + 원문
     assert VERDICT_TO_RECOMMENDED_ACTION["PROMOTE_TO_CODEX"] == "productize"
 
 

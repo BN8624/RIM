@@ -20,6 +20,7 @@ from repo_idea_miner.factory_db import (
     log_product_event,
     open_factory_db as open_db,  # challenge 스키마 + factory 스키마 보장 (기존 라우트 동작은 동일)
 )
+from repo_idea_miner import factory_labels as L
 from repo_idea_miner.factory_schemas import (
     PRODUCT_OWNER_DECISIONS,
     PRODUCT_VERDICT_LABELS,
@@ -109,27 +110,8 @@ _SOURCE_PREVIEW_PREFIXES = ("src/", "reports/")
 # preview 길이 제한 (§30 large file truncate)
 _PREVIEW_MAX_BYTES = 60000
 
-# run status / gate·qa status 화면용 한글/배지
-_STATUS_KO = {"pending": "대기", "running": "진행 중", "done": "완료", "error": "에러"}
-_GATE_STATUS_KO = {"PASS": "PASS", "FAIL": "FAIL", "SKIP": "SKIP", "UNKNOWN": "UNKNOWN"}
-
-_VERDICT_KO = {
-    "PROMOTE_TO_CODEX": "Codex 승격 후보",
-    "KEEP_CANDIDATE": "보관 후보",
-    "NEEDS_MORE_GEMMA_LOOP": "루프 더 필요",
-    "TOO_WEAK": "너무 약함",
-    "DROP": "버림",
-}
-
-_DECISION_KO = {
-    "keep": "KEEP",
-    "drop": "DROP",
-    "productize": "PRODUCTIZE",
-    "retry": "RETRY",
-    "archive": "ARCHIVE",
-}
-
-# §15 verdict → 추천 버튼 강조용
+# 표시 문구는 factory_labels로 통일한다(내부값 불변). 여기서는 버튼 순서만 정의한다.
+# (label은 factory_labels.format_review_label에서 렌더링)
 _DECISION_ACTIONS = [
     ("keep", "KEEP"),
     ("drop", "DROP"),
@@ -199,6 +181,12 @@ form.filters button { font-size: 1rem; padding: 10px 18px; border-radius: 12px; 
 .smoke-meta { font-size: .85rem; color: #6b7280; margin: 2px 0; }
 .issue { margin: 6px 0; } .issue .k { font-size: .78rem; color: #6b7280; }
 .evi { margin: 6px 0 0; padding-left: 18px; font-size: .9rem; }
+details.raw > summary { cursor: pointer; list-style: none; user-select: none; }
+details.raw > summary::-webkit-details-marker { display: none; }
+details.raw > summary::before { content: "▸ "; color: #6b7280; }
+details.raw[open] > summary::before { content: "▾ "; }
+details.raw > summary.sec-h { margin-bottom: 0; }
+details.raw[open] > summary.sec-h { margin-bottom: 12px; }
 .chead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
 .repo { font-weight: 700; font-size: .92rem; word-break: break-all; flex: 1 1 auto; color: #6b7280; }
 .repo a { color: #6b7280; text-decoration: none; }
@@ -517,21 +505,19 @@ def render_detail(conn: sqlite3.Connection, challenge_id: int, tab: str, secrets
 
 def _verdict_badge(verdict: str | None) -> str:
     v = verdict or "PENDING"
-    label = _VERDICT_KO.get(v, "진행 중" if verdict is None else v)
-    return f'<span class="badge v-{_e(v)}">{_e(label)}</span>'
+    return f'<span class="badge v-{_e(v)}">{_e(L.format_verdict_label(verdict))}</span>'
 
 
 def _status_badge(status: str | None) -> str:
     st = status or "pending"
     cls = st if st in ("done", "error", "running", "pending") else "pending"
-    text = "ERROR" if st == "error" else _STATUS_KO.get(st, st)
-    return f'<span class="sb sb-{cls}">{_e(text)}</span>'
+    return f'<span class="sb sb-{cls}">{_e(L.format_status_label(st))}</span>'
 
 
 def _review_badge(action: str | None) -> str:
     if not action:
         return '<span class="rb">미검수</span>'
-    return f'<span class="rb rb-on">{_e(_DECISION_KO.get(action, action))}</span>'
+    return f'<span class="rb rb-on">{_e(L.format_review_label(action))}</span>'
 
 
 def _run_root(run: dict) -> Path | None:
@@ -568,13 +554,18 @@ def _overall_qa_status(qa: dict) -> str:
     return "UNKNOWN"
 
 
+def _gate_inline(gate: dict) -> str:
+    passed, total = gate_pass_count(gate)
+    return f"{passed}/{total} 통과"
+
+
 def _gate_pills(gate: dict) -> str:
-    labels = {"static": "Static", "contract": "Contract", "syntax": "Syntax", "smoke": "Smoke"}
     out = []
     for key in GATE_KEYS:
         status = (gate.get(key) or {}).get("status", "UNKNOWN")
         out.append(
-            f'<span class="gp gp-{_e(status)}"><span class="lbl">{labels[key]}</span>{_e(status)}</span>'
+            f'<span class="gp gp-{_e(status)}"><span class="lbl">{_e(L.format_gate_label(key))}</span>'
+            f'{_e(L.format_gate_status(status))}</span>'
         )
     return '<div class="gaterow">' + "".join(out) + "</div>"
 
@@ -645,7 +636,7 @@ def _source_files(final_dir: Path | None) -> list[str]:
 
 def _final_tree(final_dir: Path | None, limit: int = 200) -> str:
     if not final_dir or not final_dir.is_dir():
-        return "(final_artifact 없음)"
+        return "(아직 생성된 파일이 없습니다)"
     lines = ["final_artifact/"]
     paths = sorted(p for p in final_dir.rglob("*") if p.is_file())
     for p in paths[:limit]:
@@ -677,7 +668,7 @@ def _smoke_preview_html(smoke: dict, secrets: list[str]) -> str:
 
 def _action_buttons(run_id: int, recommended: str | None, current: str | None, next_goal: str) -> str:
     out = []
-    for d, label in _DECISION_ACTIONS:
+    for d, _en in _DECISION_ACTIONS:
         cls = ("primary" if d == recommended else "") + (" on" if d == current else "")
         extra = ""
         if d in ("retry", "productize") and next_goal:
@@ -686,7 +677,7 @@ def _action_buttons(run_id: int, recommended: str | None, current: str | None, n
         out.append(
             f'<form method="post" action="/product/{run_id}/decision" style="display:inline">'
             f'<input type="hidden" name="decision" value="{d}">{extra}'
-            f'<button type="submit" class="{cls.strip()}">{label}{star}</button></form>'
+            f'<button type="submit" class="{cls.strip()}">{_e(L.format_review_label(d))}{star}</button></form>'
         )
     return "".join(out)
 
@@ -695,12 +686,12 @@ def _product_filter_chips(filters: dict) -> str:
     active = filters.get("verdict"), filters.get("status"), (filters.get("review") or "").lower()
     chips = [("전체", "/products", not any(active))]
     for lab in PRODUCT_VERDICT_LABELS:
-        chips.append((lab, f"/products?verdict={lab}", filters.get("verdict") == lab))
-    chips.append(("status=error", "/products?status=error", filters.get("status") == "error"))
+        chips.append((L.format_verdict_label(lab), f"/products?verdict={lab}", filters.get("verdict") == lab))
+    chips.append(("오류", "/products?status=error", filters.get("status") == "error"))
     chips.append(("미검수", "/products?review=unreviewed", active[2] == "unreviewed"))
     chips.append(("검수완료", "/products?review=reviewed", active[2] == "reviewed"))
-    chips.append(("RETRY", "/products?review=retry", active[2] == "retry"))
-    chips.append(("PRODUCTIZE", "/products?review=productize", active[2] == "productize"))
+    chips.append(("다시 돌리기", "/products?review=retry", active[2] == "retry"))
+    chips.append(("제품화", "/products?review=productize", active[2] == "productize"))
     links = "".join(
         f'<a href="{href}" class="{"on" if on else ""}">{_e(lab)}</a>' for lab, href, on in chips
     )
@@ -721,12 +712,12 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
 
     summary = f"""
 <section class="summary">
-  <h2 class="sec-h">Product Runs 요약</h2>
+  <h2 class="sec-h">결과물 요약</h2>
   <div class="sgrid">
-    <div class="sitem"><span class="k">전체 run</span><span class="val">{len(all_runs)}건</span></div>
-    <div class="sitem"><span class="k">Codex 승격</span><span class="val">{verdict_counts.get('PROMOTE_TO_CODEX', 0)}건</span></div>
-    <div class="sitem"><span class="k">루프 더 필요</span><span class="val">{verdict_counts.get('NEEDS_MORE_GEMMA_LOOP', 0)}건</span></div>
-    <div class="sitem"><span class="k">에러</span><span class="val">{error_n}건</span></div>
+    <div class="sitem"><span class="k">전체</span><span class="val">{len(all_runs)}건</span></div>
+    <div class="sitem"><span class="k">제품화 후보</span><span class="val">{verdict_counts.get('PROMOTE_TO_CODEX', 0)}건</span></div>
+    <div class="sitem"><span class="k">더 돌려야 함</span><span class="val">{verdict_counts.get('NEEDS_MORE_GEMMA_LOOP', 0)}건</span></div>
+    <div class="sitem"><span class="k">오류</span><span class="val">{error_n}건</span></div>
     <div class="sitem"><span class="k">미검수</span><span class="val">{unreviewed_n}건</span></div>
   </div>
 </section>"""
@@ -741,23 +732,19 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
         rev = reviews.get(r["id"])
         title = _product_title(r, psum)
         passed, total = gate_pass_count(gate)
-        issue = (psum or {}).get("issue_summary") or (qa.get("issue_summary") or "-")
-        next_goal = (psum or {}).get("next_goal") or qa.get("next_goal") or "-"
-        recommended = (psum or {}).get("recommended_action") or VERDICT_TO_RECOMMENDED_ACTION.get(
-            r.get("verdict") or "", "-"
-        ).upper()
+        issue = L.humanize_issue((psum or {}).get("issue_summary") or qa.get("issue_summary") or "-")
+        recommended = L.format_recommended(r.get("verdict"), r.get("status"))
         cards.append(
             f"""  <article class="card">
     <div class="chead">
-      <span class="repo"><a href="/product/{r['id']}">run #{r['id']}</a></span>
+      <span class="repo"><a href="/product/{r['id']}">번호 {r['id']}</a></span>
       {_verdict_badge(r.get('verdict'))}
       {_status_badge(r.get('status'))}
       {_review_badge((rev or {}).get('action'))}
     </div>
     <p class="title"><a href="/product/{r['id']}">{_e(title)}</a></p>
-    <div class="issue"><span class="k">Issue</span> {_e(issue)}</div>
-    <p class="meta">Gate {passed}/{total} PASS · QA {_e(_overall_qa_status(qa))}</p>
-    <div class="issue"><span class="k">Next</span> {_e(next_goal)}</div>
+    <div class="issue"><span class="k">문제</span> {_e(issue)}</div>
+    <p class="meta">검사 {passed}/{total} 통과 · 품질 {_e(L.format_qa_status(_overall_qa_status(qa)))}</p>
     <p class="meta">추천 {_e(recommended)} · <a href="/product/{r['id']}">상세 보기 →</a></p>
   </article>"""
         )
@@ -805,98 +792,112 @@ def render_product_detail(
             ch = dict(row)
 
     action_buttons = _action_buttons(run_id, recommended, rev_action, next_goal)
+    reason_h = L.humanize_issue(reason)
+    rec_ko = L.format_recommended(verdict, status)
 
-    # 1. Verdict Hero (§14)
+    # 1. 판정 요약(Hero) — 한국어 검수 문장 (§11). 영어 원문은 접힘 영역에 (§13·§14)
     hero = f"""
 <section class="summary">
   <div class="chead">
-    <span class="repo">run #{run_id}</span>
+    <span class="repo">번호 {run_id}</span>
     {_verdict_badge(verdict)}
     {_status_badge(status)}
     {_review_badge(rev_action)}
   </div>
   <p class="title">{_e(title)}</p>
-  <p class="meta">추천 Action: <b>{_e((recommended or '-').upper())}</b> · 단계 {_e(run.get('current_stage') or '-')}
-    · 라인 {_e(run.get('line') or '-')} · {_e((run.get('created_at') or '')[:19].replace('T', ' '))}</p>
-  <div class="issue"><span class="k">이유</span> {_e(reason)}</div>
+  <p class="meta">추천: <b>{_e(rec_ko)}</b> · 상태 {_e(L.format_status_label(status))}
+    · {_e((run.get('created_at') or '')[:19].replace('T', ' '))}</p>
+  <div class="issue"><span class="k">이유</span> {_e(reason_h)}</div>
+  <p class="meta">검사: {_gate_inline(gate)} · 품질: {_e(L.format_qa_status(_overall_qa_status(qa)))}</p>
   <div class="actions" style="margin-top:12px">{action_buttons}</div>
+  <details class="raw"><summary>원본 상태값 보기</summary>
+    <p class="kv">verdict: {_e(verdict or 'null')}</p>
+    <p class="kv">status: {_e(status)}</p>
+    <p class="kv">review: {_e(rev_action or 'unreviewed')}</p>
+    <p class="kv">recommended: {_e(recommended or '-')}</p>
+    <p class="kv">stage: {_e(run.get('current_stage') or '-')} · line: {_e(run.get('line') or '-')}</p>
+  </details>
 </section>"""
 
-    # 3. 원본 Challenge 요약 (§15)
+    # 3. 원본 아이디어 요약 (§15)
     if ch or psum:
         anchors = (psum or {}).get("challenge_anchors") or []
         forbidden = (psum or {}).get("challenge_forbidden") or []
         brief = (psum or {}).get("owner_brief_summary") or "-"
         link = (
-            f'<a href="/challenge/{ch["id"]}">원본 Challenge 상세 →</a>'
+            f'<a href="/challenge/{ch["id"]}">원본 아이디어 상세 →</a>'
             if ch
-            else '<span class="muted">원본 Challenge 정보 없음 (삭제되었거나 샘플 run)</span>'
+            else '<span class="muted">원본 아이디어 정보 없음 (삭제되었거나 샘플)</span>'
         )
         ch_summary = f"""
 <section class="panel">
-  <h2 class="sec-h">원본 Challenge 요약</h2>
-  <p class="meta">Challenge ID: {_e(run.get('challenge_id') if run.get('challenge_id') else '(없음)')}</p>
-  <div class="field"><span class="k">Owner Brief</span>{_e(brief)}</div>
-  <div class="field"><span class="k">Difficulty Anchors</span><ul class="evi">{''.join(f'<li>{_e(a)}</li>' for a in anchors) or '<li class="muted">없음</li>'}</ul></div>
-  <div class="field"><span class="k">Forbidden Simplifications</span><ul class="evi">{''.join(f'<li>{_e(f)}</li>' for f in forbidden) or '<li class="muted">없음</li>'}</ul></div>
+  <h2 class="sec-h">원본 아이디어 요약</h2>
+  <div class="field"><span class="k">한 줄 설명</span>{_e(brief)}</div>
+  <div class="field"><span class="k">핵심 조건</span><ul class="evi">{''.join(f'<li>{_e(a)}</li>' for a in anchors) or '<li class="muted">없음</li>'}</ul></div>
+  <div class="field"><span class="k">금지된 단순화</span><ul class="evi">{''.join(f'<li>{_e(f)}</li>' for f in forbidden) or '<li class="muted">없음</li>'}</ul></div>
   <p class="meta">{link}</p>
 </section>"""
     else:
-        ch_summary = '<section class="panel"><h2 class="sec-h">원본 Challenge 요약</h2><p class="muted">원본 Challenge 정보 없음</p></section>'
+        ch_summary = '<section class="panel"><h2 class="sec-h">원본 아이디어 요약</h2><p class="muted">원본 아이디어 정보 없음</p></section>'
 
-    # 4. Gate Summary (§16)
+    # 4. 검사 결과 (§6·§16)
+    gate_lines = "".join(
+        f'<div class="field"><span class="k">{_e(L.format_gate_label(k))}</span>{_e(L.format_gate_status((gate.get(k) or {}).get("status", "UNKNOWN")))}</div>'
+        for k in GATE_KEYS
+    )
     gate_html = f"""
 <section class="panel">
-  <h2 class="sec-h">Gate Summary</h2>
+  <h2 class="sec-h">검사 결과</h2>
   {_gate_pills(gate)}
-  <p class="meta">{_e('; '.join(f"{k}: {(gate.get(k) or {}).get('summary','')}" for k in GATE_KEYS)[:600])}</p>
+  {gate_lines}
 </section>"""
 
-    # 5. QA Summary (§17)
-    evidence = qa.get("evidence") or []
+    # 5. 품질 확인 (§7·§17)
+    evidence = [L.humanize_issue(x) for x in (qa.get("evidence") or [])]
     qa_html = f"""
 <section class="panel">
-  <h2 class="sec-h">QA Summary</h2>
-  <p class="meta">Anchor: <b>{_e(qa.get('anchor_status'))}</b> · Forbidden: <b>{_e(qa.get('forbidden_status'))}</b>
-    · Core Interaction: <b>{_e(qa.get('core_interaction_status'))}</b></p>
-  <div class="issue"><span class="k">핵심 결함</span> {_e(qa.get('issue_summary') or '-')}</div>
+  <h2 class="sec-h">품질 확인</h2>
+  <p class="meta">핵심 조건: <b>{_e(L.format_qa_status(qa.get('anchor_status')))}</b>
+    · 금지된 단순화: <b>{_e(L.format_qa_status(qa.get('forbidden_status')))}</b>
+    · 핵심 조작: <b>{_e(L.format_qa_status(qa.get('core_interaction_status')))}</b></p>
+  <div class="issue"><span class="k">문제</span> {_e(L.humanize_issue(qa.get('issue_summary')) or '-')}</div>
   <div class="field"><span class="k">근거</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in evidence) or '<li class="muted">없음</li>'}</ul></div>
 </section>"""
 
-    # 6. Known Issues / Next Goal (§18)
-    known = (psum or {}).get("known_issues") or []
+    # 6. 알려진 문제 / 다음 목표 (§18)
+    known = [L.humanize_issue(x) for x in ((psum or {}).get("known_issues") or [])]
     issues_html = f"""
 <section class="panel">
-  <h2 class="sec-h">Known Issues / Next Goal</h2>
-  <div class="field"><span class="k">Known Issues</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in known) or '<li class="muted">없음</li>'}</ul></div>
-  <div class="field"><span class="k">Next Goal</span>{_e(next_goal or '없음')}</div>
+  <h2 class="sec-h">알려진 문제 / 다음 목표</h2>
+  <div class="field"><span class="k">알려진 문제</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in known) or '<li class="muted">없음</li>'}</ul></div>
+  <div class="field"><span class="k">다음 목표</span>{_e(L.humanize_issue(next_goal) or '없음')}</div>
 </section>"""
 
-    # 7. Smoke Output Preview (§19)
+    # 7. 실행 결과 미리보기 (§19) — 기술 로그이므로 접힘 (§13)
     smoke_html = f"""
-<section class="panel">
-  <h2 class="sec-h">Smoke Output Preview</h2>
+<details class="panel raw">
+  <summary class="sec-h">실행 결과 미리보기</summary>
   {_smoke_preview_html(gate.get('smoke') or {}, secrets)}
-</section>"""
+</details>"""
 
-    # 8. Artifact Paths (§20)
+    # 8. 생성물 경로 (§15·§20) — 접힘
     codex_dir = (psum or {}).get("codex_export_dir")
     paths_html = f"""
-<section class="panel">
-  <h2 class="sec-h">Artifact Paths</h2>
-  <div class="field"><span class="k">workspace_dir</span><span class="kv">{_e(run.get('workspace_dir') or '-')}</span></div>
-  <div class="field"><span class="k">final_artifact_dir</span><span class="kv">{_e(run.get('final_artifact_dir') or '(미생성)')}</span></div>
-  <div class="field"><span class="k">codex_export_dir</span><span class="kv">{_e(codex_dir or '-')}</span></div>
-</section>"""
+<details class="panel raw">
+  <summary class="sec-h">생성물 경로</summary>
+  <div class="field"><span class="k">작업 폴더</span><span class="kv">{_e(run.get('workspace_dir') or '-')}</span></div>
+  <div class="field"><span class="k">최종 결과 폴더</span><span class="kv">{_e(run.get('final_artifact_dir') or '(미생성)')}</span></div>
+  <div class="field"><span class="k">제품화 전달 폴더</span><span class="kv">{_e(codex_dir or '-')}</span></div>
+</details>"""
 
-    # 9. Final Artifact File Tree (§21)
+    # 9. 생성 파일 목록 (§15·§21) — 접힘
     tree_html = f"""
-<section class="panel">
-  <h2 class="sec-h">Final Artifact File Tree</h2>
+<details class="panel raw">
+  <summary class="sec-h">생성 파일 목록</summary>
   <div class="tree">{_e(_final_tree(final_dir))}</div>
-</section>"""
+</details>"""
 
-    # 10. 허용된 Source Preview (§22)
+    # 10. 소스 미리보기 (§15·§22) — 접힘
     src_files = _source_files(final_dir)
     src_links = "".join(
         f'<a href="/product/{run_id}?src={_e(f)}" class="{"active" if src == f else ""}">{_e(f)}</a>'
@@ -906,16 +907,17 @@ def render_product_detail(
     if src:
         sp = _safe_source_path(final_dir, src)
         if sp is not None:
-            src_content = f'<section class="panel"><pre>{_e(_read_capped(sp, secrets))}</pre></section>'
+            src_content = f'<pre>{_e(_read_capped(sp, secrets))}</pre>'
         else:
-            src_content = '<section class="panel"><p class="muted">허용되지 않은 경로이거나 파일이 없습니다.</p></section>'
+            src_content = '<p class="muted">허용되지 않은 경로이거나 파일이 없습니다.</p>'
     source_html = f"""
-<section class="panel">
-  <h2 class="sec-h">허용된 Source Preview</h2>
+<details class="panel raw"{' open' if src else ''}>
+  <summary class="sec-h">소스 미리보기</summary>
   <div class="tabs">{src_links or '<span class="muted">표시할 소스 파일 없음</span>'}</div>
-</section>{src_content}"""
+  {src_content}
+</details>"""
 
-    # 11. Report Preview Tabs (§23)
+    # 11. 리포트 미리보기 (§15·§23) — 접힘, 영어 원문 보존 (§14)
     tab = tab if tab in _PRODUCT_REPORT_TABS_MAP else "product_verdict"
     base_kind, rel, _lbl = _PRODUCT_REPORT_TABS_MAP[tab]
     base = final_dir if base_kind == "final" else run_root
@@ -927,26 +929,26 @@ def render_product_detail(
         for key, (_, _, label) in _PRODUCT_REPORT_TABS
     )
     report_html = f"""
-<section class="panel">
-  <h2 class="sec-h">Report Preview</h2>
+<details class="panel raw"{' open' if tab != 'product_verdict' else ''}>
+  <summary class="sec-h">리포트 미리보기 (원문)</summary>
   <div class="tabs">{tabs}</div>
   <pre>{_e(report_content)}</pre>
-</section>"""
+</details>"""
 
-    # 12. Action Buttons (하단, §29: 상단·하단 모두 배치)
+    # 12. 하단 판정 버튼 (§29: 상단·하단 모두 배치)
     bottom_actions = f"""
 <section class="panel">
-  <h2 class="sec-h">내 판정 (최종 검수)</h2>
+  <h2 class="sec-h">내 판정</h2>
   <div class="actions">{action_buttons}</div>
 </section>"""
 
     body = (
         _nav("product")
-        + '<p class="back"><a href="/products">← Product Runs 목록으로</a></p>'
+        + '<p class="back"><a href="/products">← 목록으로</a></p>'
         + hero + ch_summary + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )
-    return _page(f"제품 run #{run_id}", body)
+    return _page(f"제품 번호 {run_id}", body)
 
 
 # ---------------------------------------------------------------- HTTP 서버

@@ -81,15 +81,15 @@ def test_products_index_is_review_queue(env):
     body = _get(env.base, "/products")
     assert "Product Runs" in body
     assert "Challenge Inbox" in body  # 상단 nav (§7)
-    assert "Codex 승격 후보" in body  # verdict 배지 (§8)
+    assert "제품화 후보" in body  # verdict 배지 한국어 (§2)
     assert "미검수" in body  # review 상태 (§27)
     assert f"/product/{env.run_id}" in body
 
 
 def test_status_verdict_review_separated(env):
     body = _get(env.base, "/products")
-    # ERROR는 verdict가 아니라 status로 표시 (§4)
-    assert "ERROR" in body
+    # error는 verdict가 아니라 status로 "오류" 표시 (§3·§4)
+    assert "오류" in body
     assert f"/product/{env.err_id}" in body
 
 
@@ -130,32 +130,32 @@ def test_review_retry_and_productize_filters(env):
 def test_detail_sections_present(env):
     body = _get(env.base, f"/product/{env.run_id}")
     for header in (
-        "원본 Challenge 요약", "Gate Summary", "QA Summary",
-        "Known Issues / Next Goal", "Smoke Output Preview", "Artifact Paths",
-        "Final Artifact File Tree", "허용된 Source Preview", "Report Preview",
+        "원본 아이디어 요약", "검사 결과", "품질 확인",
+        "알려진 문제 / 다음 목표", "실행 결과 미리보기", "생성물 경로",
+        "생성 파일 목록", "소스 미리보기", "리포트 미리보기",
     ):
         assert header in body, header
-    assert "PRODUCTIZE (추천)" in body  # PROMOTE_TO_CODEX → productize 강조 (§25)
-    for label in ("KEEP", "DROP", "RETRY", "ARCHIVE"):
+    assert "제품화 (추천)" in body  # PROMOTE_TO_CODEX → 제품화 강조 (§5·§25)
+    for label in ("보관", "버림", "다시 돌리기", "보류"):
         assert label in body
 
 
 def test_challenge_summary_and_link(env):
     body = _get(env.base, f"/product/{env.run_id}")
-    # sample run은 challenge_id 없음 → 안내 표시하되 anchors는 product_summary에서 (§12·§15)
-    assert "원본 Challenge 정보 없음" in body
-    assert "Difficulty Anchors" in body
+    # sample run은 challenge_id 없음 → 안내 표시하되 핵심 조건은 product_summary에서 (§12·§15)
+    assert "원본 아이디어 정보 없음" in body
+    assert "핵심 조건" in body
 
 
 def test_error_run_detail_not_500(env):
     body = _get(env.base, f"/product/{env.err_id}")
-    assert "run #" in body
-    assert "(final_artifact 없음)" in body  # missing final artifact여도 안전 (§31)
+    assert "번호" in body
+    assert "아직 생성된 파일이 없습니다" in body  # missing final artifact여도 안전 (§31)
 
 
 def test_deleted_challenge_run_detail(env):
     body = _get(env.base, f"/product/{env.ghost_id}")
-    assert "원본 Challenge 정보 없음" in body
+    assert "원본 아이디어 정보 없음" in body
 
 
 def test_invalid_run_id(env):
@@ -175,7 +175,7 @@ def test_gate_summary_fallback_when_json_missing(env):
     for p in list(run_dir.rglob("gate_summary.json")):
         p.unlink()
     body = _get(env.base, f"/product/{env.run_id}")
-    assert "Gate Summary" in body
+    assert "검사 결과" in body
     assert "gp-PASS" in body  # reports/*.md fallback로도 PASS 추정 (§16)
 
 
@@ -184,7 +184,7 @@ def test_qa_summary_fallback_when_json_missing(env):
     for p in list(run_dir.rglob("qa_summary.json")):
         p.unlink()
     body = _get(env.base, f"/product/{env.run_id}")
-    assert "QA Summary" in body
+    assert "품질 확인" in body
 
 
 # ---------------------------------------------------------------- 보안 (§30)
@@ -238,7 +238,7 @@ def test_review_append_only_and_latest(env):
         conn.close()
     # 목록에는 최신 review만 (§27)
     body = _get(env.base, "/products")
-    assert "RETRY" in body
+    assert "다시 돌리기" in body
 
 
 def test_retry_saves_selected_next_goal(env):
