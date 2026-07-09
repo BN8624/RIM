@@ -608,6 +608,12 @@ def test_e2e_47_review_no_contamination(tmp_path):
     # 기존 review 산출물이 있으면 제거하고 다시 생성
     if (run / "review").is_dir():
         shutil.rmtree(run / "review")
+    # on-disk #47이 Phase 2C-1로 이미 polish됐을 수 있으므로, mismatch 감지 경로를
+    # 결정적으로 테스트하기 위해 알려진 결함 viewer로 되돌린다
+    for base in ("final_artifact", "workspace"):
+        v = run / base / "product" / "viewer" / "index.html"
+        if v.is_file():
+            v.write_text(_VIEWER_MISMATCH, encoding="utf-8")
     before = compute_protected_hashes(run)
     out = run_review_package(run_dir=run)
     after = compute_protected_hashes(run)

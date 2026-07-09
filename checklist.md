@@ -131,3 +131,18 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] factory-validate 072220 PASS (Phase 2C-0 marker 인식, 보호 대상 artifact 미변경)
 - [x] pytest — 기존 641 + Phase 2C-0 신규 32 (test_factory_review_2c0.py) / secret scan은 validate 경로 통과
 - [ ] Phase 2C 잔여 = 다수 run 검수 자동화 (미착수)
+
+# Phase 2C-1 #47 Product Viewer Field Mapping Polish — 2026-07-10
+
+## 구현
+- [x] factory_product_polish.py — product viewer만 좁게 수정하는 field mapping polish. viewer <script> 블록을 폴리시된 스크립트로 교체(CSS/구조 보존): normalizeEdge(source_id/target_id→from/to), normalizeEvent(event/node_id→kind/label + deterministic message), computeLayout(좌표 없음→execution_order/topological deterministic layout, random/Date 금지), normalizeReplayForViewer(raw→display model 분리). 새 명령 **factory-product-polish --run-dir|--run-id --target viewer-field-mapping --dry-run(기본)|--apply**. 사전조건: 2C-0 fitness=NEEDS_PRODUCT_POLISH + verdict REVIEW_READY + green_base. 보호 대상 hash(src/golden/fixtures/contract/oracle/**replay 포함**, product/ 제외) before/after/check. apply 후 smoke_review 재실행(factory_review 재사용)+analyze_polish(edge/event/layout fixed, mismatches_remaining)+build_fitness 재평가.
+- [x] factory_validate.py — detect_phase2c1_run(marker)+_check_phase2c1(core+continuation 양 route, marker 없으면 no-op): 산출물/hash PASS/product/ 범위 밖 변경 차단/golden·replay 변경 차단/edge·event·layout 기록/PRODUCT_CANDIDATE 엄격(edge·event·layout fixed+mismatch 없음+consistent+green+2C-0 핵심≥4).
+- [x] cli.py — factory-product-polish(dry-run/apply, 동시 지정 거부).
+- [x] challenge_dashboard.py — 목록 카드(2C-1 있으면 제품성 추천/검수 상태/viewer polish/다음 액션 4줄, 2C-1이 2C-0보다 우선)+상세 Phase 2C-1 패널(edge/event/layout 고쳐짐 상태)+report 탭 7종.
+
+## 검수
+- [x] #47(072220) polish dry-run(3 mismatch 감지)+apply — 보호 대상 44개 불변(hash PASS), product viewer 2개만 변경, edge/event/layout 모두 fixed, 남은 mismatch 없음. runner/viewer 일치 4필드. polish 후 Product layer 2→4, Demo 2→4.
+- [x] **#47 polish 후 recommended_fitness=NEEDS_PRODUCT_POLISH 유지**(field mapping은 고쳐졌으나 저작 조작 없는 결과 뷰어 중심 → order §17 case B). green_base/REVIEW_READY 유지.
+- [x] factory-validate 072220 PASS (2C-0 + 2C-1 marker 모두 인식). 폴리시된 viewer는 edge.from/ev.type/node.x 리터럴 0개, source_id/target_id/node_id/.event 읽음.
+- [x] pytest — 기존 673 + 2C-1 신규 29 (test_factory_product_polish_2c1.py) = 702. 2C-0 E2E는 on-disk polish 무관하게 mismatch viewer로 리셋해 결정적.
+- [ ] Phase 2C 잔여 = 다수 run 검수/polish 자동화, 조작 가능한 product experience(node editor)는 별도 큰 작업

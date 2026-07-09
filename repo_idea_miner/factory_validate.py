@@ -231,6 +231,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_spec_repair_apply(run_dir)
     problems += _check_anti_hardcode_patch(run_dir)
     problems += _check_phase2c0(run_dir)
+    problems += _check_phase2c1(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -569,6 +570,110 @@ def _check_phase2c0(run_dir: Path) -> list[str]:
     return p
 
 
+# ---------------------------------------------------------------- Phase 2C-1 Viewer Polish 검증 (§13)
+
+PHASE2C1_SUBDIR = "review/phase2c1"
+PHASE2C1_REQUIRED = (
+    "phase2c1_polish_plan.json", "phase2c1_polish_report.json", "phase2c1_diff_summary.json",
+    "phase2c1_hash_check.json", "artifact_smoke_review_after_polish.json",
+    "product_fitness_report_after_polish.json", "phase2c1_dashboard_summary.json",
+)
+PHASE2C1_MARKERS = (
+    "phase2c1_dashboard_summary.json", "phase2c1_polish_report.json",
+    "product_fitness_report_after_polish.json",
+)
+
+
+def detect_phase2c1_run(run_dir: str | Path) -> bool:
+    """Phase 2C-1 marker(review/phase2c1/ 아래 산출물)가 있는 run인지 감지한다 (§13)."""
+    d = Path(run_dir) / PHASE2C1_SUBDIR
+    return any((d / m).is_file() for m in PHASE2C1_MARKERS)
+
+
+def _check_phase2c1(run_dir: Path) -> list[str]:
+    """§13: Phase 2C-1 marker가 있는 run만 viewer polish 산출물/정합성을 검사한다."""
+    if not detect_phase2c1_run(run_dir):
+        return []
+    rd = run_dir / PHASE2C1_SUBDIR
+    p: list[str] = []
+    for rel in PHASE2C1_REQUIRED:
+        if not (rd / rel).is_file():
+            p.append(f"Phase 2C-1 산출물 없음: {PHASE2C1_SUBDIR}/{rel}")
+
+    hash_check = _load_json(rd / "phase2c1_hash_check.json") or {}
+    diff = _load_json(rd / "phase2c1_diff_summary.json") or {}
+    smoke = _load_json(rd / "artifact_smoke_review_after_polish.json") or {}
+    fitness = _load_json(rd / "product_fitness_report_after_polish.json") or {}
+
+    # §13.2 보호 대상 artifact / golden / fixtures / contract / replay 불변
+    if hash_check and hash_check.get("status") != "PASS":
+        detail = hash_check.get("changed") or hash_check.get("added") or hash_check.get("removed")
+        p.append(f"Phase 2C-1: 보호 대상 artifact(src/golden/fixtures/contract/replay) 변경됨: {detail}")
+    if diff.get("core_golden_fixtures_contract_replay_changed"):
+        p.append("Phase 2C-1: golden/fixtures/contract/replay 변경 발생")
+    # 변경 파일이 product viewer 범위 안(§13.1)
+    for changed in diff.get("product_files_changed") or []:
+        if "/product/" not in changed.replace("\\", "/"):
+            p.append(f"Phase 2C-1: 허용 범위 밖 파일 변경: {changed}")
+
+    # edge/event/layout 기록 존재 (§13.1)
+    for key in ("edge_mapping_fixed", "event_mapping_fixed", "node_layout_generated"):
+        if key not in smoke and key not in fitness:
+            p.append(f"Phase 2C-1: {key} 기록 없음")
+
+    rec = fitness.get("recommended_fitness")
+    if rec is None:
+        p.append("Phase 2C-1: recommended_fitness 없음")
+    elif rec not in FITNESS_GRADES:
+        p.append(f"Phase 2C-1: 알 수 없는 recommended_fitness: {rec}")
+
+    # recommended_fitness ↔ smoke 모순 (§13.1)
+    edge_fixed = smoke.get("edge_mapping_fixed", fitness.get("edge_mapping_fixed"))
+    event_fixed = smoke.get("event_mapping_fixed", fitness.get("event_mapping_fixed"))
+    layout_gen = smoke.get("node_layout_generated", fitness.get("node_layout_generated"))
+    remaining = smoke.get("viewer_schema_mismatches_remaining",
+                          fitness.get("viewer_schema_mismatches_remaining")) or []
+    consistent = smoke.get("runner_viewer_consistent", fitness.get("runner_viewer_consistent"))
+
+    gate_rerun = _load_json(run_dir / "gate_rerun_after_anti_hardcode_patch.json") or {}
+    gates = gate_rerun.get("gates") or {}
+    gate_fail = bool(gates) and not all(gates.values())
+    green_base = fitness.get("green_base")
+    if green_base is None:
+        green_base = (_load_json(run_dir / "green_base.json") or {}).get("base_type") == "green_base"
+    scores = fitness.get("scores") or {}
+    red_flags = fitness.get("critical_red_flags") or []
+
+    # §13.2 PRODUCT_CANDIDATE 엄격 (2C-0 기준 + field mapping 조건)
+    if rec == "PRODUCT_CANDIDATE":
+        if edge_fixed is not True:
+            p.append("Phase 2C-1: PRODUCT_CANDIDATE인데 edge_mapping_fixed != true")
+        if event_fixed is not True:
+            p.append("Phase 2C-1: PRODUCT_CANDIDATE인데 event_mapping_fixed != true")
+        if layout_gen is not True:
+            p.append("Phase 2C-1: PRODUCT_CANDIDATE인데 node_layout_generated != true")
+        if remaining:
+            p.append(f"Phase 2C-1: PRODUCT_CANDIDATE인데 viewer_schema_mismatches_remaining 존재: {remaining}")
+        if consistent is not True:
+            p.append("Phase 2C-1: PRODUCT_CANDIDATE인데 runner_viewer_consistent != true")
+        if green_base is False:
+            p.append("Phase 2C-1: PRODUCT_CANDIDATE인데 green_base false")
+        if gate_fail:
+            p.append("Phase 2C-1: PRODUCT_CANDIDATE인데 gate fail 존재")
+        if red_flags:
+            p.append(f"Phase 2C-1: PRODUCT_CANDIDATE인데 critical red flag 존재: {red_flags}")
+        for c in PHASE2C0_CRITICAL_CRITERIA + ("Core usefulness",):
+            if scores.get(c, 0) < 4:
+                p.append(f"Phase 2C-1: PRODUCT_CANDIDATE인데 핵심 항목 4점 미만: {c}={scores.get(c)}")
+
+    # §12.1 evidence 없는 4/5점 금지
+    for c in fitness.get("criteria") or []:
+        if c.get("score", 0) >= 4 and not c.get("evidence"):
+            p.append(f"Phase 2C-1: evidence 없는 {c.get('score')}점 항목: {c.get('criterion')}")
+
+    return p
+
+
 def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     """§7: spec repair proposal/review는 있으면 검사 — apply는 Phase 2A에서 무조건 금지."""
     p: list[str] = []
@@ -875,6 +980,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_spec_repair_apply(run_dir)
     problems += _check_anti_hardcode_patch(run_dir)
     problems += _check_phase2c0(run_dir)
+    problems += _check_phase2c1(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:

@@ -155,6 +155,16 @@ def build_parser() -> argparse.ArgumentParser:
                        help="보조: product run id (resolved run_dir를 출력)")
     frv_p.add_argument("--db", default="challenge.db")
 
+    fpp_p = sub.add_parser("factory-product-polish",
+                           help="product viewer field mapping polish (Phase 2C-1, 기본 dry-run)")
+    fpp_p.add_argument("--run-dir", default=None, help="polish 대상 run 디렉터리 (권장)")
+    fpp_p.add_argument("--run-id", type=int, default=None, help="보조: product run id")
+    fpp_p.add_argument("--target", default="viewer-field-mapping",
+                       choices=["viewer-field-mapping"], help="polish 대상")
+    fpp_p.add_argument("--dry-run", action="store_true", help="polish 계획만 생성 (기본 동작)")
+    fpp_p.add_argument("--apply", action="store_true", help="viewer field mapping을 실제 수정")
+    fpp_p.add_argument("--db", default="challenge.db")
+
     fq_p = sub.add_parser("factory-continue-queue",
                           help="continuation queue 분류/라우팅 (Phase 2A, 기본 dry-run)")
     fq_p.add_argument("--lane", choices=["patch", "spec-repair"], default=None,
@@ -662,6 +672,48 @@ def main(argv: list[str] | None = None) -> int:
             print(f"- recommended_fitness: {out.get('recommended_fitness')}")
             for r in out.get("critical_red_flags") or []:
                 print(f"  red flag: {r}")
+            print(f"- review dir: {out.get('review_dir')}")
+            return 0 if out.get("ok") else 1
+
+        if args.command == "factory-product-polish":
+            from pathlib import Path as _Path
+
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_product_polish import run_product_polish
+
+            if not (args.run_dir or args.run_id):
+                print("오류: --run-dir 또는 --run-id가 필요합니다.", file=sys.stderr)
+                return 1
+            if args.dry_run and args.apply:
+                print("오류: --dry-run과 --apply는 동시에 쓸 수 없습니다.", file=sys.stderr)
+                return 1
+            db_conn = open_factory_db(args.db) if _Path(args.db).exists() else None
+            if args.run_id and db_conn is None:
+                print("오류: --run-id는 DB가 필요합니다.", file=sys.stderr)
+                return 1
+            try:
+                out = run_product_polish(run_dir=args.run_dir, run_id=args.run_id,
+                                         target=args.target, apply=args.apply, db_conn=db_conn)
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            print("PRODUCT VIEWER POLISH" + (" (apply)" if args.apply else " (dry-run)"))
+            print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
+            print(f"- challenge_id: {out.get('challenge_id')} / status: {out.get('status')}")
+            for p in out.get("problems") or []:
+                print(f"  BLOCKED: {p}")
+            if out.get("error"):
+                print(f"오류: {out['error']}", file=sys.stderr)
+            if out.get("plan"):
+                print(f"- detected mismatches: {len(out['plan']['detected_mismatches'])}")
+                print(f"- planned files: {out['plan']['planned_files']}")
+            if out.get("applied"):
+                print(f"- patched files: {out['patched_files']}")
+                print(f"- protected hash: {out['hash_status']}")
+                ex = out.get("extra") or {}
+                print(f"- edge/event/layout fixed: {ex.get('edge_mapping_fixed')}/"
+                      f"{ex.get('event_mapping_fixed')}/{ex.get('node_layout_generated')}")
+                print(f"- recommended_fitness: {out.get('recommended_fitness')}")
             print(f"- review dir: {out.get('review_dir')}")
             return 0 if out.get("ok") else 1
 

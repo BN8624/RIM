@@ -140,6 +140,14 @@ _PRODUCT_REPORT_TABS = [
     ("demo_manifest", ("run", "review/phase2c0/demo_manifest.json", "demo_manifest")),
     ("phase2c0_dashboard_summary", ("run", "review/phase2c0/phase2c0_dashboard_summary.json", "phase2c0_dashboard_summary")),
     ("review_no_code_hash_check", ("run", "review/phase2c0/review_no_code_hash_check.json", "no-code-change 검사")),
+    # Phase 2C-1 viewer polish (review/phase2c1/ — 상세 페이지 전용)
+    ("phase2c1_polish_report", ("run", "review/phase2c1/phase2c1_polish_report.md", "viewer polish 리포트")),
+    ("phase2c1_polish_plan", ("run", "review/phase2c1/phase2c1_polish_plan.md", "viewer polish 계획")),
+    ("smoke_review_after_polish", ("run", "review/phase2c1/artifact_smoke_review_after_polish.md", "polish 후 스모크")),
+    ("fitness_after_polish", ("run", "review/phase2c1/product_fitness_report_after_polish.md", "polish 후 제품성")),
+    ("phase2c1_diff_summary", ("run", "review/phase2c1/phase2c1_diff_summary.json", "polish diff")),
+    ("phase2c1_hash_check", ("run", "review/phase2c1/phase2c1_hash_check.json", "polish hash 검사")),
+    ("phase2c1_dashboard_summary", ("run", "review/phase2c1/phase2c1_dashboard_summary.json", "phase2c1_dashboard_summary")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
@@ -769,6 +777,67 @@ def _phase2c0_panel(p2c: dict | None) -> str:
 </section>"""
 
 
+_PHASE2C1_SUBDIR = "review/phase2c1"
+
+
+def _load_phase2c1(run_root: Path | None) -> dict | None:
+    """Phase 2C-1 viewer polish 요약(review/phase2c1/)을 읽는다. 없으면 None."""
+    if run_root is None:
+        return None
+    p = run_root / _PHASE2C1_SUBDIR / "phase2c1_dashboard_summary.json"
+    if not p.is_file():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _phase2c1_card_lines(p2c1: dict | None) -> str:
+    """목록 카드에 추가하는 4줄: 제품성 추천 · 검수 상태 · viewer polish · 사용자 다음 액션 (§12)."""
+    if not p2c1:
+        return ""
+    rec = p2c1.get("recommended_fitness")
+    ko = _fitness_ko(rec)
+    return (
+        f'<p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or "-")})</p>'
+        f'<p class="meta">검수 상태: {_e(p2c1.get("review_status") or "-")}</p>'
+        f'<p class="meta">viewer polish: {_e(p2c1.get("viewer_polish_status") or "-")}</p>'
+        f'<p class="meta">사용자 다음 액션: {_e(p2c1.get("user_next_action") or "-")}</p>'
+    )
+
+
+def _phase2c1_panel(p2c1: dict | None) -> str:
+    """상세 페이지 Phase 2C-1 패널: edge/event/layout fix 상태 + polish 후 제품성 (§12 상세)."""
+    if not p2c1:
+        return ""
+    rec = p2c1.get("recommended_fitness")
+    ko = _fitness_ko(rec)
+    scores = p2c1.get("scores") or {}
+    score_line = " · ".join(f"{_e(k)} {v}" for k, v in scores.items()) or "-"
+    flags = p2c1.get("critical_red_flags") or []
+    remaining = p2c1.get("viewer_schema_mismatches_remaining") or []
+
+    def _mark(v):
+        return "고쳐짐" if v else "미해결"
+
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2C-1 Viewer Field Mapping Polish</h2>
+  <p class="meta">edge 매핑: <b>{_mark(p2c1.get('edge_mapping_fixed'))}</b>
+    · event 매핑: <b>{_mark(p2c1.get('event_mapping_fixed'))}</b>
+    · node layout: <b>{_mark(p2c1.get('node_layout_generated'))}</b>
+    (deterministic: {_e(str(p2c1.get('layout_deterministic')))})</p>
+  <p class="meta">남은 schema mismatch: {_e(", ".join(remaining) if remaining else "없음")}
+    · 보호 대상 hash: {_e(p2c1.get('hash_status') or '-')}
+    · runner/viewer 일치: {_e(str(p2c1.get('runner_viewer_consistent')))}</p>
+  <p class="meta">polish 후 제품성 추천: <b>{_e(ko)}</b> ({_e(rec or '-')})
+    · 평균 {_e(p2c1.get('average_score'))}/5 · 검수 상태: {_e(p2c1.get('review_status') or '-')}</p>
+  <div class="field"><span class="k">제품성 점수</span>{score_line}</div>
+  <div class="field"><span class="k">주의 신호</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in flags) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 def _match_product_filters(run: dict, rev: dict | None, filters: dict) -> bool:
     verdict = filters.get("verdict")
     status = filters.get("status")
@@ -962,7 +1031,9 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<p class="meta">추천 {_e(recommended)}</p>'
                 f'{_lane_line(p2a, None)}'
             )
-        body_lines += _phase2c0_card_lines(_load_phase2c0(run_root))
+        p2c1 = _load_phase2c1(run_root)
+        body_lines += (_phase2c1_card_lines(p2c1) if p2c1
+                       else _phase2c0_card_lines(_load_phase2c0(run_root)))
         cards.append(
             f"""  <article class="card">
     <div class="chead">
@@ -1222,6 +1293,7 @@ def render_product_detail(
         _nav("product")
         + '<p class="back"><a href="/products">← 목록으로</a></p>'
         + hero + ch_summary + p2a_html + _phase2c0_panel(_load_phase2c0(run_root))
+        + _phase2c1_panel(_load_phase2c1(run_root))
         + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )
