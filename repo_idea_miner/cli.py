@@ -116,6 +116,16 @@ def build_parser() -> argparse.ArgumentParser:
     fb_p.add_argument("--live-validation", action="store_true",
                       help="Phase 1.6b live 검증 run으로 표시하고 live_validation_summary.json 생성")
 
+    fc_p = sub.add_parser("factory-continue",
+                          help="continuation_base를 delta loop로 재검증 (Phase 1.7)")
+    fc_p.add_argument("--run-id", type=int, default=None, help="기존 product run id (source of truth)")
+    fc_p.add_argument("--run-dir", default=None, help="기존 run 디렉터리 (DB 없이 경로로 실행)")
+    fc_p.add_argument("--mode", choices=["mock", "live"], default="mock")
+    fc_p.add_argument("--db", default="challenge.db")
+    fc_p.add_argument("--output-dir", default="runs")
+    fc_p.add_argument("--no-db", action="store_true", help="DB 저장 생략")
+    fc_p.add_argument("--max-patches", type=int, default=2, help="delta patch 최대 횟수 (기본 2, §11.2)")
+
     fs_p = sub.add_parser("factory-status", help="Product Factory 상태 표시")
     fs_p.add_argument("--db", default="challenge.db")
 
@@ -412,6 +422,53 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"codex_export: {result['codex_export_dir']}")
             if result.get("product_run_id"):
                 print(f"product_run_id: {result['product_run_id']} (db: {args.db})")
+            return 0
+
+        if args.command == "factory-continue":
+            from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler
+            from repo_idea_miner.config import load_challenge_miner_settings
+            from repo_idea_miner.factory_continue import run_continuation
+            from repo_idea_miner.factory_db import open_factory_db
+
+            if not (args.run_id or args.run_dir):
+                print("오류: --run-id 또는 --run-dir 중 하나가 필요합니다.", file=sys.stderr)
+                return 1
+            db_conn = None if (args.no_db or args.run_dir and not args.run_id) else open_factory_db(args.db)
+            if args.run_id and db_conn is None:
+                print("오류: --run-id는 DB가 필요합니다.", file=sys.stderr)
+                return 1
+            try:
+                scheduler = None
+                if args.mode == "live" and db_conn is not None:
+                    settings = load_settings()
+                    if settings.google_keys:
+                        scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys,
+                                                          load_challenge_miner_settings())
+                result = run_continuation(
+                    base_run_dir=args.run_dir, base_run_id=args.run_id, mode=args.mode,
+                    max_patches=args.max_patches, output_dir=args.output_dir,
+                    db_conn=db_conn, scheduler=scheduler,
+                )
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            if result.get("status") == "CANNOT_CONTINUE":
+                print(f"CANNOT_CONTINUE: {result.get('error')}")
+                return 1
+            if result.get("error") and result.get("status") != "DONE":
+                print(f"실패: {result['error']}")
+                return 1
+            print(f"continuation_run_dir: {result.get('continuation_run_dir')}")
+            print(f"base: {result.get('base_run_dir')} / challenge_id: {result.get('challenge_id')}")
+            print(f"failure_types: {result.get('failure_types')}")
+            print(f"patch_attempts: {result.get('patch_attempts')} / "
+                  f"transient_retries: {result.get('transient_retries')} / "
+                  f"rejected: {len(result.get('rejected_patches') or [])}")
+            print(f"resolved: {result.get('resolved')}")
+            print(f"verdict: {result.get('verdict')} / "
+                  f"promoted_to_green_base: {result.get('promoted_to_green_base')}")
+            if result.get("green_base_path"):
+                print(f"green_base: {result['green_base_path']}")
             return 0
 
         if args.command == "factory-status":

@@ -585,6 +585,27 @@ def _gate_pills(gate: dict) -> str:
     return '<div class="gaterow">' + "".join(out) + "</div>"
 
 
+def _continuation_line(dsum: dict) -> str:
+    """Phase 1.7 continuation 결과 표시 (§18)."""
+    if not dsum.get("is_continuation"):
+        return ""
+    resolved = dsum.get("continuation_resolved") or {}
+    done = sum(1 for v in resolved.values() if v)
+    total = len(resolved)
+    remaining = dsum.get("remaining_failures") or []
+    items = " / ".join(
+        f'{_e(k)}: {"해결" if v else "미해결"}' for k, v in resolved.items()
+    ) or "(분류된 실패 없음)"
+    base = dsum.get("base_run_id")
+    return (
+        f'<p class="meta">Continuation: '
+        f'{"#" + str(base) + " " if base else ""}수정 루프 {dsum.get("patch_attempts", 0)}회'
+        f' · 해결 {done}/{total}</p>'
+        f'<p class="meta">수정 결과: {items}</p>'
+        + (f'<p class="meta">남은 실패: {_e(", ".join(remaining))}</p>' if remaining else "")
+    )
+
+
 def _base_line(dsum: dict) -> str:
     """Green Base / Continuation Base 구분 표시 (§6.4, §10)."""
     if dsum.get("green_base"):
@@ -630,6 +651,7 @@ def _core_harness_panel(dsum: dict, final_dir: Path | None, run_root: Path | Non
   {_base_line(dsum)}
   <p class="meta">제품 레이어: <b>{"Replay 출력 사용 확인" if dsum.get('product_layer_consumes_core') else "Replay 출력 미확인"}</b>
     {"· <b>실전 검증(Live Validation) 실행</b>" if dsum.get('is_live_validation') else ""}</p>
+  {_continuation_line(dsum)}
   <p class="meta">실행 안내: 상세 리포트 탭의 run_instructions
     · 하드코딩 신호 {len((anti.get('level1_problems') or [])) + len((anti.get('level2_problems') or []))}건
     · 추천: <b>{_e(dsum.get('recommendation') or '-')}</b></p>
@@ -811,6 +833,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<p class="meta">제품 레이어: '
                 f'{"Replay 출력 사용 확인" if dsum.get("product_layer_consumes_core") else "Replay 출력 미확인"}'
                 f'{" · <b>실전 검증 실행</b>" if dsum.get("is_live_validation") else ""}</p>'
+                f'{_continuation_line(dsum)}'
             )
         else:
             gate = load_gate_summary(final_dir, run_root)

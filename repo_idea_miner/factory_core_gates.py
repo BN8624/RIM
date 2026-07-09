@@ -573,6 +573,20 @@ def check_invariant(final_state: dict, invariant: str) -> tuple[bool | None, str
     return (True, "") if ok else (False, f"invariant 위반: {path}={value} (기대 {op} {num:g})")
 
 
+def invariant_category(ok: bool | None, msg: str) -> str:
+    """check_invariant 결과를 §15.2 카테고리로 분류한다.
+
+    반환: INVARIANT_PASS | INVARIANT_FAIL | INVARIANT_NOT_EXPOSED | INVARIANT_UNCHECKABLE.
+    """
+    if ok is None:
+        return "INVARIANT_UNCHECKABLE"
+    if ok:
+        return "INVARIANT_PASS"
+    if "필드 없음" in msg or "dict가 아님" in msg:
+        return "INVARIANT_NOT_EXPOSED"
+    return "INVARIANT_FAIL"
+
+
 def run_state_invariant_gate(
     core_contract: dict, replay_outputs: dict[str, dict]
 ) -> tuple[GateResult, dict]:
@@ -581,6 +595,8 @@ def run_state_invariant_gate(
     for entity in core_contract.get("state_entities") or []:
         invariants += entity.get("invariants") or []
     violations = []
+    not_exposed: list[dict] = []
+    failed: list[dict] = []
     unevaluated = []
     checked = 0
     for sid, run in replay_outputs.items():
@@ -589,26 +605,39 @@ def run_state_invariant_gate(
             continue
         final_state = parsed.get("final_state")
         if not isinstance(final_state, dict):
-            violations.append({"scenario_id": sid, "invariant": "(구조)", "message": "final_state가 dict가 아님"})
+            v = {"scenario_id": sid, "invariant": "(구조)", "message": "final_state가 dict가 아님",
+                 "category": "INVARIANT_NOT_EXPOSED"}
+            violations.append(v)
+            not_exposed.append(v)
             continue
         for inv in invariants:
             ok, msg = check_invariant(final_state, inv)
+            category = invariant_category(ok, msg)
             if ok is None:
                 if msg not in unevaluated:
                     unevaluated.append(msg)
                 continue
             checked += 1
             if not ok:
-                violations.append({"scenario_id": sid, "invariant": inv, "message": msg})
+                v = {"scenario_id": sid, "invariant": inv, "message": msg, "category": category}
+                violations.append(v)
+                (not_exposed if category == "INVARIANT_NOT_EXPOSED" else failed).append(v)
     for v in violations:
         r.problems.append(f"{v['scenario_id']}: {v['message']}")
     r.notes += unevaluated
-    r.notes.append(f"invariant 평가 {checked}건")
+    r.notes.append(f"invariant 평가 {checked}건 (노출 안 됨 {len(not_exposed)} / 위반 {len(failed)})")
     summary = {
         "status": "PASS" if not violations else "FAIL",
         "checked": checked,
         "violations": violations,
+        "not_exposed": not_exposed,
+        "failed": failed,
         "unevaluated": unevaluated,
+        "counts": {
+            "not_exposed": len(not_exposed),
+            "failed": len(failed),
+            "uncheckable": len(unevaluated),
+        },
     }
     r.ok = not r.problems
     return r, summary

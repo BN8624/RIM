@@ -498,6 +498,71 @@ Schema (use exactly these keys):
 """
 
 
+# ---------------------------------------------------------------- Phase 1.7 Continuation Patch (§10)
+
+# §10.2 필수 문구 — patch worker에게 반드시 전달된다
+CONTINUATION_PATCH_MANDATE = (
+    "너의 작업은 새로 만드는 것이 아니다.\n"
+    "기존 continuation_base를 보존하고, 실패한 gate를 통과시키기 위한 최소 delta patch만 작성하라.\n"
+    "contract, fixtures, golden은 frozen이다.\n"
+    "허용된 파일만 수정하라.\n"
+    "runner/golden을 우회하지 말라.\n"
+    "hardcoded expected output을 넣지 말라.\n"
+    "scenario id별 분기를 넣지 말라."
+)
+
+
+def build_continuation_patch_prompt(
+    repair_plan_md: str,
+    failure_md: str,
+    key_files: dict[str, str],
+    allowed_touch_files: list[str],
+    frozen_files: list[str],
+    attempt: int,
+    max_attempts: int,
+) -> str:
+    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 4000)}" for path, content in key_files.items())
+    return f"""You are the Continuation Patch desk of RIM Product Factory Phase 1.7.
+
+{CORE_PRINCIPLES}
+
+{CONTINUATION_PATCH_MANDATE}
+
+(시도 {attempt}/{max_attempts})
+
+허용 수정 경로(allowed_touch_files): {json.dumps(allowed_touch_files, ensure_ascii=False)}
+동결 경로(frozen_files, 수정 금지): {json.dumps(frozen_files, ensure_ascii=False)}
+
+Schema (use exactly these keys):
+{json.dumps(_PATCH_SCHEMA, ensure_ascii=False, indent=2)}
+
+{JSON_RULES}
+
+=== REPAIR PLAN ===
+{_clip(repair_plan_md, 4000)}
+
+=== FAILURE EVIDENCE ===
+{_clip(failure_md, 4000)}
+
+=== KEY FILES ===
+{files_md}
+"""
+
+
+def mock_continuation_patch_output() -> dict:
+    """mock continuation patch: product/viewer가 replay를 실제 소비하도록 고친다 (§14)."""
+    return {
+        "files": [
+            {"path": "product/viewer/index.html", "content": _MOCK_VIEWER_HTML},
+            {"path": "product/viewer/viewer.js", "content": _MOCK_VIEWER_JS},
+        ],
+        "patch_report": (
+            "product/viewer가 replay/index.json을 fetch하고 final_state/events/summary를 표시하도록 "
+            "최소 delta로 수정. contract/fixtures/golden은 건드리지 않음."
+        ),
+    }
+
+
 # ---------------------------------------------------------------- prompt builders (Stage 6)
 
 def build_product_layer_prompt(

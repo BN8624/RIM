@@ -14,7 +14,14 @@ from repo_idea_miner.llm_client import GoogleGenAIGemmaClient, LLMCallLogger, LL
 
 
 class DeskError(Exception):
-    """Desk 실행 실패 (LLM 호출/스키마 검증 실패)."""
+    """Desk 실행 실패 (LLM 호출/스키마 검증 실패).
+
+    kind: 'transient'|'timeout'|'exhausted'|'auth'|'fatal'|'schema'|None — patch 재시도 판단용 (§12).
+    """
+
+    def __init__(self, message: str, kind: str | None = None):
+        super().__init__(message)
+        self.kind = kind
 
 
 class DeskExecutor:
@@ -64,7 +71,7 @@ class DeskExecutor:
         except (LLMCallError, RIMError) as exc:
             kind, msg = classify_challenge_error(exc)
             self.scheduler.release_error(key_id, kind, msg)
-            raise DeskError(f"{schema_name}: LLM 호출 실패 ({kind}): {msg[:200]}") from exc
+            raise DeskError(f"{schema_name}: LLM 호출 실패 ({kind}): {msg[:200]}", kind=kind) from exc
         except Exception as exc:  # noqa: BLE001 - key 상태 반영 후 재던짐
             kind, msg = classify_challenge_error(exc)
             self.scheduler.release_error(key_id, kind, msg)
@@ -87,7 +94,8 @@ def _validate_output(schema_name: str, raw: dict, model_cls: type[BaseModel]) ->
     try:
         return model_cls.model_validate(raw)
     except ValidationError as exc:
-        raise DeskError(f"{schema_name}: 스키마 검증 실패 ({exc.error_count()}개 필드 오류)") from exc
+        raise DeskError(f"{schema_name}: 스키마 검증 실패 ({exc.error_count()}개 필드 오류)",
+                        kind="schema") from exc
 
 
 # ---------------------------------------------------------------- markdown 렌더러
