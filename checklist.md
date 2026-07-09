@@ -83,3 +83,17 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] factory-build --sample mock --mode mock — REVIEW_READY, 7 gate 전부 PASS, green_base 저장, factory-validate PASS (§15 완주)
 - [x] §15 산출물 전부 생성 확인 (normalized/classification/contract 4종/fixtures 3/golden 3/oracle risk/runner/replay/각 gate summary/product layer/dashboard_summary/green_base)
 - [x] pytest 466 passed (기존 378개 포함, Phase 1.6 신규 88개) / secret scan 통과(fake key 주입 테스트 포함)
+
+# Phase 1.7b Continuation Run Validation Routing Fix — 2026-07-09
+
+## 구현
+- [x] factory_validate.py — detect_run_type(§3): CONTINUATION_RUN/CORE_FACTORY_RUN/LEGACY_FACTORY_RUN/UNKNOWN_RUN 감지, continuation → core → legacy 순
+- [x] factory_validate.py — validate_continuation_run_dir(§5,§6): 필수 산출물(continuation_run_summary/failure_classification/repair_plan/green_base_promotion/gate_rerun_summary/phase17_dashboard_summary) + frozen/allowed touch 정합성 + verdict consistency + secret scan. (ok, problems, info) 반환
+- [x] validate_product_run_dir — continuation run은 detect 후 continuation 경로로 라우팅(legacy 경로 차단)
+- [x] cli.py — factory-validate가 continuation run 감지 시 run type/base run/verdict/promotion/failure/patch/gate rerun 상세 출력, 그 외는 run type 표기한 PASS/FAIL
+
+## 검수
+- [x] 실제 #47 continuation run(100043) validate — CONTINUATION_RUN, SPEC_REPAIR_REQUIRED 정직 PASS (patch_diff_summary 미생성은 있으면-검사로 처리)
+- [x] mock core build validate — CORE_FACTORY_RUN PASS / legacy run validate — LEGACY_FACTORY_RUN PASS / live-validation run(072220) — CORE_FACTORY_RUN PASS (계속 유지)
+- [x] pytest 533 passed (기존 508개 + Phase 1.7b 신규 25개) / secret scan 통과
+- [ ] Phase 2 = 여러 run/challenge continuation 일반화 (미착수)
