@@ -173,6 +173,16 @@ def build_parser() -> argparse.ArgumentParser:
     fpe_p.add_argument("--apply", action="store_true", help="viewer에 editor mode를 실제 주입")
     fpe_p.add_argument("--db", default="challenge.db")
 
+    fpl_p = sub.add_parser("factory-product-loop",
+                           help="Gemma Productization Autopilot 최소 루프 (Phase 2D-0, apply 없음)")
+    fpl_p.add_argument("--run-dir", default=None, help="대상 run 디렉터리 (권장)")
+    fpl_p.add_argument("--run-id", type=int, default=None, help="보조: product run id")
+    fpl_p.add_argument("--mode", choices=["mock", "live"], default="mock")
+    fpl_p.add_argument("--gemma-mode", choices=["sequential", "unified"], default="sequential",
+                       help="desk 호출 방식 (검증 기준은 동일)")
+    fpl_p.add_argument("--max-iterations", type=int, default=1, help="기본 1 (§21)")
+    fpl_p.add_argument("--db", default="challenge.db")
+
     fq_p = sub.add_parser("factory-continue-queue",
                           help="continuation queue 분류/라우팅 (Phase 2A, 기본 dry-run)")
     fq_p.add_argument("--lane", choices=["patch", "spec-repair"], default=None,
@@ -767,6 +777,62 @@ def main(argv: list[str] | None = None) -> int:
                       f"JS syntax: {es.get('js_syntax_status')}")
                 print(f"- recommended_fitness: {out.get('recommended_fitness')} "
                       f"(draft editor candidate: {(out.get('fitness') or {}).get('draft_editor_candidate')})")
+            print(f"- review dir: {out.get('review_dir')}")
+            return 0 if out.get("ok") else 1
+
+        if args.command == "factory-product-loop":
+            from pathlib import Path as _Path
+
+            from repo_idea_miner.challenge_key_scheduler import ChallengeKeyScheduler
+            from repo_idea_miner.config import load_challenge_miner_settings
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_product_loop import run_product_loop
+
+            if not (args.run_dir or args.run_id):
+                print("오류: --run-dir 또는 --run-id가 필요합니다.", file=sys.stderr)
+                return 1
+            db_conn = open_factory_db(args.db) if _Path(args.db).exists() else None
+            if args.run_id and db_conn is None:
+                print("오류: --run-id는 DB가 필요합니다.", file=sys.stderr)
+                return 1
+            try:
+                scheduler = None
+                if args.mode == "live" and db_conn is not None:
+                    settings = load_settings()
+                    if settings.google_keys:
+                        scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys,
+                                                          load_challenge_miner_settings())
+                out = run_product_loop(
+                    run_dir=args.run_dir, run_id=args.run_id, mode=args.mode,
+                    gemma_mode=args.gemma_mode, max_iterations=args.max_iterations,
+                    db_conn=db_conn, scheduler=scheduler,
+                )
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            print(f"PRODUCT LOOP ({args.mode} / {args.gemma_mode})")
+            print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
+            print(f"- challenge_id: {out.get('challenge_id')} / status: {out.get('status')}")
+            if out.get("error"):
+                print(f"오류: {out['error']}", file=sys.stderr)
+                return 1
+            print(f"- prior_fitness_label: {out.get('prior_fitness_label')}")
+            print(f"- autopilot_stage: {out.get('autopilot_stage')}")
+            print(f"- primary_gap: {out.get('primary_gap')}")
+            print(f"- next_lane: {out.get('next_lane')}")
+            print(f"- auto_order_quality: {out.get('auto_order_quality_status')} "
+                  f"({out.get('auto_order_quality_score')})")
+            print(f"- live_repair_apply: {out.get('live_repair_apply')} / "
+                  f"repair_execute: {out.get('repair_execute')}")
+            print(f"- protected hash: {out.get('hash_status')}")
+            ml = out.get("mock_loop") or {}
+            print("- mock loop: " + (" ".join(f"{k}={v}" for k, v in ml.items()) or "-"))
+            for c in out.get("stop_conditions") or []:
+                print(f"  stop: {c}")
+            for pr in out.get("problems") or []:
+                print(f"  problem: {pr}")
+            if out.get("failure_type"):
+                print(f"- failure_type: {out['failure_type']}")
             print(f"- review dir: {out.get('review_dir')}")
             return 0 if out.get("ok") else 1
 

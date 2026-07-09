@@ -233,6 +233,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_phase2c0(run_dir)
     problems += _check_phase2c1(run_dir)
     problems += _check_phase2c2(run_dir)
+    problems += _check_phase2d0(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -789,6 +790,219 @@ def _check_phase2c2(run_dir: Path) -> list[str]:
     return p
 
 
+# ---------------------------------------------------------------- Phase 2D-0 Autopilot 검증 (§30)
+
+PHASE2D0_SUBDIR = "review/phase2d0"
+PHASE2D0_MARKERS = (
+    "product_loop_dashboard_summary.json", "product_stage_label.json", "auto_order.json",
+)
+# 판정이 성공(AUTOPILOT_JUDGED/HOLD)한 run의 필수 산출물 (§30.1)
+PHASE2D0_REQUIRED_BASE = (
+    "artifact_evidence.json", "user_facing_quality_evidence.json", "hard_blocker_result.json",
+    "product_stage_label.json", "product_stage_label.md",
+    "product_gap_classification.json", "product_gap_classification.md",
+    "product_loop_iteration_summary.json", "product_loop_iteration_summary.md",
+    "product_loop_dashboard_summary.json",
+)
+PHASE2D0_REQUIRED_ORDER = (
+    "recommended_next_lane.json", "recommended_next_lane.md",
+    "auto_order.md", "auto_order.json", "auto_order_quality_report.json", "scope_guard.json",
+    "repair_blueprint.json", "expected_patch_plan.md",
+    "tests_to_run.json", "rollback_or_failure_conditions.json",
+)
+PHASE2D0_HONEST_FAILURES = (
+    "AUTOPILOT_INFRA_FAIL", "AUTOPILOT_INVALID_OUTPUT", "AUTOPILOT_EVIDENCE_INSUFFICIENT",
+)
+_PRODUCT_CANDIDATE_QUALITY_KEYS = (
+    "first_screen_understandable", "clear_next_action", "has_example_or_seed_data",
+    "success_feedback_visible", "failure_feedback_visible", "user_can_understand_value_in_60s",
+)
+
+
+def detect_phase2d0_run(run_dir: str | Path) -> bool:
+    """§30: Phase 2D-0 marker(review/phase2d0/ 아래 산출물)가 있는 run인지 감지한다."""
+    d = Path(run_dir) / PHASE2D0_SUBDIR
+    return any((d / m).is_file() for m in PHASE2D0_MARKERS)
+
+
+def _check_phase2d0(run_dir: Path) -> list[str]:
+    """§30: Phase 2D-0 marker가 있는 run만 autopilot 산출물/정합성을 검사한다."""
+    if not detect_phase2d0_run(run_dir):
+        return []
+    from repo_idea_miner.factory_autopilot_schemas import (
+        AUTO_ORDER_QUALITY_MIN,
+        AutoOrderSlots,  # noqa: F401 - schema 파일 대조용 임포트 유지
+        DESK_SCHEMAS,
+        ProductGapClassification,
+        ProductStageLabel,
+        RecommendedNextLane,
+        RepairBlueprint,
+        ScopeGuard,
+        validate_against_hard_blockers,
+        validate_desk_output,
+        validate_judgment_evidence,
+        validate_stage_gap_lane_consistency,
+    )
+    from repo_idea_miner.factory_product_loop import validate_blueprint_scopes
+
+    rd = run_dir / PHASE2D0_SUBDIR
+    p: list[str] = []
+    summary = _load_json(rd / "product_loop_iteration_summary.json") or {}
+    status = summary.get("status")
+
+    # ---- 필수 산출물 (§30.1). 정직한 실패 run은 최소 기록만 요구한다.
+    if status in PHASE2D0_HONEST_FAILURES:
+        for rel in ("artifact_evidence.json", "user_facing_quality_evidence.json",
+                    "hard_blocker_result.json", "product_loop_iteration_summary.json",
+                    "product_loop_dashboard_summary.json"):
+            if not (rd / rel).is_file():
+                p.append(f"Phase 2D-0(실패 run) 산출물 없음: {PHASE2D0_SUBDIR}/{rel}")
+    else:
+        for rel in PHASE2D0_REQUIRED_BASE:
+            if not (rd / rel).is_file():
+                p.append(f"Phase 2D-0 산출물 없음: {PHASE2D0_SUBDIR}/{rel}")
+        gap_for_req = _load_json(rd / "product_gap_classification.json") or {}
+        if gap_for_req.get("primary_gap"):
+            for rel in PHASE2D0_REQUIRED_ORDER:
+                if not (rd / rel).is_file():
+                    p.append(f"Phase 2D-0 산출물 없음: {PHASE2D0_SUBDIR}/{rel}")
+        # schema 정의 파일 (§28)
+        schemas_dir = rd / "schemas"
+        for name in DESK_SCHEMAS:
+            if not (schemas_dir / f"{name}.schema.json").is_file():
+                p.append(f"Phase 2D-0 schema 파일 없음: schemas/{name}.schema.json")
+
+    # ---- 조건부 산출물 (§30.1)
+    if summary.get("schema_repair_used") and not (rd / "schema_repair_report.json").is_file():
+        p.append("Phase 2D-0: schema_repair_pass 실행됐는데 schema_repair_report.json 없음")
+    if summary.get("mock_loop_executed") and \
+            not (rd / "mock_loop_order_following_report.json").is_file():
+        p.append("Phase 2D-0: mock/safe loop 실행됐는데 mock_loop_order_following_report.json 없음")
+
+    # ---- 보호 대상/기존 review 불변 (phase2d0_hash_check가 있으면 PASS 필수)
+    hash_check = _load_json(rd / "phase2d0_hash_check.json") or {}
+    if hash_check and hash_check.get("status") != "PASS":
+        detail = hash_check.get("changed") or hash_check.get("added") or hash_check.get("removed")
+        p.append(f"Phase 2D-0: 보호 대상 artifact/기존 review 변경됨: {detail}")
+
+    label = _load_json(rd / "product_stage_label.json") or {}
+    gap = _load_json(rd / "product_gap_classification.json") or {}
+    lane = _load_json(rd / "recommended_next_lane.json") or {}
+    order = _load_json(rd / "auto_order.json") or {}
+    guard = _load_json(rd / "scope_guard.json") or {}
+    blueprint = _load_json(rd / "repair_blueprint.json") or {}
+    quality_rep = _load_json(rd / "auto_order_quality_report.json") or {}
+    hard = _load_json(rd / "hard_blocker_result.json") or {}
+    artifact_ev = _load_json(rd / "artifact_evidence.json") or {}
+    user_q = _load_json(rd / "user_facing_quality_evidence.json") or {}
+    hardcode = _load_json(rd / "hardcode_guard.json") or {}
+
+    # ---- strict JSON schema 재검증 (§30.1)
+    for name, data, cls in (("product_stage_label", label, ProductStageLabel),
+                            ("product_gap_classification", gap, ProductGapClassification),
+                            ("recommended_next_lane", lane, RecommendedNextLane),
+                            ("scope_guard", guard, ScopeGuard),
+                            ("repair_blueprint", blueprint, RepairBlueprint)):
+        if data:
+            _model, problems = validate_desk_output(name, data, cls)
+            p += [f"Phase 2D-0 schema: {x}" for x in problems]
+
+    # ---- evidence_refs 검증 (§9, §30.1)
+    known = set(artifact_ev.get("evidence_refs_catalog") or [])
+    if label and gap and lane and known:
+        p += [f"Phase 2D-0 evidence: {x}"
+              for x in validate_judgment_evidence(label, gap, lane, known)]
+
+    # ---- stage/gap/lane + lane policy 정합성 (§30.2)
+    if label and gap and lane:
+        p += [f"Phase 2D-0 정합성: {x}"
+              for x in validate_stage_gap_lane_consistency(label, gap, lane)]
+
+    # ---- hard blocker와 stage 정합성 (§6, §30.2)
+    if label and hard:
+        p += [f"Phase 2D-0 hard blocker: {x}"
+              for x in validate_against_hard_blockers(label, hard)]
+
+    # ---- prior_fitness_label과 autopilot_stage 분리 기록 (§5)
+    if label:
+        if "prior_fitness_label" not in label or "autopilot_stage" not in label:
+            p.append("Phase 2D-0: prior_fitness_label/autopilot_stage 분리 기록 없음")
+        if "autopilot_is_product_candidate" not in label:
+            p.append("Phase 2D-0: autopilot_is_product_candidate 없음")
+
+    # ---- auto_order ↔ lane ↔ scope_guard ↔ blueprint 정합성 (§30.2)
+    rec_lane = lane.get("recommended_next_lane")
+    if order and rec_lane and order.get("lane") != rec_lane:
+        p.append(f"Phase 2D-0: auto_order lane({order.get('lane')})과 "
+                 f"recommended_next_lane({rec_lane}) 불일치")
+    if guard and rec_lane and guard.get("lane") != rec_lane:
+        p.append(f"Phase 2D-0: scope_guard lane({guard.get('lane')}) 불일치")
+    if order and guard:
+        if set(order.get("allowed_scopes") or []) != set(guard.get("allowed_scopes") or []):
+            p.append("Phase 2D-0: scope_guard와 auto_order allowed_scopes 불일치")
+        if not set(guard.get("protected_scopes") or []) <= set(order.get("protected_scopes") or []):
+            p.append("Phase 2D-0: auto_order protected_scopes가 scope_guard보다 좁음")
+    if blueprint and rec_lane and blueprint.get("target_lane") != rec_lane:
+        p.append(f"Phase 2D-0: repair_blueprint target_lane({blueprint.get('target_lane')}) 불일치")
+
+    # ---- blueprint: apply 금지 + protected scope 제안 금지 (§19, §30.2)
+    if blueprint:
+        if blueprint.get("apply_allowed") is not False:
+            p.append("Phase 2D-0: repair_blueprint.apply_allowed != false (live repair apply 금지)")
+        p += [f"Phase 2D-0: {x}" for x in validate_blueprint_scopes(blueprint, live=True)]
+
+    # ---- auto_order 품질 (§18.3, §30.2)
+    score = quality_rep.get("auto_order_quality_score")
+    if quality_rep and score is not None and score < AUTO_ORDER_QUALITY_MIN and \
+            summary.get("status") == "AUTOPILOT_JUDGED":
+        p.append(f"Phase 2D-0: auto_order_quality_score {score} < {AUTO_ORDER_QUALITY_MIN}인데 "
+                 "HOLD 처리되지 않음")
+    if order and not order.get("forbidden_actions"):
+        p.append("Phase 2D-0: auto_order에 금지 범위(forbidden_actions) 누락")
+
+    # ---- hardcode 감지 (§12, §30.2)
+    if hardcode and hardcode.get("status") != "PASS":
+        p.append("Phase 2D-0: challenge_id/title 기반 hardcode 감지 (프롬프트 누수)")
+    trace = _load_json(rd / "judge_prompt_trace.json") or {}
+    if trace.get("contains_challenge_id") or trace.get("contains_title"):
+        p.append("Phase 2D-0: judge prompt에 challenge_id/title 포함 (hardcode 금지)")
+
+    # ---- mock loop order following (§22, §30.2)
+    mock = _load_json(rd / "mock_loop_order_following_report.json") or {}
+    if mock:
+        if mock.get("repair_followed_order") is False:
+            p.append("Phase 2D-0: mock_loop_order_following_report.repair_followed_order=false")
+        for key in ("auto_order_read", "scope_guard_read", "protected_files_unchanged"):
+            if mock.get(key) is False:
+                p.append(f"Phase 2D-0: mock loop {key}=false")
+
+    # ---- PRODUCT_CANDIDATE 엄격 조건 (§27, §30.2)
+    stage = label.get("autopilot_stage") or label.get("stage")
+    if stage == "PRODUCT_CANDIDATE":
+        loop_ev = label.get("product_loop_evidence") or {}
+        for k, v in loop_ev.items():
+            if v is not True:
+                p.append(f"Phase 2D-0: PRODUCT_CANDIDATE인데 product_loop.{k} != true")
+        q_ev = label.get("user_facing_quality_evidence") or user_q
+        for k in _PRODUCT_CANDIDATE_QUALITY_KEYS:
+            if q_ev.get(k) is not True:
+                p.append(f"Phase 2D-0: PRODUCT_CANDIDATE인데 {k} != true")
+        if hard.get("product_candidate_blocked"):
+            p.append("Phase 2D-0: hard blocker 존재인데 autopilot_stage=PRODUCT_CANDIDATE")
+        facts = artifact_ev.get("facts") or {}
+        if facts.get("js_syntax_status") == "FAIL":
+            p.append("Phase 2D-0: JS syntax FAIL인데 PRODUCT_CANDIDATE")
+        if facts.get("critical_red_flags"):
+            p.append("Phase 2D-0: critical red flag 존재인데 PRODUCT_CANDIDATE")
+        if (artifact_ev.get("product_loop") or {}).get("can_execute_input") is not True:
+            p.append("Phase 2D-0: runner-backed execution 없음인데 PRODUCT_CANDIDATE")
+    # §30.2: user_can_understand_value_in_60s=false + PRODUCT_CANDIDATE → FAIL (위 검사에 포함되나 명시)
+    if stage == "PRODUCT_CANDIDATE" and user_q.get("user_can_understand_value_in_60s") is False:
+        p.append("Phase 2D-0: user_can_understand_value_in_60s=false인데 PRODUCT_CANDIDATE")
+
+    return p
+
+
 def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     """§7: spec repair proposal/review는 있으면 검사 — apply는 Phase 2A에서 무조건 금지."""
     p: list[str] = []
@@ -1097,6 +1311,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_phase2c0(run_dir)
     problems += _check_phase2c1(run_dir)
     problems += _check_phase2c2(run_dir)
+    problems += _check_phase2d0(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:

@@ -161,6 +161,20 @@ _PRODUCT_REPORT_TABS = [
     ("fitness_after_editor", ("run", "review/phase2c2/product_fitness_report_after_editor.md", "editor 후 제품성")),
     ("phase2c2_hash_check", ("run", "review/phase2c2/phase2c2_hash_check.json", "editor hash 검사")),
     ("phase2c2_dashboard_summary", ("run", "review/phase2c2/phase2c2_dashboard_summary.json", "phase2c2_dashboard_summary")),
+    # Phase 2D-0 autopilot (review/phase2d0/ — 상세 페이지 전용)
+    ("product_stage_label", ("run", "review/phase2d0/product_stage_label.md", "autopilot stage")),
+    ("product_gap_classification", ("run", "review/phase2d0/product_gap_classification.md", "gap 분류")),
+    ("recommended_next_lane", ("run", "review/phase2d0/recommended_next_lane.md", "next lane")),
+    ("auto_order", ("run", "review/phase2d0/auto_order.md", "auto order")),
+    ("auto_order_quality_report", ("run", "review/phase2d0/auto_order_quality_report.json", "auto order 품질")),
+    ("scope_guard", ("run", "review/phase2d0/scope_guard.json", "scope guard")),
+    ("repair_blueprint", ("run", "review/phase2d0/repair_blueprint.json", "repair blueprint")),
+    ("expected_patch_plan", ("run", "review/phase2d0/expected_patch_plan.md", "expected patch plan")),
+    ("hard_blocker_result", ("run", "review/phase2d0/hard_blocker_result.json", "hard blockers")),
+    ("user_facing_quality_evidence", ("run", "review/phase2d0/user_facing_quality_evidence.json", "user-facing 품질")),
+    ("mock_loop_order_following_report", ("run", "review/phase2d0/mock_loop_order_following_report.json", "mock loop 검증")),
+    ("product_loop_iteration_summary", ("run", "review/phase2d0/product_loop_iteration_summary.md", "loop 요약")),
+    ("product_loop_dashboard_summary", ("run", "review/phase2d0/product_loop_dashboard_summary.json", "product_loop_dashboard_summary")),
 ]
 _PRODUCT_REPORT_TABS_MAP = dict(_PRODUCT_REPORT_TABS)
 
@@ -920,6 +934,96 @@ def _phase2c2_panel(p2c2: dict | None) -> str:
 </section>"""
 
 
+_PHASE2D0_SUBDIR = "review/phase2d0"
+
+
+def _load_phase2d0(run_root: Path | None) -> dict | None:
+    """Phase 2D-0 autopilot 요약(review/phase2d0/)을 읽는다. 없으면 None."""
+    if run_root is None:
+        return None
+    p = run_root / _PHASE2D0_SUBDIR / "product_loop_dashboard_summary.json"
+    if not p.is_file():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _phase2d0_card_lines(p2d0: dict | None) -> str:
+    """목록 카드에 추가하는 autopilot 줄: prior fitness/stage/next lane/status (§29)."""
+    if not p2d0:
+        return ""
+    prior = p2d0.get("prior_fitness_label") or "-"
+    qual = p2d0.get("prior_fitness_qualifier")
+    return (
+        f'<p class="meta">prior fitness: {_e(prior)}{_e(" / " + qual if qual else "")}</p>'
+        f'<p class="meta">autopilot stage: <b>{_e(p2d0.get("autopilot_stage") or "-")}</b></p>'
+        f'<p class="meta">next lane: {_e(p2d0.get("next_lane") or "-")}</p>'
+        f'<p class="meta">autopilot: {_e(p2d0.get("autopilot_status") or "-")}'
+        f' · auto_order quality: {_e(p2d0.get("auto_order_status") or "-")}'
+        f' · repair blueprint: {_e(p2d0.get("repair_blueprint_status") or "-")}</p>'
+    )
+
+
+def _phase2d0_panel(p2d0: dict | None, run_root: Path | None) -> str:
+    """상세 페이지 Phase 2D-0 패널: evidence/hard blocker/judge/gap/lane/order/blueprint/mock loop (§29)."""
+    if not p2d0:
+        return ""
+    rd = (run_root / _PHASE2D0_SUBDIR) if run_root else None
+
+    def _j(name):
+        if rd is None:
+            return {}
+        try:
+            return json.loads((rd / name).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    ev = _j("artifact_evidence.json")
+    loop = ev.get("product_loop") or {}
+    q = _j("user_facing_quality_evidence.json")
+    hard = _j("hard_blocker_result.json")
+    label = _j("product_stage_label.json")
+    gap = _j("product_gap_classification.json")
+    lane = _j("recommended_next_lane.json")
+    quality_rep = _j("auto_order_quality_report.json")
+    mock = _j("mock_loop_order_following_report.json")
+
+    def _tf(v):
+        return "true" if v is True else ("false" if v is False else "-")
+
+    loop_line = " · ".join(f"{k.replace('can_', '')}={_tf(v)}" for k, v in loop.items())
+    q_line = " · ".join(f"{k}={_tf(v)}" for k, v in q.items())
+    blockers = hard.get("applied") or []
+    stop = p2d0.get("stop_conditions") or []
+    mock_line = " · ".join(f"{k}={_tf(mock.get(k))}" for k in (
+        "auto_order_read", "scope_guard_read", "repair_followed_order",
+        "protected_files_unchanged", "smoke_ran", "validate_ran", "rejudge_ran")) if mock else "-"
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2D-0 Gemma Productization Autopilot</h2>
+  <p class="meta">prior fitness: {_e(p2d0.get('prior_fitness_label') or '-')}
+    {_e('/ ' + p2d0.get('prior_fitness_qualifier') if p2d0.get('prior_fitness_qualifier') else '')}
+    → autopilot stage: <b>{_e(p2d0.get('autopilot_stage') or '-')}</b>
+    (is_product_candidate: {_tf(p2d0.get('autopilot_is_product_candidate'))})</p>
+  <p class="meta">primary gap: <b>{_e(gap.get('primary_gap') or '-')}</b>
+    · next lane: <b>{_e(p2d0.get('next_lane') or '-')}</b>
+    · lane risk: {_e(lane.get('lane_risk') or '-')}
+    · auto_execute: {_tf(lane.get('auto_execute_allowed'))}</p>
+  <p class="meta">autopilot: {_e(p2d0.get('autopilot_status') or '-')}
+    · auto_order quality: {_e(quality_rep.get('status') or '-')} ({_e(quality_rep.get('auto_order_quality_score'))})
+    · repair blueprint: {_e(p2d0.get('repair_blueprint_status') or '-')}
+    · 보호 대상 hash: {_e(p2d0.get('hash_status') or '-')}</p>
+  <div class="field"><span class="k">Artifact Evidence</span><p class="meta">{_e(loop_line or '-')}</p></div>
+  <div class="field"><span class="k">User-Facing Quality</span><p class="meta">{_e(q_line or '-')}</p></div>
+  <div class="field"><span class="k">Hard Blockers</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in blockers) or '<li class="muted">없음</li>'}</ul></div>
+  <div class="field"><span class="k">판정 이유</span><p class="meta">{_e(label.get('reason') or '-')}</p></div>
+  <div class="field"><span class="k">Mock Loop Order Following</span><p class="meta">{_e(mock_line)}</p></div>
+  <div class="field"><span class="k">Stop Conditions</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in stop) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 def _match_product_filters(run: dict, rev: dict | None, filters: dict) -> bool:
     verdict = filters.get("verdict")
     status = filters.get("status")
@@ -1121,6 +1225,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
             body_lines += _phase2c1_card_lines(p2c1)
         else:
             body_lines += _phase2c0_card_lines(_load_phase2c0(run_root))
+        body_lines += _phase2d0_card_lines(_load_phase2d0(run_root))
         cards.append(
             f"""  <article class="card">
     <div class="chead">
@@ -1382,6 +1487,7 @@ def render_product_detail(
         + hero + ch_summary + p2a_html + _phase2c0_panel(_load_phase2c0(run_root))
         + _phase2c1_panel(_load_phase2c1(run_root))
         + _phase2c2_panel(_load_phase2c2(run_root))
+        + _phase2d0_panel(_load_phase2d0(run_root), run_root)
         + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )
