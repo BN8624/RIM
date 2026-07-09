@@ -285,6 +285,11 @@ def augment_core_contract_runtime(result: GateResult, core_contract: dict, repla
 
 # ---------------------------------------------------------------- Product Layer 소비 검사 (Phase 1.6b §5)
 
+# product 파일은 CSS 뒤 <script>에 replay fetch가 오는 경우가 많아 넉넉히 읽어야 한다
+# (짧게 자르면 fetch/필드 사용을 놓쳐 false-negative 발생, live #47에서 관측됨).
+PRODUCT_READ_LIMIT = 20000
+
+
 def product_layer_consumes_core(
     product_files: dict[str, str], core_contract: dict | None = None
 ) -> list[str]:

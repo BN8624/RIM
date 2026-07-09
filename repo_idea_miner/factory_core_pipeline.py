@@ -7,7 +7,11 @@ import shutil
 from pathlib import Path
 
 from repo_idea_miner.config import Settings, load_settings
-from repo_idea_miner.factory_core_gates import product_layer_consumes_core, run_core_gates
+from repo_idea_miner.factory_core_gates import (
+    PRODUCT_READ_LIMIT,
+    product_layer_consumes_core,
+    run_core_gates,
+)
 from repo_idea_miner.factory_core_prompts import (
     build_build_review_prompt,
     build_classify_prompt,
@@ -626,8 +630,9 @@ def run_core_factory(
             return written, rejected
 
         def _product_files_text() -> dict[str, str]:
+            # 넉넉히 읽는다: 짧게 자르면 CSS 뒤 <script>의 replay fetch를 놓쳐 false-negative (§5.4)
             return {
-                rel: read_workspace_file(workspace, rel, 3000)
+                rel: read_workspace_file(workspace, rel, PRODUCT_READ_LIMIT)
                 for rel in list_workspace_files(workspace) if rel.startswith("product/")
             }
 

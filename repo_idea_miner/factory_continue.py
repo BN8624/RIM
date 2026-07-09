@@ -7,7 +7,11 @@ import time
 from pathlib import Path
 
 from repo_idea_miner.config import Settings, load_settings
-from repo_idea_miner.factory_core_gates import product_layer_consumes_core, run_core_gates
+from repo_idea_miner.factory_core_gates import (
+    PRODUCT_READ_LIMIT,
+    product_layer_consumes_core,
+    run_core_gates,
+)
 from repo_idea_miner.factory_core_prompts import (
     build_build_review_prompt,
     build_continuation_patch_prompt,
@@ -387,7 +391,7 @@ def run_continuation(
         return gates
 
     def _product_problems() -> list[str]:
-        files = {rel: read_workspace_file(workspace, rel, 3000)
+        files = {rel: read_workspace_file(workspace, rel, PRODUCT_READ_LIMIT)
                  for rel in list_workspace_files(workspace) if rel.startswith("product/")}
         return product_layer_consumes_core(files, core_contract)
 
@@ -646,9 +650,10 @@ def _patch_with_retry(executor, packet_md, failure_md, key_files, allowed, froze
             return model.model_dump(), transient, None
         except DeskError as exc:
             kind = exc.kind
-            if kind == "transient" and transient < max_transient:
+            if kind in ("transient", "timeout") and transient < max_transient:
                 transient += 1
-                log_fn({"event": "patch_transient_retry", "attempt": attempt, "retry": transient})
+                log_fn({"event": "patch_transient_retry", "attempt": attempt,
+                        "retry": transient, "kind": kind})
                 sleep_fn(min(2.0 * transient, 8.0))
                 continue
             if kind == "schema" and not invalid_retried:

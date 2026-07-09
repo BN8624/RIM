@@ -185,6 +185,26 @@ def test_product_layer_fake_state_only_fails():
     assert any("실제로 읽지 않음" in p for p in problems)
 
 
+def test_large_viewer_consumption_not_truncated(tmp_path):
+    """live #47 발견: CSS 뒤 <script>의 replay fetch가 짧은 read로 잘려 false-negative 나면 안 된다."""
+    from repo_idea_miner.factory_core_gates import PRODUCT_READ_LIMIT, product_layer_consumes_core
+    from repo_idea_miner.factory_workspace import read_workspace_file, write_workspace_file
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    big_css = "\n".join(f".n{i} {{ color: #{i:06d}; padding: 4px; }}" for i in range(120))  # 3000자 이상
+    html = (f"<style>{big_css}</style>\n<body><div id=app></div>\n<script>\n"
+            "const d = await fetch('../../replay/index.json').then(r=>r.json());\n"
+            "el.textContent = d.summary; render(d.final_state); (d.events||[]).forEach(show);\n"
+            "</script></body>")
+    write_workspace_file(ws, "product/viewer/index.html", html, [])
+    assert len(html) > 3300 and html.find("replay/index.json") > 3000  # fetch가 3000 뒤에 있음
+    files = {"product/viewer/index.html": read_workspace_file(ws, "product/viewer/index.html", PRODUCT_READ_LIMIT)}
+    assert product_layer_consumes_core(files) == []  # 전체를 읽어 소비로 판정
+    truncated = {"product/viewer/index.html": read_workspace_file(ws, "product/viewer/index.html", 3000)}
+    assert product_layer_consumes_core(truncated)  # 짧게 자르면 놓침(회귀 가드)
+
+
 def test_product_layer_core_logic_duplication_fails():
     """§5.4: product가 core action 로직을 복제하면 FAIL."""
     files = {"product/v.js": (
