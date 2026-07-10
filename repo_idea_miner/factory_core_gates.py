@@ -673,14 +673,20 @@ def invariant_category(ok: bool | None, msg: str) -> str:
 
 
 def _entity_instances(entity: dict, final_state: dict) -> list[dict]:
-    """entity 필드를 모두 가진 인스턴스를 final_state의 top-level 컬렉션에서 찾는다 (Phase 2B-1 §9).
+    """entity 필드를 모두 가진 인스턴스를 final_state에서 찾는다 (Phase 2B-1 §9).
 
-    list-of-dicts와 dict-of-dicts(id 키 컬렉션)만 최소 해석한다. 못 찾으면 빈 리스트
+    entity 이름 키 singleton(final_state[name]이 필드를 모두 가진 dict), list-of-dicts,
+    dict-of-dicts(id 키 컬렉션)만 최소 해석한다. 못 찾으면 빈 리스트
     (호출부가 INVARIANT_NOT_EXPOSED를 유지 — missing path 자동 PASS 금지).
     """
     fields = set(entity.get("fields") or [])
     if not fields:
         return []
+    # entity 이름 키 singleton: golden expected_final_state와 같은 중첩 구조를 해석한다.
+    # 필드가 하나라도 없으면 매칭하지 않는다 — NOT_EXPOSED 유지 (자동 PASS 금지).
+    named = final_state.get(entity.get("name") or "")
+    if isinstance(named, dict) and fields <= set(named.keys()):
+        return [named]
     out: list[dict] = []
     for value in final_state.values():
         if isinstance(value, list):

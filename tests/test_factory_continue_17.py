@@ -331,3 +331,57 @@ def test_e2e_golden_failure_stays_honest(tmp_path):
     assert res["promoted_to_green_base"] is False
     assert res["verdict"] in ("NEEDS_MORE_GEMMA_LOOP", "SPEC_REPAIR_REQUIRED", "RUNS_BUT_WEAK")
     assert not (Path(res["continuation_run_dir"]) / "green_base.json").is_file()
+
+
+# ---------------------------------------------------------------- CLI: --run-dir live의 scheduler 구성
+
+def test_cli_continue_run_dir_live_opens_db_for_scheduler(monkeypatch):
+    """--run-dir이어도 live면 db를 열어 scheduler를 구성한다.
+
+    scheduler 없이 live patch가 돌면 LLM 호출 없이 PATCH_FAILED만 남아
+    실제 결함처럼 오해된다 — db는 key scheduler 구성에 필요하다."""
+    from types import SimpleNamespace
+    import repo_idea_miner.cli_handlers as ch
+    import repo_idea_miner.factory_db as fdb
+    import repo_idea_miner.factory_continue as fc
+
+    calls = {}
+
+    class _Conn:
+        def close(self):
+            calls["closed"] = True
+
+    def fake_open(db):
+        calls["db"] = db
+        return _Conn()
+
+    def fake_scheduler(conn):
+        calls["scheduler_conn"] = conn
+        return "SCHEDULER"
+
+    def fake_run(**kwargs):
+        calls["kwargs"] = kwargs
+        return {"status": "DONE", "verdict": "SPEC_REPAIR_REQUIRED", "error": None,
+                "continuation_run_dir": "x", "base_run_dir": "y", "challenge_id": 1,
+                "failure_types": [], "resolved": {}, "patch_attempts": 0,
+                "transient_retries": 0, "rejected_patches": [],
+                "promoted_to_green_base": False}
+
+    monkeypatch.setattr(fdb, "open_factory_db", fake_open)
+    monkeypatch.setattr(ch, "_live_scheduler", fake_scheduler)
+    monkeypatch.setattr(fc, "run_continuation", fake_run)
+
+    args = SimpleNamespace(run_id=None, run_dir="runs/some_run", mode="live",
+                           max_patches=2, output_dir="runs", db="challenge.db", no_db=False)
+    assert ch._cmd_factory_continue(args) == 0
+    assert calls["db"] == "challenge.db"
+    assert calls["kwargs"]["scheduler"] == "SCHEDULER"
+    assert calls["closed"] is True
+
+    # mock 모드 --run-dir는 이전처럼 db를 열지 않는다
+    calls.clear()
+    args_mock = SimpleNamespace(run_id=None, run_dir="runs/some_run", mode="mock",
+                                max_patches=2, output_dir="runs", db="challenge.db", no_db=False)
+    assert ch._cmd_factory_continue(args_mock) == 0
+    assert "db" not in calls
+    assert calls["kwargs"]["scheduler"] is None

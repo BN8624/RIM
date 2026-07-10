@@ -183,6 +183,41 @@ def test_state_invariant_gate_pass_and_fail(tmp_path):
     assert summary2["violations"]
 
 
+def test_state_invariant_singleton_entity_exposed():
+    """entity 이름 키 singleton 중첩(final_state[name])도 invariant 평가 대상이다 (§9).
+
+    golden expected_final_state와 같은 중첩 구조를 runner가 방출했는데
+    NOT_EXPOSED로 오탐하면 patch lane이 불필요한 노이즈 수정을 유발한다."""
+    core = {"state_entities": [
+        {"name": "FileSystem", "fields": ["root_node", "version"],
+         "invariants": ["version >= 0", "exists:root_node"]},
+        {"name": "NavigationState", "fields": ["current_path", "selected_id"],
+         "invariants": ["exists:current_path", "current_path.length >= 1"]},
+    ]}
+    ok_state = {"FileSystem": {"root_node": {"id": "root"}, "version": 0},
+                "NavigationState": {"current_path": ["root"], "selected_id": None}}
+    result, summary = run_state_invariant_gate(core, {"s1": {"parsed": {"final_state": ok_state}}})
+    assert result.ok, result.problems
+    assert summary["counts"]["not_exposed"] == 0
+
+    # 값 위반은 NOT_EXPOSED가 아니라 FAIL로 구분된다
+    bad = json.loads(json.dumps(ok_state))
+    bad["FileSystem"]["version"] = -1
+    result2, summary2 = run_state_invariant_gate(core, {"s1": {"parsed": {"final_state": bad}}})
+    assert not result2.ok
+    assert {v["category"] for v in summary2["violations"]} == {"INVARIANT_FAIL"}
+
+    # 필드가 하나라도 없으면 singleton으로 해석하지 않는다 — 자동 PASS 금지
+    missing = {"FileSystem": {"version": 0},
+               "NavigationState": {"current_path": ["root"], "selected_id": None}}
+    result3, summary3 = run_state_invariant_gate(core, {"s1": {"parsed": {"final_state": missing}}})
+    assert not result3.ok
+    fs_viol = [v for v in summary3["violations"]
+               if v["invariant"] in ("version >= 0", "exists:root_node")]
+    assert fs_viol
+    assert all(v["category"] == "INVARIANT_NOT_EXPOSED" for v in fs_viol)
+
+
 # ---------------------------------------------------------------- Determinism Gate (§16-29)
 
 def test_determinism_gate_pass(tmp_path):

@@ -101,6 +101,36 @@ def test_copy_run_as_child_and_base_untouched(tmp_path):
     assert _snapshot(base) == before
 
 
+def test_copy_run_as_child_rewrites_base_pointers(tmp_path):
+    """parent 내부를 가리키는 base 포인터는 child 내부 경로로 재작성된다.
+
+    포인터가 parent를 계속 가리키면 child continuation seed가 parent snapshot이 되어
+    child 수정이 전부 무시된다. parent 밖 경로와 parent 원본 파일은 건드리지 않는다."""
+    parent = tmp_path / "parent"
+    (parent / "snapshot" / "continuation_core_01").mkdir(parents=True)
+    parent_pointer = str(parent / "snapshot" / "continuation_core_01")
+    (parent / "continuation_base.json").write_text(json.dumps({
+        "base_type": "continuation_base",
+        "continuation_base_path": parent_pointer,
+    }), encoding="utf-8")
+    (parent / "green_base.json").write_text(json.dumps({
+        "base_type": "green_base",
+        "green_base_path": str(tmp_path / "elsewhere" / "green_core_01"),
+    }), encoding="utf-8")
+
+    child = copy_run_as_child(parent, tmp_path / "child")
+
+    cont = json.loads((child / "continuation_base.json").read_text(encoding="utf-8"))
+    assert cont["continuation_base_path"] == \
+        (child / "snapshot" / "continuation_core_01").as_posix()
+    # parent 밖을 가리키는 포인터는 재작성하지 않는다
+    green = json.loads((child / "green_base.json").read_text(encoding="utf-8"))
+    assert green["green_base_path"] == str(tmp_path / "elsewhere" / "green_core_01")
+    # parent 원본 포인터는 불변
+    orig = json.loads((parent / "continuation_base.json").read_text(encoding="utf-8"))
+    assert orig["continuation_base_path"] == parent_pointer
+
+
 def test_execute_lane_spec_repair_keeps_base_immutable(tmp_path):
     res = _run_mock(tmp_path)
     base = Path(res["run_dir"])

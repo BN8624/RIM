@@ -364,7 +364,10 @@ def _cmd_factory_continue(args) -> int:
     if not (args.run_id or args.run_dir):
         print("오류: --run-id 또는 --run-dir 중 하나가 필요합니다.", file=sys.stderr)
         return 1
-    db_conn = None if (args.no_db or args.run_dir and not args.run_id) else open_factory_db(args.db)
+    # live patch는 key scheduler가 필요하고 scheduler는 db가 필요하다 —
+    # --run-dir라도 live면 db를 연다 (없으면 patch가 LLM 호출 없이 실패해 오해를 만든다).
+    need_db = not args.no_db and (bool(args.run_id) or args.mode == "live")
+    db_conn = open_factory_db(args.db) if need_db else None
     if _run_id_needs_db(args, db_conn):
         return 1
     try:

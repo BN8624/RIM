@@ -169,6 +169,48 @@ def test_event_count_change_blocked():
     assert any("event 수 변경" in b for b in entry["blocked_reasons"])
 
 
+def test_event_payload_value_tamper_blocked():
+    """§8: event 종류가 같아도 payload 기대값 차이는 golden 교체로 덮지 않는다.
+
+    runner가 결함으로 placeholder id를 내면(예: target_id 'system') 그 값이
+    golden 기대값을 대체해선 안 된다 — final_state와 동일한 값 보호."""
+    golden = {
+        "scenario_id": "s3", "comparison_mode": "exact",
+        "expected_final_state": {"execution_order": ["a"], "global_tick": 1},
+        "expected_events": [{"type": "ERROR_OCCURRED", "target_id": "non_existent_id"}],
+        "expected_summary": "Completed",
+    }
+    replay = {
+        "ok": True,
+        "final_state": {"execution_order": ["a"], "global_tick": 1},
+        "events": [{"type": "ERROR_OCCURRED", "target_id": "system"}],
+        "summary": "Completed", "errors": [],
+    }
+    entry = plan_scenario_repair(golden, replay, _CONTRACT_FIELDS)
+    assert entry["new_golden"] is None
+    assert any("expected_events[0].target_id" in b and "훼손" in b
+               for b in entry["blocked_reasons"])
+
+
+def test_event_kind_read_from_type_key():
+    """dict event 종류는 'event' 키가 없으면 'type' 키로 판별한다 — 종류 불일치를 놓치지 않는다."""
+    golden = {
+        "scenario_id": "s4", "comparison_mode": "exact",
+        "expected_final_state": {"execution_order": ["a"], "global_tick": 1},
+        "expected_events": [{"type": "NODE_CREATED", "target_id": "a"}],
+        "expected_summary": "Completed",
+    }
+    replay = {
+        "ok": True,
+        "final_state": {"execution_order": ["a"], "global_tick": 1},
+        "events": [{"type": "NODE_DELETED", "target_id": "a"}],
+        "summary": "Completed", "errors": [],
+    }
+    entry = plan_scenario_repair(golden, replay, _CONTRACT_FIELDS)
+    assert entry["new_golden"] is None
+    assert any("종류 불일치" in b for b in entry["blocked_reasons"])
+
+
 def test_expected_field_deletion_blocked():
     """§18-22: 기존 expected field가 새 golden에서 사라지면 차단."""
     golden = _behind_golden()

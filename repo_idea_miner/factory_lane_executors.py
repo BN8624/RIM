@@ -57,6 +57,32 @@ def failure_signature(lane: str, problems: list[str] | None, error: str | None) 
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
 
+def _rewrite_child_base_pointers(parent_run_dir: Path, child_run_dir: Path) -> None:
+    """child로 복사된 base 포인터가 parent 내부를 가리키면 child 내부 경로로 재작성한다.
+
+    포인터가 parent를 계속 가리키면 child continuation의 seed가 parent snapshot이 되어
+    child에서의 수정이 전부 무시된다 (§5 원본 불변의 대칭 — child는 child를 봐야 한다)."""
+    for fname in ("continuation_base.json", "green_base.json"):
+        fpath = child_run_dir / fname
+        data = _load_json(fpath)
+        if not isinstance(data, dict):
+            continue
+        changed = False
+        for key in ("continuation_base_path", "green_base_path"):
+            val = data.get(key)
+            if not isinstance(val, str) or not val:
+                continue
+            try:
+                rel = Path(val.replace("\\", "/")).resolve().relative_to(
+                    Path(parent_run_dir).resolve())
+            except (ValueError, OSError):
+                continue
+            data[key] = (Path(child_run_dir) / rel).as_posix()
+            changed = True
+        if changed:
+            fpath.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def copy_run_as_child(parent_run_dir: Path, child_run_dir: Path | None,
                       children_root: Path | None = None) -> Path:
     """parent run 전체를 child run으로 복사한다 (§5 — 원본 불변, child에서만 apply)."""
@@ -65,6 +91,7 @@ def copy_run_as_child(parent_run_dir: Path, child_run_dir: Path | None,
         child_run_dir = make_factory_run_dir(children_root or Path("runs"))
     shutil.copytree(parent_run_dir, child_run_dir, dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns(*_CHILD_COPY_IGNORES))
+    _rewrite_child_base_pointers(Path(parent_run_dir), Path(child_run_dir))
     (child_run_dir / "child_run_origin.json").write_text(json.dumps({
         "parent_run_dir": str(Path(parent_run_dir).as_posix()),
         "created_by": "phase2d1_loop_executor",

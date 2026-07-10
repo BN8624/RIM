@@ -107,11 +107,13 @@ def check_apply_preconditions(run_dir: Path) -> tuple[list[str], dict]:
 # ---------------------------------------------------------------- Golden 보정 계획 (§7, §8)
 
 def _event_kind(event) -> str | None:
-    """event 항목의 종류를 뽑는다. 'node_created_event' 문자열과 {'event': 'node_created'}를 동일 종류로 본다."""
+    """event 항목의 종류를 뽑는다. 'node_created_event' 문자열과 {'event': 'node_created'}를 동일 종류로 본다.
+
+    dict event는 'event' 키 우선, 없으면 'type' 키 — 둘 다 없으면 None(종류 판별 불가)."""
     if isinstance(event, str):
         return event[:-len("_event")] if event.endswith("_event") else event
     if isinstance(event, dict):
-        return event.get("event")
+        return event.get("event") if "event" in event else event.get("type")
     return None
 
 
@@ -216,6 +218,20 @@ def plan_scenario_repair(golden: dict, replay: dict | None, contract_fields: set
             for i, (o, n) in enumerate(zip(old_events, new_events)):
                 if _event_kind(o) != _event_kind(n):
                     blocked.append(f"events[{i}] 종류 불일치: {_event_kind(o)} → {_event_kind(n)} (§8)")
+                elif isinstance(o, dict):
+                    # §8: event payload 기대값도 final_state와 동일하게 보호한다 —
+                    # 종류가 같아도 기존 값이 바뀌면 core 결함을 golden으로 덮는 변경이므로 차단.
+                    if not isinstance(n, dict):
+                        blocked.append(
+                            f"events[{i}]가 dict에서 {type(n).__name__}로 축소 — 기대 구조 약화 금지 (§8)")
+                        continue
+                    for path, value in _leaf_paths(o):
+                        new_value, found = _get_by_path(n, path)
+                        if not found or new_value != value:
+                            shown = repr(new_value) if found else "(없음)"
+                            blocked.append(
+                                f"기존 기대값 훼손: expected_events[{i}].{path} {value!r} → "
+                                f"{shown} — core 결함을 golden 수정으로 덮는 변경 금지 (§8)")
             if not blocked:
                 new_golden["expected_events"] = json.loads(json.dumps(new_events))
                 entry["changes"].append("expected_events를 runner event 객체 schema로 정합 (수/종류/순서 보존)")
