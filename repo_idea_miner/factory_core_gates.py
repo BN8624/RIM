@@ -541,6 +541,57 @@ def run_golden_output_gate(
     return r, summary
 
 
+# ---------------------------------------------------------------- Golden Representation Lint (정답지 표현 계약)
+
+def lint_golden_representation(core_contract: dict, goldens: list[dict]) -> dict:
+    """golden이 contract의 output_representation(이벤트/summary 표현 계약)을 따르는지 기계 검사.
+
+    구현이 없는 시점에 정답지↔구현 표현 드리프트를 막는 결정적 lint다.
+    선언이 없으면 NOT_DECLARED (기존 run 호환 — 강제하지 않고 기록만).
+    비어 있는 expected_events/expected_summary는 "기대 없음"으로 통과다.
+    """
+    rep = (core_contract or {}).get("output_representation")
+    if not isinstance(rep, dict) or not rep:
+        return {"status": "NOT_DECLARED", "declared": None, "problems": [],
+                "checked_goldens": len(goldens or [])}
+    problems: list[str] = []
+    ev_type = rep.get("event_item_type")
+    ev_keys = [k for k in (rep.get("event_required_keys") or []) if isinstance(k, str)]
+    kind_key = rep.get("event_kind_key")
+    kinds = [k for k in (rep.get("event_kinds") or []) if isinstance(k, str)]
+    for g in goldens or []:
+        sid = g.get("scenario_id") or "?"
+        for i, ev in enumerate(g.get("expected_events") or []):
+            if ev_type == "object":
+                if not isinstance(ev, dict):
+                    problems.append(
+                        f"{sid}: expected_events[{i}]가 object가 아님 "
+                        f"(선언 object, 실제 {type(ev).__name__} {str(ev)[:40]!r} — 추상 라벨 금지)")
+                    continue
+                missing = [k for k in ev_keys if k not in ev]
+                if missing:
+                    problems.append(f"{sid}: expected_events[{i}]에 필수 키 없음: {missing}")
+                if kinds and kind_key and ev.get(kind_key) not in kinds:
+                    problems.append(
+                        f"{sid}: expected_events[{i}].{kind_key}={ev.get(kind_key)!r}가 "
+                        f"선언된 event_kinds에 없음: {kinds}")
+            elif ev_type == "string":
+                if not isinstance(ev, str):
+                    problems.append(
+                        f"{sid}: expected_events[{i}]가 string이 아님 "
+                        f"(선언 string, 실제 {type(ev).__name__})")
+                elif kinds and ev not in kinds:
+                    problems.append(
+                        f"{sid}: expected_events[{i}]={ev!r}가 선언된 event_kinds에 없음: {kinds}")
+        summary = g.get("expected_summary")
+        if summary not in (None, "") and not isinstance(summary, str):
+            problems.append(
+                f"{sid}: expected_summary가 string이 아님 "
+                f"(하네스 표준: summary는 상태에서 파생된 문자열, 실제 {type(summary).__name__})")
+    return {"status": "PASS" if not problems else "FAIL", "declared": rep,
+            "problems": problems, "checked_goldens": len(goldens or [])}
+
+
 # ---------------------------------------------------------------- State Invariant Gate (§8.5)
 
 _INV_CMP_RE = re.compile(r"^\s*([\w.]+)\s*(>=|<=|==|>|<)\s*(-?\d+(?:\.\d+)?)\s*$")

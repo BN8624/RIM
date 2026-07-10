@@ -127,12 +127,24 @@ class Determinism(_Base):
     seed_required: bool = True
 
 
+class OutputRepresentation(_Base):
+    """구현과 golden이 공유하는 이벤트/summary 표현 계약 (정답지 표현 lint의 기준)."""
+
+    event_item_type: str | None = None  # "object" | "string"
+    event_required_keys: list[str] = Field(default_factory=list)
+    event_kind_key: str | None = None
+    event_kinds: list[str] = Field(default_factory=list)
+    summary_format: str = ""
+    summary_rule: str = ""
+
+
 class CoreContract(_Base):
     artifact_class: str = Field(min_length=1)
     core_goal: str = Field(min_length=1)
     state_entities: list[StateEntity] = Field(min_length=1)
     actions: list[CoreAction] = Field(min_length=1)
     determinism: Determinism = Field(default_factory=Determinism)
+    output_representation: OutputRepresentation | None = None
     forbidden_shortcuts: list[str] = Field(default_factory=list)
 
 

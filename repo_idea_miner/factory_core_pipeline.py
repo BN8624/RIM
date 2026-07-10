@@ -9,6 +9,7 @@ from pathlib import Path
 from repo_idea_miner.config import Settings, load_settings
 from repo_idea_miner.factory_core_gates import (
     PRODUCT_READ_LIMIT,
+    lint_golden_representation,
     product_layer_consumes_core,
     run_core_gates,
 )
@@ -397,6 +398,9 @@ def run_core_factory(
             for g in data["goldens"]:
                 if g["scenario_id"] not in scenario_ids:
                     problems.append(f"golden이 없는 scenario를 참조: {g['scenario_id']}")
+            # 정답지 표현 계약 lint — 구현 전 golden↔구현 표현 드리프트 차단
+            rep_lint = lint_golden_representation(core_contract, data["goldens"])
+            problems += [f"representation lint: {p}" for p in rep_lint["problems"]]
             return problems
 
         def _write_scenarios(data: dict) -> None:
@@ -436,12 +440,15 @@ def run_core_factory(
             harness_problems = _harness_sg_problems(sg)
             sg_status = "NEEDS_REPAIR" if (harness_problems and sg_review["status"] == "PASS") else sg_review["status"]
         _write_run_json("scenario_golden_review.json", sg_review)
+        rep_lint_final = lint_golden_representation(core_contract, sg["goldens"])
+        _write_run_json("golden_representation_lint.json", rep_lint_final)
         oracle_risk_level = sg["oracle_risk"]["risk_level"]
         harness["stages"]["scenario_oracle"] = {
             "status": sg_status, "repair_attempts": sg_attempts,
             "scenario_count": len(sg["scenarios"]), "golden_count": len(sg["goldens"]),
             "oracle_risk_level": oracle_risk_level,
             "golden_strength": sg_review["golden_strength"],
+            "representation_lint": rep_lint_final["status"],
         }
         log_loop_event(run_dir, secrets, stage="scenario_oracle", desk="Scenario Oracle Stage",
                        validation=sg_status,

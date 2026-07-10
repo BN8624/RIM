@@ -225,6 +225,15 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     if final_ok:
         problems += _core_final_artifact_consistency(final_dir)
 
+    # 정답지 표현 계약 lint — 있으면-검사: lint FAIL인데 검수 가능 verdict면 모순
+    rep_lint = _load_json(run_dir / "golden_representation_lint.json")
+    if rep_lint is not None and rep_lint.get("status") == "FAIL":
+        dsum = _load_json(run_dir / "dashboard_summary.json") or {}
+        if dsum.get("verdict") in ("REVIEW_READY", "PROMOTE_TO_CODEX"):
+            problems.append(
+                f"golden representation lint FAIL인데 verdict={dsum.get('verdict')} "
+                f"(정답지가 표현 계약 위반: {(rep_lint.get('problems') or [])[:3]})")
+
     # Phase 2A/2B-1: base run에 spec repair proposal/apply 산출물이 있으면 함께 검증
     problems += _check_frozen_hash_guard(run_dir)
     problems += _check_spec_repair_outputs(run_dir)
