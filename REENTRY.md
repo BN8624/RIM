@@ -1,14 +1,14 @@
 # REENTRY
 
 HEAD:
-- commit: (A5 commit — check 강화 + AI task fixtures)
+- commit: 8e7ba3e + A6 docs commit (AI-Only Atlas Reset A0~A6 완료)
 - branch: main
 - clean: true (untracked order docs only — never commit them)
 
 SYSTEM_STATUS:
-- tests: full suite PASS at 7fce157 (1001, pre-A3); after A5 targeted 70 PASS
-  (atlas/scanner/context/fixtures/cli/characterization), full suite rerun = A6
-- architecture_check: PASS + WARN 채널 (literal-only artifacts, route 미선언 CLI,
+- tests: full suite PASS at A6 (1027); architecture-build 연속 2회 byte-identical;
+  dashboard smoke(/, /products 200) PASS
+- architecture_check: PASS + WARN 채널 (literal-only artifacts 집계, route 미선언 CLI,
   AI_INDEX component query primary 초과 — 모두 §17.2 비차단)
 - known_flaky: []
 
@@ -33,11 +33,10 @@ RECENT_SEMANTIC_CHANGES:
   recall 100% 테스트; atlas↔context import cycle 해소(공유 상수·load_manifest를 scanner로,
   context는 builder 미import — live fingerprint는 handler가 주입)
 
+- A6 done: full pytest PASS, build×2 byte-identical, dashboard smoke, tracked md=root 4,
+  HTML/serve/summary 부재 — AI-Only Atlas & Documentation Reset 마감
+
 OPEN_BLOCKERS:
-- id: ai_only_atlas_A6
-  state: pending (A0~A5 done)
-  evidence: runs/_ai_only_atlas/state.json (detailed per-stage plan) + order doc at repo root
-  next_action: A6 final regression (build×2, full pytest, dashboard/viewer smoke, md 정책) + §25 보고
 - id: hold_54
   state: waiting_human
   evidence: runs/factory_20260710_021635/review/phase2d1/loop_20260710_141947/hold_for_human_packet.json
@@ -48,8 +47,9 @@ OPEN_BLOCKERS:
   next_action: human final review/release decision; rerun loop if a fresh record is wanted
 
 NEXT_ACTIONS:
-1. A6: build×2 byte-identical, full pytest, runtime UI regression(dashboard smoke),
-   tracked md 정책, root md 4, 최종 보고 (응답으로만 — 새 md 보고 금지)
+1. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조) — AI 측 남은 자동 작업 없음
+2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+   escalation 설계, literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
 - do not commit the two untracked root order docs
