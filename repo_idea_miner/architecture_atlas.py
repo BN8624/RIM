@@ -438,8 +438,24 @@ def _last_commit_files(root: Path) -> set[str]:
         return set()
 
 
-README_REQUIRED_SECTIONS = ("## READ ORDER", "## REPOSITORY RULES", "## CONTEXT COMMAND",
-                            "## VALIDATION COMMANDS", "## DO NOT")
+README_REQUIRED_SECTIONS = ("## REQUIRED READ ORDER", "## REPOSITORY RULES",
+                            "## CONTEXT COMMAND", "## VALIDATION COMMANDS",
+                            "## REQUIRED BEFORE EDIT", "## REQUIRED AFTER EDIT", "## DO NOT")
+# Atlas Usage Contract (usage-contract 주문서 §7) — 문서에서 지워지면 check가 잡는 stable 토큰/key.
+README_CONTRACT_TOKENS = ("REENTRY.md", "AI_INDEX.md", "PROJECT_CANON.md",
+                          "architecture-context", "read_first", "--changed", "--impact",
+                          "architecture-check", "Atlas does not finalize edit scope")
+CANON12_REQUIRED_KEYS = ("ATLAS_AUTHORITY:", "EVIDENCE_PRIORITY:", "IMPACT_LIMIT:",
+                         "REQUIRED_WORKFLOW:", "VALIDATED_LIMIT:", "ATLAS_MAINTENANCE:",
+                         "DO_NOT:")
+# Atlas를 최종 정답기/완전한 runtime 분석기로 표현하는 단정 표현만 금지 (부정문과 겹치지 않게 선정)
+FORBIDDEN_ATLAS_ORACLE_TOKENS = (
+    "Atlas가 최종 수정 범위를 확정한다",
+    "Atlas determines the final edit scope",
+    "Atlas finalizes the edit scope",
+    "완전한 runtime 영향 분석기다",
+    "complete runtime analysis is guaranteed",
+)
 REENTRY_REQUIRED_SECTIONS = ("HEAD_SOURCE:", "SYSTEM_STATUS:", "RECENT_SEMANTIC_CHANGES:",
                              "OPEN_BLOCKERS:", "NEXT_ACTIONS:", "DO_NOT_REPEAT:", "VERIFY:")
 REENTRY_REQUIRED_COMMANDS = ("git rev-parse HEAD", "git status --porcelain=v1")
@@ -449,6 +465,36 @@ FORBIDDEN_HUMAN_ATLAS_TOKENS = ("architecture/index.html", "architecture-serve",
                                 "architecture-summary", "모바일 Atlas")
 DOC_SIZE_LIMITS = {"README.md": 4096, "AI_INDEX.md": 6144,
                    "PROJECT_CANON.md": 20480, "REENTRY.md": 8192}
+
+
+def usage_contract_problems(readme: str, canon: str, context_options: set[str],
+                            known_cmds: set[str]) -> list[str]:
+    """Atlas Usage Contract 검사 (usage-contract 주문서 §7) — 순수 함수.
+    README 계약 토큰·CLI 실재, CANON-12 stable key 비어있지 않음, 권한 과장 표현 금지,
+    문서가 요구하는 --changed/--impact의 parser 실재를 결정론적으로 검사한다."""
+    problems: list[str] = []
+    for m in re.finditer(r"python -m repo_idea_miner\s+([a-z][a-z0-9-]*)", readme):
+        if m.group(1) not in known_cmds:
+            problems.append(f"README가 없는 CLI를 안내: {m.group(1)}")
+    for tok in README_CONTRACT_TOKENS:
+        if tok not in readme:
+            problems.append(f"README Atlas 사용 계약 토큰 누락: {tok}")
+    sec_m = re.search(r"^## CANON-12 .*?(?=^## CANON-|\Z)", canon, re.M | re.S)
+    if not sec_m:
+        problems.append("PROJECT_CANON에 CANON-12 섹션 없음")
+    else:
+        sec = sec_m.group(0)
+        for key in CANON12_REQUIRED_KEYS:
+            if not re.search(rf"^{re.escape(key)}[ \t]*\n- ", sec, re.M):
+                problems.append(f"CANON-12 Atlas 계약 key 누락 또는 빈 섹션: {key}")
+    for name, text in (("README", readme), ("PROJECT_CANON", canon)):
+        for tok in FORBIDDEN_ATLAS_ORACLE_TOKENS:
+            if tok in text:
+                problems.append(f"{name}: Atlas 권한 과장 표현 금지 — {tok}")
+    for opt in ("--changed", "--impact"):
+        if opt not in context_options:
+            problems.append(f"architecture-context parser에 {opt} 없음 — 문서 계약과 불일치")
+    return problems
 
 
 def run_architecture_check(root: Path, secrets: list[str] | None = None,
@@ -681,11 +727,13 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None,
             if t not in atlas["test_paths"]:
                 problems.append(f"module {m['module']}: test {t}가 test_paths에 없음 (추정 stem path 금지)")
 
-    # 19. README의 주요 CLI 실재
+    # 19+30. README·CANON-12 Atlas 사용 계약 (usage-contract 주문서 §7): CLI 실재,
+    #     계약 토큰/stable key, 권한 과장 표현 금지, --changed/--impact parser 실재
     readme = (root / "README.md").read_text(encoding="utf-8")
-    for m in re.finditer(r"python -m repo_idea_miner\s+([a-z][a-z0-9-]*)", readme):
-        if m.group(1) not in known_cmds:
-            problems.append(f"README가 없는 CLI를 안내: {m.group(1)}")
+    canon_text = (root / "PROJECT_CANON.md").read_text(encoding="utf-8")
+    ctx_options = {o for c in atlas["cli"]
+                   if c["command"] == "architecture-context" for o in c["options"]}
+    problems.extend(usage_contract_problems(readme, canon_text, ctx_options, known_cmds))
 
     # 20. 삭제된 과거 문서로 가는 실제 md 링크 잔존
     for name in ROOT_MD_WHITELIST:

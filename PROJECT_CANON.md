@@ -395,16 +395,62 @@ FORBIDDEN:
 COMPATIBILITY:
 - structural fingerprint ignores function-internal changes; stale fingerprint = check FAIL
 
+ATLAS_AUTHORITY:
+- Atlas is an initial structure reference map — it narrows the candidate files/symbols/
+  routes/contracts/invariants/tests to read first; it is not an oracle that finalizes edit scope
+- context membership alone does not make a file an edit target
+- files absent from the context may still be required — confirm via actual code relations
+  (call sites, contracts) and read them
+- read the actual `read_first` code before deciding the final work scope
+
+EVIDENCE_PRIORITY:
+- order: (1) actual current code (2) fresh execution/probe/validator results
+  (3) schemas and contracts (4) related tests (5) Atlas context (6) past reports
+- when Atlas conflicts with actual code or fresh observation, do not prefer Atlas:
+  verify the code → decide whether atlas/manifest is stale → apply the structural update
+  → `architecture-build` / `architecture-check`
+
+IMPACT_LIMIT:
+- `direct_static_impact` means direct imports, routes, artifacts, validators, contracts,
+  invariants, and test links only
+- it is not a full runtime analysis: dynamic dispatch, registry runtime state,
+  filesystem/DB state, and subprocess behavior need actual code and execution checks
+
+REQUIRED_WORKFLOW:
+- before edit: REENTRY state → AI_INDEX selector → selected CANON sections →
+  `architecture-context` initial scope → read actual `read_first` symbols →
+  compare `--impact` with call sites → check contracts/invariants/tests → decide final scope
+- after edit: targeted tests → `architecture-context --changed --impact` →
+  `architecture-check` → structural change: `architecture-build` + related CANON section
+  in the same commit → state change: REENTRY
+
+VALIDATED_LIMIT:
+- A7 blind validation: required structure information was present in the context for 5/5 tasks
+- blind AI final item selection was complete in 4/5 tasks
+- Atlas is a reliable initial structure reference; it does not replace reading the actual
+  code and making the final judgment
+
+ATLAS_MAINTENANCE:
+- fingerprint-neutral edits (function-internal changes) may not require a rebuild
+- module / public canonical symbol / CLI / route / validator / artifact relation change
+  → run `architecture-build`
+- canonical route / contract / invariant / ownership boundary change → update
+  `manifest.toml` and the related CANON section together
+- do not accumulate work history, completion reports, or one-off orders in Atlas/CANON —
+  keep current structural facts only; history lives in git
+
+DO_NOT:
+- do not edit from Atlas output alone; do not read or modify every file in the context
+- do not deny a real dependency because Atlas lacks it
+- do not read `direct_static_impact` as a complete runtime call graph
+- do not add unrelated primary files to raise recall; no task hardcode to pass a task
+
 NOTES:
 - outputs: `architecture/manifest.toml` (human-declared meaning: routes/contracts/invariants)
   + generated `atlas.json` (schema V2: repository/symbols/routes/artifacts role+provenance/
   contracts/invariants/document_routes) + `atlas.schema.json`
 - artifact roles: ambiguous string literals stay LITERAL_REFERENCE — promotion to
   PRODUCES/CONSUMES requires AST_IO_CALL or MANIFEST provenance
-- AI protocol: read order README→REENTRY→AI_INDEX→selected CANON→context; before edit:
-  `--impact`/invariants/do_not_modify/tests_to_run; after edit: targeted tests →
-  `--changed --impact` → `architecture-check` → rebuild atlas on structural change,
-  update CANON on semantic change, update REENTRY on state change
 - document canon: current facts=atlas.json / meaning=PROJECT_CANON / routing=AI_INDEX /
   state=REENTRY / bootstrap=README / history=git log
 - workspace change canon: `git status --porcelain -uall` output is the single source —

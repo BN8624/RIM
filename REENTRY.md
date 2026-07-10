@@ -61,6 +61,11 @@ RECENT_SEMANTIC_CHANGES:
   test-selection), task hardcode 수정 금지 원칙에 따라 미수정. blind fixture 5종 승격
   (tests/fixtures/ai_tasks/blind_*, 총 13종) — ctx 수준 recall은 5종 전부 회귀 고정 green.
 
+- Atlas Usage Contract done (usage-contract 주문서): README REQUIRED READ ORDER/BEFORE EDIT/
+  AFTER EDIT 재편 + CANON-12에 ATLAS_AUTHORITY~DO_NOT 7 stable key(권한·한계·workflow·
+  유지 계약) + check 19+30 usage_contract_problems(계약 토큰/key/과장 표현/CLI·옵션 정합)
+  + 계약 회귀 테스트 5종. AI 작업 시작 절차 정본은 README와 CANON-12.
+
 OPEN_BLOCKERS:
 - id: hold_54
   state: waiting_human

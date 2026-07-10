@@ -167,6 +167,67 @@ def test_reentry_head_source_policy():
     assert not _REENTRY_STATIC_HEAD_RE.search("- evidence: run at commit 98cd9ad\n")
 
 
+def _usage_contract_inputs():
+    from repo_idea_miner.architecture_atlas import usage_contract_problems
+
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    canon = (REPO_ROOT / "PROJECT_CANON.md").read_text(encoding="utf-8")
+    a = _atlas()
+    opts = {o for c in a["cli"] if c["command"] == "architecture-context"
+            for o in c["options"]}
+    cmds = {c["command"] for c in a["cli"]}
+    return usage_contract_problems, readme, canon, opts, cmds
+
+
+def test_atlas_usage_contract_current_documents_pass():
+    """usage-contract §8.1-1/9/10: 실제 README·CANON-12가 사용 계약을 만족하고,
+    required workflow의 CLI·옵션이 실제 parser와 일치한다."""
+    check, readme, canon, opts, cmds = _usage_contract_inputs()
+    assert check(readme, canon, opts, cmds) == []
+
+
+def test_usage_contract_fails_on_removed_readme_procedure():
+    """usage-contract §8.1-2/3: read_first 절차·--changed --impact 절차 삭제 시 FAIL."""
+    check, readme, canon, opts, cmds = _usage_contract_inputs()
+    no_read_first = readme.replace("read_first", "primary")
+    assert any("read_first" in p for p in check(no_read_first, canon, opts, cmds))
+    no_changed = readme.replace("--changed", "--diff")
+    assert any("--changed" in p for p in check(no_changed, canon, opts, cmds))
+
+
+def test_usage_contract_fails_on_oracle_wording():
+    """usage-contract §8.1-4: Atlas를 최종 범위 결정기로 표현하면 FAIL (README·CANON 모두)."""
+    check, readme, canon, opts, cmds = _usage_contract_inputs()
+    bad_readme = readme + "\nAtlas determines the final edit scope.\n"
+    assert any("권한 과장" in p for p in check(bad_readme, canon, opts, cmds))
+    bad_canon = canon + "\nAtlas가 최종 수정 범위를 확정한다.\n"
+    assert any("권한 과장" in p for p in check(readme, bad_canon, opts, cmds))
+
+
+def test_usage_contract_fails_on_removed_canon_keys():
+    """usage-contract §8.1-5/6/7: ATLAS_AUTHORITY/IMPACT_LIMIT/VALIDATED_LIMIT 등
+    stable key 삭제·빈 섹션 시 FAIL."""
+    check, readme, canon, opts, cmds = _usage_contract_inputs()
+    from repo_idea_miner.architecture_atlas import CANON12_REQUIRED_KEYS
+
+    for key in CANON12_REQUIRED_KEYS:
+        removed = canon.replace(key, "X_" + key)
+        assert any(key in p for p in check(readme, removed, opts, cmds)), key
+    # 빈 섹션(뒤따르는 '- ' 항목 없음)도 실패
+    emptied = canon.replace("ATLAS_AUTHORITY:\n- ", "ATLAS_AUTHORITY:\n\n- x ")
+    assert any("ATLAS_AUTHORITY:" in p for p in check(readme, emptied, opts, cmds))
+
+
+def test_usage_contract_fails_on_unknown_cli_or_missing_option():
+    """usage-contract §8.1-8 + §7.3: 없는 CLI 안내·문서가 요구하는 옵션의 parser 부재 시 FAIL."""
+    check, readme, canon, opts, cmds = _usage_contract_inputs()
+    ghost = readme + "\npython -m repo_idea_miner architecture-teleport\n"
+    assert any("architecture-teleport" in p for p in check(ghost, canon, opts, cmds))
+    problems = check(readme, canon, {"--route"}, cmds)
+    assert any("--changed" in p for p in problems)
+    assert any("--impact" in p for p in problems)
+
+
 def test_canon_index_ids_match():
     canon, index = _canon_ids(REPO_ROOT)
     assert canon == index

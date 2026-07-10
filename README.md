@@ -4,11 +4,12 @@ Machine-first repository map for AI coding agents (Claude/GPT).
 RIM = Repo Idea Miner + Challenge Mode + Product Factory. Runtime UI(dashboard/viewer)는
 제품 기능이며 이 문서의 대상이 아니다.
 
-## READ ORDER
-1. `REENTRY.md` — current state packet
-2. `AI_INDEX.md` — deterministic routing table
+## REQUIRED READ ORDER
+1. `REENTRY.md` — current state and open blockers
+2. `AI_INDEX.md` — pick the CANON-ID + Atlas selector for the task
 3. Selected `PROJECT_CANON.md` sections (never the whole file)
-4. architecture-context query — Atlas slice (see CONTEXT COMMAND)
+4. architecture-context query — initial code scope (see CONTEXT COMMAND)
+5. read the actual `read_first` files/symbols, then decide the final edit scope
 
 ## REPOSITORY RULES
 - main branch only. commit per semantic unit, push immediately. no force push/rebase.
@@ -42,10 +43,16 @@ python -m repo_idea_miner factory-validate <run_dir>  # product run artifacts
 python -m repo_idea_miner validate <run_dir>          # miner run artifacts
 ```
 
-## AI PROTOCOL (short form — full rules in CANON-12)
-before edit: `architecture-context --impact` → invariants → do_not_modify → tests_to_run
-after edit: targeted tests → `architecture-context --changed --impact` → `architecture-check`
-→ structural change: `architecture-build` / semantic change: PROJECT_CANON / state change: REENTRY
+## REQUIRED BEFORE EDIT (full contract in CANON-12)
+- check context `invariants` / `contracts` / `do_not_modify` / `tests_to_run`;
+  use `--impact` for the direct static impact when needed
+- Atlas does not finalize edit scope — context membership is a reading hint, not an edit list
+- files absent from the context may still be required: confirm via actual call sites/contracts
+
+## REQUIRED AFTER EDIT
+1. targeted tests → 2. `architecture-context --changed --impact` → 3. `architecture-check`
+4. structural change: `architecture-build` (same commit) / semantic·contract·invariant
+   change: related PROJECT_CANON section / state change: `REENTRY.md`
 
 ## DO NOT
 - commit `.env`, `challenge.db`, `runs/` contents, raw prompts/logs

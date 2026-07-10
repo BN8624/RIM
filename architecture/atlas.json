@@ -7981,7 +7981,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 971,
+  "test_count": 976,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -8187,7 +8187,7 @@
      ]
     }
    ],
-   "loc": 887,
+   "loc": 935,
    "module": "repo_idea_miner.architecture_atlas",
    "path": "repo_idea_miner/architecture_atlas.py",
    "private_symbols": [
@@ -8216,8 +8216,11 @@
     "ARTIFACT_PROVENANCES",
     "ARTIFACT_ROLES",
     "ATLAS_SCHEMA",
+    "CANON12_REQUIRED_KEYS",
     "DOC_SIZE_LIMITS",
+    "FORBIDDEN_ATLAS_ORACLE_TOKENS",
     "FORBIDDEN_HUMAN_ATLAS_TOKENS",
+    "README_CONTRACT_TOKENS",
     "README_REQUIRED_SECTIONS",
     "REENTRY_REQUIRED_COMMANDS",
     "REENTRY_REQUIRED_SECTIONS",
@@ -8226,6 +8229,7 @@
     "compute_fingerprint",
     "module_component_map",
     "run_architecture_check",
+    "usage_contract_problems",
     "write_atlas"
    ],
    "tests": [
@@ -14413,9 +14417,9 @@
   }
  ],
  "repository": {
-  "head": "d48eeb9c7a6ff149038ba72f0d28458e17e31be7",
-  "structural_diff": false,
-  "structural_fingerprint": "94255da00cb5e10244b93da8332e575ec0318f4b03b113fb93df44987041dd88",
+  "head": "6004d054615fc0791440dbc8252a2d81354fe680",
+  "structural_diff": true,
+  "structural_fingerprint": "80605c68a312a359059409d95bc7af584c008043a062936b3cee59f82beb1536",
   "structure_snapshot": "845ec77d9279f203662b1daa9486bea74aa7e982344d2f924f18da229ee9906d"
  },
  "routes": [
@@ -14629,7 +14633,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 793,
+   "end_line": 841,
    "kind": "function",
    "path": "repo_idea_miner/architecture_atlas.py",
    "related_tests": [
@@ -14640,7 +14644,7 @@
     "orchestrator"
    ],
    "signature": "def run_architecture_check(root: Path, secrets: list[str] | None=None, warnings: list[str] | None=None) -> list[str]",
-   "start_line": 454,
+   "start_line": 500,
    "symbol_id": "repo_idea_miner.architecture_atlas.run_architecture_check"
   },
   {
