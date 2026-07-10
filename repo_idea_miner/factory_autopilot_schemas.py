@@ -258,6 +258,19 @@ class ProductStageLabel(BaseModel):
     missing_loop_parts: list[str] = Field(default_factory=list)
 
 
+class RequirementCoverageItem(BaseModel):
+    """원 주문서 requirement 1건의 구현 여부 판정 (Phase 2D-1 §8)."""
+    requirement: str = Field(min_length=1)
+    status: str  # implemented | missing | respected | violated | unknown
+    evidence_refs: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+
+class RequirementCoverageJudgment(BaseModel):
+    """Requirement Coverage desk 출력 — implemented/respected는 evidence_refs 필수 (날조 차단)."""
+    items: list[RequirementCoverageItem] = Field(default_factory=list)
+
+
 class GapItem(BaseModel):
     type: str
     severity: str
