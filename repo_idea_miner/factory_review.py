@@ -1,7 +1,6 @@
 # Phase 2C-0: #47 green 산출물을 오염 없이 smoke review하고 evidence 기반으로 제품성을 추천 판정하는 모듈.
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shlex
@@ -11,6 +10,20 @@ import sys
 import tempfile
 from pathlib import Path
 
+from repo_idea_miner.factory_product_evidence import (
+    challenge_id_from_run,
+    compare_protected_hashes,
+    compute_protected_hashes,
+    find_product_viewer,
+    first_replay_file,
+    load_json,
+    read_gate_context,
+    sha256_file,
+    viewer_field_mismatches,
+    viewer_reads_replay_evidence,
+    write_json,
+    write_text,
+)
 from repo_idea_miner.factory_run_layout import resolve_run_target
 
 # ---------------------------------------------------------------- 상수 (§3, §8)
@@ -42,16 +55,6 @@ FITNESS_GRADES = (
     "ARCHIVE",
 )
 
-# no-code-change guard 보호 대상 artifact logic (§3.4)
-_PROTECTED_CONTRACTS = (
-    "core_contract.json",
-    "state_contract.json",
-    "action_contract.json",
-    "runner_contract.json",
-)
-_PROTECTED_DIR_PREFIXES = ("src/", "product/", "golden/", "fixtures/")
-_PROTECTED_ROOTS = ("workspace", "final_artifact")
-
 # runner 출력 계약 필드 — smoke가 replay/viewer 대응을 볼 때 기준으로 삼는다 (§6.2)
 _CORE_OUTPUT_FIELDS = ("ok", "final_state", "events", "summary", "errors")
 
@@ -64,105 +67,6 @@ _CRITICAL_CRITERIA = (
 )
 
 
-# ---------------------------------------------------------------- 공통 IO
-
-def _load_json(path: Path) -> dict | None:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def _write_json(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-# ---------------------------------------------------------------- No-Code-Change hash guard (§3.4)
-
-def compute_protected_hashes(run_dir: Path) -> dict[str, str]:
-    """보호 대상 artifact logic(src/product/golden/fixtures/contract/oracle)의 sha256 map을 만든다.
-
-    review 산출물/smoke temp/logs/__pycache__는 대상에서 제외한다(§3.4).
-    """
-    run_dir = Path(run_dir)
-    out: dict[str, str] = {}
-    for root_name in _PROTECTED_ROOTS:
-        base = run_dir / root_name
-        if not base.is_dir():
-            continue
-        for rel in _PROTECTED_CONTRACTS:
-            p = base / rel
-            if p.is_file():
-                out[f"{root_name}/{rel}"] = _sha256(p)
-        for prefix in _PROTECTED_DIR_PREFIXES:
-            d = base / prefix.rstrip("/")
-            if not d.is_dir():
-                continue
-            for p in sorted(d.rglob("*")):
-                if not p.is_file() or "__pycache__" in p.parts:
-                    continue
-                out[f"{root_name}/{p.relative_to(base).as_posix()}"] = _sha256(p)
-    orr = run_dir / "oracle_risk_report.json"
-    if orr.is_file():
-        out["oracle_risk_report.json"] = _sha256(orr)
-    return out
-
-
-def compare_protected_hashes(before: dict[str, str], after: dict[str, str]) -> dict:
-    changed = sorted(k for k in before if k in after and before[k] != after[k])
-    removed = sorted(k for k in before if k not in after)
-    added = sorted(k for k in after if k not in before)
-    ok = not (changed or removed or added)
-    return {
-        "status": "PASS" if ok else "FAIL",
-        "files_checked": len(before),
-        "changed": changed,
-        "added": added,
-        "removed": removed,
-        "note": "Phase 2C-0는 no-code-change review — 보호 대상 artifact가 바뀌면 FAIL (§3.4)",
-    }
-
-
-# ---------------------------------------------------------------- 대상 식별 / 사전 조건 (§5)
-
-def read_gate_context(run_dir: Path) -> dict:
-    """green_base / gate 재검증 / phase2b1b 요약에서 하네스 상태를 읽는다 (§5)."""
-    gb = _load_json(run_dir / "green_base.json") or {}
-    p2b1b = _load_json(run_dir / "phase2b1b_dashboard_summary.json") or {}
-    gr = _load_json(run_dir / "gate_rerun_after_anti_hardcode_patch.json") or {}
-    gates = gr.get("gates") or p2b1b.get("gates") or {}
-    green_base = (gb.get("base_type") == "green_base") or bool(p2b1b.get("promoted_to_green_base"))
-    verdict = gb.get("verdict") or p2b1b.get("verdict")
-    passed = sum(1 for v in gates.values() if v)
-    return {
-        "green_base": bool(green_base),
-        "green_base_path": gb.get("green_base_path"),
-        "verdict": verdict,
-        "gates": gates,
-        "gates_passed": passed,
-        "gates_total": len(gates),
-        "gate_fail": bool(gates) and not all(gates.values()),
-        "anti_hardcode": bool(gates.get("anti_hardcode")),
-        "summary_source": gr.get("summary_source") or p2b1b.get("summary_source"),
-        "summary_hardcode_risk": gr.get("summary_hardcode_risk") or p2b1b.get("summary_hardcode_risk"),
-        "next_goal": gb.get("next_goal"),
-    }
-
-
 # ---------------------------------------------------------------- Artifact Smoke Review (§6)
 
 def _parse_runner_command(cmd: str) -> list[str]:
@@ -171,54 +75,6 @@ def _parse_runner_command(cmd: str) -> list[str]:
     if argv and argv[0].lower() in ("python", "python3", "py"):
         argv[0] = sys.executable
     return argv
-
-
-def _find_product_viewer(final_dir: Path) -> Path | None:
-    """product/ 아래 첫 viewer html을 찾는다 (index.html 우선)."""
-    product = final_dir / "product"
-    if not product.is_dir():
-        return None
-    htmls = sorted(product.rglob("*.html"))
-    for p in htmls:
-        if p.name == "index.html":
-            return p
-    return htmls[0] if htmls else None
-
-
-def _first_replay_file(final_dir: Path) -> tuple[str | None, dict | None]:
-    idx = _load_json(final_dir / "replay" / "index.json") or {}
-    replays = idx.get("replays") or []
-    if replays and replays[0].get("file"):
-        f = replays[0]["file"]
-        return f, _load_json(final_dir / "replay" / f)
-    # index가 없으면 replay dir에서 직접 첫 파일
-    rdir = final_dir / "replay"
-    if rdir.is_dir():
-        for p in sorted(rdir.glob("replay_*.json")):
-            return p.name, _load_json(p)
-    return None, None
-
-
-def _viewer_reads_replay_evidence(viewer_src: str, replay: dict | None) -> list[str]:
-    """viewer가 replay를 읽는다는 근거를 모은다. 단순 fetch 문자열 하나만으로는 부족 (§6.2)."""
-    ev: list[str] = []
-    if re.search(r"replay/index\.json", viewer_src):
-        ev.append("viewer가 replay/index.json을 fetch함 (source)")
-    if re.search(r"replay/[`'\"]?\s*\+|replay/\$\{|replay/\$\{?file", viewer_src) or \
-            re.search(r"replay/`?\$\{file\}`?", viewer_src):
-        ev.append("viewer가 replay/<scenario> 파일을 fetch함 (source)")
-    if replay:
-        # replay 실제 필드를 viewer가 참조하는지 (data.<field> / 하위 status 등)
-        for field in ("summary", "events", "final_state"):
-            if field in replay and re.search(rf"\bdata\.{field}\b", viewer_src):
-                sval = replay.get(field)
-                shown = sval if isinstance(sval, str) else f"<{type(sval).__name__}>"
-                ev.append(f"smoke가 replay 필드 '{field}'(={shown})를 읽고 viewer가 data.{field}를 표시함")
-        nodes = ((replay.get("final_state") or {}).get("nodes")) or {}
-        if nodes and re.search(r"\bnode\.status\b", viewer_src):
-            statuses = sorted({n.get("status") for n in nodes.values() if isinstance(n, dict)})
-            ev.append(f"replay 노드 status({','.join(s for s in statuses if s)})를 viewer가 node.status로 표시함")
-    return ev
 
 
 def _consistency_fields(runner_out: dict | None, replay: dict | None, viewer_src: str) -> list[str]:
@@ -246,37 +102,10 @@ def _consistency_fields(runner_out: dict | None, replay: dict | None, viewer_src
     return fields
 
 
-def _viewer_field_mismatches(replay: dict | None, viewer_src: str) -> list[str]:
-    """viewer가 참조하지만 replay 스키마에 없는 필드(렌더링 결함)를 찾는다 (제품성 감점 근거)."""
-    out: list[str] = []
-    if not replay:
-        return out
-    fs = replay.get("final_state") or {}
-    nodes = fs.get("nodes") or {}
-    edges = fs.get("edges") or []
-    events = replay.get("events") or []
-    sample_node = next(iter(nodes.values()), {}) if isinstance(nodes, dict) else {}
-    sample_edge = edges[0] if edges else {}
-    sample_event = events[0] if events else {}
-    # edge from/to
-    if re.search(r"edge\.from|edge\.to", viewer_src) and sample_edge and \
-            ("from" not in sample_edge or "to" not in sample_edge):
-        out.append(f"viewer는 edge.from/edge.to를 읽지만 replay edge 키는 {sorted(sample_edge)} → 엣지 미렌더링")
-    # event type/message
-    if re.search(r"ev\.type|ev\.message|\.type\b", viewer_src) and sample_event and \
-            ("type" not in sample_event or "message" not in sample_event):
-        out.append(f"viewer는 event.type/message를 읽지만 replay event 키는 {sorted(sample_event)} → 이벤트 로그 undefined")
-    # node position x/y
-    if re.search(r"node\.x|node\.y", viewer_src) and sample_node and \
-            ("x" not in sample_node or "y" not in sample_node):
-        out.append("viewer는 node.x/node.y로 좌표 배치하지만 replay 노드에 x/y 없음 → 노드 겹침 배치")
-    return out
-
-
 def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict:
     """원본을 오염시키지 않고 temp copy에서 runner를 실행하고 viewer/replay 대응을 정적 확인한다 (§6)."""
     final_dir = run_dir / "final_artifact"
-    runner_contract = _load_json(final_dir / "runner_contract.json") or {}
+    runner_contract = load_json(final_dir / "runner_contract.json") or {}
     runner_command = runner_contract.get("runner_command") or ""
     result: dict = {
         "runner_executable": False,
@@ -305,7 +134,7 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
         result["critical_failures"].append("final_artifact/ 없음")
         return result
 
-    idx = _load_json(final_dir / "replay" / "index.json") or {}
+    idx = load_json(final_dir / "replay" / "index.json") or {}
     result["replay_count"] = len(idx.get("replays") or [])
 
     # (A) runner를 temp copy에서 실행 — 원본 미변경 (§4.1)
@@ -332,7 +161,7 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
             result["runner_executable"] = ok
             result["runner_command_verified"] = ok
             ev_path = review_dir / "smoke" / "runner_scenario_smoke.json"
-            _write_json(ev_path, {
+            write_json(ev_path, {
                 "command": runner_command,
                 "argv": [str(a) for a in argv],
                 "cwd": "final_artifact (temp copy)",
@@ -363,8 +192,8 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
         result["core_node_types"] = sorted(set(re.findall(r'==\s*["\']([A-Z][A-Z0-9_]+)["\']', engine_src)))
 
     # (C) product viewer + replay 정적 대응 (§6.2, §6.3)
-    viewer = _find_product_viewer(final_dir)
-    _replay_file, replay = _first_replay_file(final_dir)
+    viewer = find_product_viewer(final_dir)
+    _replay_file, replay = first_replay_file(final_dir)
     if viewer is None:
         result["critical_failures"].append("product viewer 없음")
     else:
@@ -376,7 +205,7 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
             r"add[_ ]?node|create[_ ]?node|add[_ ]?edge|create[_ ]?edge|new\s+Node|"
             r"contenteditable|<input|drag(start|over|drop)?|draggable|dropNode",
             viewer_src, re.I))
-        read_ev = _viewer_reads_replay_evidence(viewer_src, replay)
+        read_ev = viewer_reads_replay_evidence(viewer_src, replay)
         result["product_viewer_reads_replay_evidence"] = read_ev
         result["product_viewer_reads_replay"] = len(read_ev) >= 2  # 단순 fetch 하나로는 불가 (§6.2)
         if not result["product_viewer_reads_replay"]:
@@ -393,7 +222,7 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
         else:
             result["runner_viewer_consistent"] = "unknown"
             result["unknowns"].append(f"runner↔viewer 일치 필드가 2개 미만: {fields}")
-        result["mismatches"] = _viewer_field_mismatches(replay, viewer_src)
+        result["mismatches"] = viewer_field_mismatches(replay, viewer_src)
 
     # (D) openable paths — 실제 존재하는 것만 (§10)
     for rel in (result.get("product_viewer_path"),
@@ -872,7 +701,7 @@ def run_review_package(
     result["review_dir"] = str(review_dir.as_posix())
 
     gate = read_gate_context(run_dir)
-    result["challenge_id"] = tinfo.get("challenge_id") or _challenge_id_from_run(run_dir)
+    result["challenge_id"] = tinfo.get("challenge_id") or challenge_id_from_run(run_dir)
 
     # ---- No-Code-Change: 보호 대상 hash BEFORE (§3.4)
     hash_before = compute_protected_hashes(run_dir)
@@ -897,14 +726,14 @@ def run_review_package(
     }
 
     # ---- 산출물 기록 (review/phase2c0/) (§8)
-    _write_json(review_dir / "review_no_code_hash_before.json", hash_before)
-    _write_json(review_dir / "review_no_code_hash_after.json", hash_after)
-    _write_json(review_dir / "review_no_code_hash_check.json", hash_check)
+    write_json(review_dir / "review_no_code_hash_before.json", hash_before)
+    write_json(review_dir / "review_no_code_hash_after.json", hash_after)
+    write_json(review_dir / "review_no_code_hash_check.json", hash_check)
 
     smoke_out = {k: v for k, v in smoke.items() if k not in ("core_node_types", "replay_count", "evidence")}
     smoke_out["evidence"] = smoke.get("evidence")
-    _write_json(review_dir / "artifact_smoke_review.json", smoke_out)
-    _write_text(review_dir / "artifact_smoke_review.md", _render_smoke_md(smoke))
+    write_json(review_dir / "artifact_smoke_review.json", smoke_out)
+    write_text(review_dir / "artifact_smoke_review.md", _render_smoke_md(smoke))
 
     fitness_json = {
         "recommended_fitness": rec,
@@ -923,11 +752,11 @@ def run_review_package(
         "next_goal": _next_steps(rec, smoke)[0] if _next_steps(rec, smoke) else None,
         "next_steps": _next_steps(rec, smoke),
     }
-    _write_json(review_dir / "product_fitness_report.json", fitness_json)
-    _write_text(review_dir / "product_fitness_report.md", _render_fitness_md(fitness, gate))
+    write_json(review_dir / "product_fitness_report.json", fitness_json)
+    write_text(review_dir / "product_fitness_report.md", _render_fitness_md(fitness, gate))
 
     demo = _build_demo_manifest(run_dir, ctx)
-    _write_json(review_dir / "demo_manifest.json", demo)
+    write_json(review_dir / "demo_manifest.json", demo)
 
     review_pkg_json = {
         "challenge_id": result["challenge_id"],
@@ -945,11 +774,11 @@ def run_review_package(
         "critical_red_flags": fitness["critical_red_flags"],
         "next_steps": _next_steps(rec, smoke),
     }
-    _write_json(review_dir / "review_package.json", review_pkg_json)
-    _write_text(review_dir / "review_package.md", _render_review_package_md(ctx))
+    write_json(review_dir / "review_package.json", review_pkg_json)
+    write_text(review_dir / "review_package.md", _render_review_package_md(ctx))
 
-    _write_text(review_dir / "human_review_checklist.md", _render_checklist_md(smoke, fitness))
-    _write_text(review_dir / "sixty_second_review_script.md", _render_sixty_second_md(smoke, ctx))
+    write_text(review_dir / "human_review_checklist.md", _render_checklist_md(smoke, fitness))
+    write_text(review_dir / "sixty_second_review_script.md", _render_sixty_second_md(smoke, ctx))
 
     dashboard = {
         "phase": "2c0",
@@ -973,19 +802,10 @@ def run_review_package(
         "gates_total": gate.get("gates_total"),
         "final_decision": "PENDING_USER_REVIEW",
     }
-    _write_json(review_dir / "phase2c0_dashboard_summary.json", dashboard)
+    write_json(review_dir / "phase2c0_dashboard_summary.json", dashboard)
 
     result["ok"] = True
     result["status"] = "REVIEWED"
     result["smoke"] = smoke
     result["fitness"] = fitness
     return result
-
-
-def _challenge_id_from_run(run_dir: Path) -> int | None:
-    for name in ("phase2b1b_dashboard_summary.json", "green_base_promotion_after_anti_hardcode_patch.json",
-                 "dashboard_summary.json"):
-        d = _load_json(run_dir / name) or {}
-        if d.get("challenge_id") is not None:
-            return d["challenge_id"]
-    return None

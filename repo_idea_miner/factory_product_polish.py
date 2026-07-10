@@ -6,16 +6,18 @@ from pathlib import Path
 
 from repo_idea_miner.factory_run_layout import resolve_run_target
 
-from repo_idea_miner.factory_review import (
-    _find_product_viewer,
-    _first_replay_file,
-    _load_json,
-    _sha256,
-    _viewer_field_mismatches,
-    _write_json,
-    _write_text,
-    build_fitness,
+from repo_idea_miner.factory_product_evidence import (
+    find_product_viewer,
+    first_replay_file,
+    load_json,
     read_gate_context,
+    sha256_file,
+    viewer_field_mismatches,
+    write_json,
+    write_text,
+)
+from repo_idea_miner.factory_review import (
+    build_fitness,
     smoke_review,
 )
 
@@ -220,7 +222,7 @@ def resolve_polish_target(run_dir=None, run_id=None, db_conn=None):
 def check_polish_preconditions(run_dir: Path, gate: dict) -> list[str]:
     """§8: Phase 2C-0 fitness=NEEDS_PRODUCT_POLISH + verdict REVIEW_READY + green_base true."""
     problems: list[str] = []
-    fitness = _load_json(run_dir / "review" / "phase2c0" / "product_fitness_report.json")
+    fitness = load_json(run_dir / "review" / "phase2c0" / "product_fitness_report.json")
     if fitness is None:
         problems.append("Phase 2C-0 product_fitness_report.json 없음 (2C-0 review 먼저 필요)")
     elif fitness.get("recommended_fitness") != "NEEDS_PRODUCT_POLISH":
@@ -245,17 +247,17 @@ def compute_polish_protected_hashes(run_dir: Path) -> dict[str, str]:
         for rel in _PROTECTED_CONTRACTS:
             p = base / rel
             if p.is_file():
-                out[f"{root_name}/{rel}"] = _sha256(p)
+                out[f"{root_name}/{rel}"] = sha256_file(p)
         for prefix in _PROTECTED_DIR_PREFIXES:
             d = base / prefix.rstrip("/")
             if not d.is_dir():
                 continue
             for p in sorted(d.rglob("*")):
                 if p.is_file() and "__pycache__" not in p.parts:
-                    out[f"{root_name}/{p.relative_to(base).as_posix()}"] = _sha256(p)
+                    out[f"{root_name}/{p.relative_to(base).as_posix()}"] = sha256_file(p)
     orr = run_dir / "oracle_risk_report.json"
     if orr.is_file():
-        out["oracle_risk_report.json"] = _sha256(orr)
+        out["oracle_risk_report.json"] = sha256_file(orr)
     return out
 
 
@@ -279,17 +281,17 @@ def _product_viewer_paths(run_dir: Path) -> list[Path]:
 
 
 def _product_hashes(paths: list[Path], run_dir: Path) -> dict[str, str]:
-    return {str(p.relative_to(run_dir).as_posix()): _sha256(p) for p in paths if p.is_file()}
+    return {str(p.relative_to(run_dir).as_posix()): sha256_file(p) for p in paths if p.is_file()}
 
 
 # ---------------------------------------------------------------- 진단 / patch
 
 def detect_viewer_mismatches(final_dir: Path) -> tuple[list[str], dict | None, Path | None]:
-    viewer = _find_product_viewer(final_dir)
-    _f, replay = _first_replay_file(final_dir)
+    viewer = find_product_viewer(final_dir)
+    _f, replay = first_replay_file(final_dir)
     if viewer is None:
         return ["product viewer 없음"], replay, None
-    mism = _viewer_field_mismatches(replay, viewer.read_text(encoding="utf-8", errors="replace"))
+    mism = viewer_field_mismatches(replay, viewer.read_text(encoding="utf-8", errors="replace"))
     return mism, replay, viewer
 
 
@@ -313,7 +315,7 @@ def patch_viewer(viewer_path: Path) -> bool:
 
 def analyze_polish(viewer_src: str, replay: dict | None) -> dict:
     """폴리시된 viewer가 edge/event/layout을 제대로 처리하는지 판정한다 (§10.2)."""
-    mism = _viewer_field_mismatches(replay, viewer_src)
+    mism = viewer_field_mismatches(replay, viewer_src)
     edge_left = any("엣지" in m for m in mism)
     event_left = any("이벤트" in m for m in mism)
     pos_left = any("겹침" in m or "좌표" in m for m in mism)
@@ -444,8 +446,8 @@ def run_product_polish(run_dir=None, run_id=None, target=DEFAULT_TARGET, apply=F
         "blocked_reasons": problems,
         "status": "DRY_RUN_BLOCKED" if problems else "DRY_RUN_PASS",
     }
-    _write_json(review_dir / "phase2c1_polish_plan.json", plan)
-    _write_text(review_dir / "phase2c1_polish_plan.md", _plan_md(plan))
+    write_json(review_dir / "phase2c1_polish_plan.json", plan)
+    write_text(review_dir / "phase2c1_polish_plan.md", _plan_md(plan))
 
     if not apply:
         result["ok"] = not problems
@@ -465,7 +467,7 @@ def run_product_polish(run_dir=None, run_id=None, target=DEFAULT_TARGET, apply=F
     # ---- Apply (§8)
     hash_before = compute_polish_protected_hashes(run_dir)
     prod_before = _product_hashes(_product_viewer_paths(run_dir), run_dir)
-    _write_json(review_dir / "phase2c1_hash_before.json", hash_before)
+    write_json(review_dir / "phase2c1_hash_before.json", hash_before)
 
     patched: list[str] = []
     for vp in _product_viewer_paths(run_dir):
@@ -476,13 +478,13 @@ def run_product_polish(run_dir=None, run_id=None, target=DEFAULT_TARGET, apply=F
     hash_after = compute_polish_protected_hashes(run_dir)
     hash_check = _compare(hash_before, hash_after)
     hash_check["note"] = "Phase 2C-1은 product viewer만 수정 — src/golden/fixtures/contract/replay는 불변 (§4)"
-    _write_json(review_dir / "phase2c1_hash_after.json", hash_after)
-    _write_json(review_dir / "phase2c1_hash_check.json", hash_check)
+    write_json(review_dir / "phase2c1_hash_after.json", hash_after)
+    write_json(review_dir / "phase2c1_hash_check.json", hash_check)
     result["hash_status"] = hash_check["status"]
 
     prod_after = _product_hashes(_product_viewer_paths(run_dir), run_dir)
     prod_changed = sorted(k for k in prod_before if prod_before.get(k) != prod_after.get(k))
-    _write_json(review_dir / "phase2c1_diff_summary.json", {
+    write_json(review_dir / "phase2c1_diff_summary.json", {
         "run_dir": f"runs/{run_dir.name}", "challenge_id": result["challenge_id"],
         "patched_files": patched,
         "product_files_changed": prod_changed,
@@ -495,12 +497,12 @@ def run_product_polish(run_dir=None, run_id=None, target=DEFAULT_TARGET, apply=F
     # ---- Smoke review 재실행 (원본 오염 없이 temp copy) + polish 분석
     smoke = smoke_review(run_dir, review_dir, timeout=timeout)
     polished_src = viewer.read_text(encoding="utf-8", errors="replace") if viewer and viewer.is_file() else ""
-    _f2, replay_after = _first_replay_file(final_dir)
+    _f2, replay_after = first_replay_file(final_dir)
     extra = analyze_polish(polished_src, replay_after)
     smoke_out = dict(smoke)
     smoke_out.update(extra)
-    _write_json(review_dir / "artifact_smoke_review_after_polish.json", smoke_out)
-    _write_text(review_dir / "artifact_smoke_review_after_polish.md", _smoke_md(smoke, extra))
+    write_json(review_dir / "artifact_smoke_review_after_polish.json", smoke_out)
+    write_text(review_dir / "artifact_smoke_review_after_polish.md", _smoke_md(smoke, extra))
 
     # ---- Product fitness 재평가
     fitness = build_fitness(smoke, gate)
@@ -521,8 +523,8 @@ def run_product_polish(run_dir=None, run_id=None, target=DEFAULT_TARGET, apply=F
         "node_layout_generated": extra["node_layout_generated"],
         "viewer_schema_mismatches_remaining": extra["viewer_schema_mismatches_remaining"],
     }
-    _write_json(review_dir / "product_fitness_report_after_polish.json", fitness_json)
-    _write_text(review_dir / "product_fitness_report_after_polish.md", _fitness_md(fitness))
+    write_json(review_dir / "product_fitness_report_after_polish.json", fitness_json)
+    write_text(review_dir / "product_fitness_report_after_polish.md", _fitness_md(fitness))
     result["recommended_fitness"] = fitness["recommended_fitness"]
 
     # ---- Report + dashboard summary
@@ -534,10 +536,10 @@ def run_product_polish(run_dir=None, run_id=None, target=DEFAULT_TARGET, apply=F
         "average_score": fitness["average_score"],
         "critical_red_flags": fitness["critical_red_flags"],
     }
-    _write_json(review_dir / "phase2c1_polish_report.json", report)
-    _write_text(review_dir / "phase2c1_polish_report.md", _report_md(report))
+    write_json(review_dir / "phase2c1_polish_report.json", report)
+    write_text(review_dir / "phase2c1_polish_report.md", _report_md(report))
 
-    _write_json(review_dir / "phase2c1_dashboard_summary.json", {
+    write_json(review_dir / "phase2c1_dashboard_summary.json", {
         "phase": "2c1", "challenge_id": result["challenge_id"], "run_dir": f"runs/{run_dir.name}",
         "verdict": gate.get("verdict"), "green_base": gate.get("green_base"),
         "recommended_fitness": fitness["recommended_fitness"],
@@ -574,8 +576,8 @@ def _polish_status_text(extra: dict) -> str:
 def _challenge_id(run_dir: Path) -> int | None:
     for name in ("phase2b1b_dashboard_summary.json",
                  "green_base_promotion_after_anti_hardcode_patch.json"):
-        d = _load_json(run_dir / name) or {}
+        d = load_json(run_dir / name) or {}
         if d.get("challenge_id") is not None:
             return d["challenge_id"]
-    d = _load_json(run_dir / "review" / "phase2c0" / "review_package.json") or {}
+    d = load_json(run_dir / "review" / "phase2c0" / "review_package.json") or {}
     return d.get("challenge_id")

@@ -19,15 +19,17 @@ from repo_idea_miner.factory_product_editor import (
     check_js_syntax,
     extract_supported_node_types,
 )
-from repo_idea_miner.factory_review import (
-    _find_product_viewer,
-    _first_replay_file,
-    _load_json,
-    _sha256,
-    _write_json,
-    _write_text,
-    build_fitness,
+from repo_idea_miner.factory_product_evidence import (
+    find_product_viewer,
+    first_replay_file,
+    load_json,
     read_gate_context,
+    sha256_file,
+    write_json,
+    write_text,
+)
+from repo_idea_miner.factory_review import (
+    build_fitness,
     smoke_review,
 )
 
@@ -417,23 +419,23 @@ def compute_execution_protected_hashes(run_dir: Path) -> dict[str, str]:
         for rel in _PROTECTED_CONTRACTS + _PROTECTED_FILES:
             p = base / rel
             if p.is_file():
-                out[f"{root_name}/{rel}"] = _sha256(p)
+                out[f"{root_name}/{rel}"] = sha256_file(p)
         for prefix in _PROTECTED_DIR_PREFIXES:
             d = base / prefix.rstrip("/")
             if not d.is_dir():
                 continue
             for p in sorted(d.rglob("*")):
                 if p.is_file() and "__pycache__" not in p.parts:
-                    out[f"{root_name}/{p.relative_to(base).as_posix()}"] = _sha256(p)
+                    out[f"{root_name}/{p.relative_to(base).as_posix()}"] = sha256_file(p)
     orr = run_dir / "oracle_risk_report.json"
     if orr.is_file():
-        out["oracle_risk_report.json"] = _sha256(orr)
+        out["oracle_risk_report.json"] = sha256_file(orr)
     for rev in _PROTECTED_REVIEW_DIRS:
         d = run_dir / rev
         if d.is_dir():
             for p in sorted(d.rglob("*")):
                 if p.is_file() and "__pycache__" not in p.parts:
-                    out[f"{rev}/{p.relative_to(d).as_posix()}"] = _sha256(p)
+                    out[f"{rev}/{p.relative_to(d).as_posix()}"] = sha256_file(p)
     return out
 
 
@@ -487,7 +489,7 @@ def _run_runner(artifact_root: Path, scenario: dict, timeout: float) -> tuple[in
 def _hash_dir(base: Path) -> dict[str, str]:
     if not base.is_dir():
         return {}
-    return {p.relative_to(base).as_posix(): _sha256(p)
+    return {p.relative_to(base).as_posix(): sha256_file(p)
             for p in sorted(base.rglob("*")) if p.is_file()}
 
 
@@ -524,7 +526,7 @@ def run_execution_smoke(run_dir: Path, timeout: float = 60.0) -> dict:
 
         # ---- Edit: replay 로드 → 노드/엣지 추가 (2C-2 모델 재사용)
         supported, _src = extract_supported_node_types(tmp_final)
-        _rf, replay = _first_replay_file(tmp_final)
+        _rf, replay = first_replay_file(tmp_final)
         if not supported or not replay:
             rec("load_replay_and_types", False,
                 f"supported={len(supported)} replay={'yes' if replay else 'no'}")
@@ -723,7 +725,7 @@ def _user_decision_ok(run_dir: Path) -> tuple[bool, str | None]:
 def check_execution_preconditions(run_dir: Path, gate: dict) -> list[str]:
     """2C-2 draft editor candidate + REVIEW_READY + green_base + 사용자 승인 + 주입 앵커."""
     problems: list[str] = []
-    editor_report = _load_json(run_dir / "review" / "phase2c2" / "phase2c2_editor_report.json")
+    editor_report = load_json(run_dir / "review" / "phase2c2" / "phase2c2_editor_report.json")
     if editor_report is None:
         problems.append("Phase 2C-2 editor report 없음 (2C-2 먼저 필요)")
     elif not editor_report.get("draft_editor_candidate"):
@@ -735,7 +737,7 @@ def check_execution_preconditions(run_dir: Path, gate: dict) -> list[str]:
     ok, _src = _user_decision_ok(run_dir)
     if not ok:
         problems.append("user_review_decision.md에서 Phase 2C-3 진행 결정을 찾지 못함")
-    viewer = _find_product_viewer(run_dir / "final_artifact")
+    viewer = find_product_viewer(run_dir / "final_artifact")
     if viewer is None:
         problems.append("product viewer 없음")
     elif _EDITOR_END_MARKER not in viewer.read_text(encoding="utf-8", errors="replace"):
@@ -920,8 +922,8 @@ def run_draft_execution(run_dir=None, run_id=None, apply=False, db_conn=None,
         "blocked_reasons": problems,
         "status": "DRY_RUN_BLOCKED" if problems else "DRY_RUN_PASS",
     }
-    _write_json(review_dir / "phase2c3_execution_plan.json", plan)
-    _write_text(review_dir / "phase2c3_execution_plan.md", _plan_md(plan))
+    write_json(review_dir / "phase2c3_execution_plan.json", plan)
+    write_text(review_dir / "phase2c3_execution_plan.md", _plan_md(plan))
 
     if not apply:
         result["ok"] = not problems
@@ -940,7 +942,7 @@ def run_draft_execution(run_dir=None, run_id=None, apply=False, db_conn=None,
 
     # ---- Apply
     hash_before = compute_execution_protected_hashes(run_dir)
-    _write_json(review_dir / "phase2c3_hash_before.json", hash_before)
+    write_json(review_dir / "phase2c3_hash_before.json", hash_before)
 
     patched: list[str] = []
     for path, kind in _adapter_bridge_paths(run_dir):
@@ -957,13 +959,13 @@ def run_draft_execution(run_dir=None, run_id=None, apply=False, db_conn=None,
     hash_check = _compare(hash_before, hash_after)
     hash_check["note"] = ("Phase 2C-3는 product/ + src/adapters/만 수정 — "
                           "golden/fixtures/replay/src/core/runner/contract/phase2c0·2c1·2c2 불변")
-    _write_json(review_dir / "phase2c3_hash_after.json", hash_after)
-    _write_json(review_dir / "phase2c3_hash_check.json", hash_check)
+    write_json(review_dir / "phase2c3_hash_after.json", hash_after)
+    write_json(review_dir / "phase2c3_hash_check.json", hash_check)
     result["hash_status"] = hash_check["status"]
 
     out_of_scope = [f for f in patched
                     if not any(f.startswith(p) for p in ALLOWED_SCOPE_PREFIXES)]
-    _write_json(review_dir / "phase2c3_diff_summary.json", {
+    write_json(review_dir / "phase2c3_diff_summary.json", {
         "run_dir": f"runs/{run_dir.name}", "challenge_id": result["challenge_id"],
         "patched_files": patched,
         "out_of_scope_changes": out_of_scope,
@@ -973,29 +975,29 @@ def run_draft_execution(run_dir=None, run_id=None, apply=False, db_conn=None,
 
     # ---- 정적 검사들
     adapter_check = check_adapter(final_dir)
-    _write_json(review_dir / "adapter_check.json", adapter_check)
+    write_json(review_dir / "adapter_check.json", adapter_check)
 
-    viewer = _find_product_viewer(final_dir)
+    viewer = find_product_viewer(final_dir)
     viewer_html = viewer.read_text(encoding="utf-8", errors="replace") if viewer else ""
     js_syntax = (check_js_syntax(viewer, review_dir / "js_check")
                  if viewer else {"status": "FAIL", "errors": ["viewer 없음"]})
     static_dom = check_static_dom(viewer_html)
     handler = check_handler_binding(viewer_html)
-    _write_json(review_dir / "viewer_js_syntax_check.json", js_syntax)
-    _write_json(review_dir / "viewer_static_dom_check.json", static_dom)
-    _write_json(review_dir / "viewer_handler_binding_check.json", handler)
+    write_json(review_dir / "viewer_js_syntax_check.json", js_syntax)
+    write_json(review_dir / "viewer_static_dom_check.json", static_dom)
+    write_json(review_dir / "viewer_handler_binding_check.json", handler)
     ui_pass = static_dom["status"] == "PASS" and handler["status"] == "PASS"
 
     # ---- viewer smoke (temp copy) + 실행 스모크
     viewer_smoke = smoke_review(run_dir, review_dir, timeout=timeout)
-    _write_json(review_dir / "viewer_smoke_after_execution.json", viewer_smoke)
+    write_json(review_dir / "viewer_smoke_after_execution.json", viewer_smoke)
 
     exec_smoke = run_execution_smoke(run_dir, timeout=timeout)
-    _write_json(review_dir / "execution_smoke.json", exec_smoke)
-    _write_text(review_dir / "execution_smoke.md", _smoke_md(exec_smoke))
+    write_json(review_dir / "execution_smoke.json", exec_smoke)
+    write_text(review_dir / "execution_smoke.md", _smoke_md(exec_smoke))
 
     # ---- fitness 재평가
-    prior_editor = _load_json(run_dir / "review" / "phase2c2" / "phase2c2_editor_report.json")
+    prior_editor = load_json(run_dir / "review" / "phase2c2" / "phase2c2_editor_report.json")
     base_fitness = build_fitness(viewer_smoke, gate)
     fit = finalize_execution_fitness(base_fitness, exec_smoke, ui_pass,
                                      js_syntax["status"], gate, hash_check["status"],
@@ -1020,8 +1022,8 @@ def run_draft_execution(run_dir=None, run_id=None, apply=False, db_conn=None,
         "viewer_mismatches": viewer_smoke.get("mismatches"),
         "runner_viewer_consistent": viewer_smoke.get("runner_viewer_consistent"),
     }
-    _write_json(review_dir / "product_fitness_report_after_execution.json", fitness_json)
-    _write_text(review_dir / "product_fitness_report_after_execution.md",
+    write_json(review_dir / "product_fitness_report_after_execution.json", fitness_json)
+    write_text(review_dir / "product_fitness_report_after_execution.md",
                 _fitness_md(fit, base_fitness))
 
     # ---- report + dashboard summary
@@ -1033,10 +1035,10 @@ def run_draft_execution(run_dir=None, run_id=None, apply=False, db_conn=None,
         "runner_backed_execution_included": fit["runner_backed_execution_included"],
         "product_loop_closed": fit["product_loop_closed"],
     }
-    _write_json(review_dir / "phase2c3_execution_report.json", report)
-    _write_text(review_dir / "phase2c3_execution_report.md", _report_md(report))
+    write_json(review_dir / "phase2c3_execution_report.json", report)
+    write_text(review_dir / "phase2c3_execution_report.md", _report_md(report))
 
-    _write_json(review_dir / "phase2c3_dashboard_summary.json", {
+    write_json(review_dir / "phase2c3_dashboard_summary.json", {
         "phase": "2c3", "challenge_id": result["challenge_id"],
         "run_dir": f"runs/{run_dir.name}",
         "verdict": gate.get("verdict"), "green_base": gate.get("green_base"),
@@ -1075,7 +1077,7 @@ def _challenge_id(run_dir: Path):
                 "review/phase2c1/phase2c1_dashboard_summary.json",
                 "review/phase2c0/review_package.json",
                 "final_artifact/product_summary.json"):
-        d = _load_json(run_dir / rel) or {}
+        d = load_json(run_dir / rel) or {}
         if d.get("challenge_id") is not None:
             return d["challenge_id"]
     return None

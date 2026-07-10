@@ -6,11 +6,13 @@ from pathlib import Path
 import pytest
 
 from repo_idea_miner.cli import main
+from repo_idea_miner.factory_product_evidence import (
+    compute_protected_hashes,
+    read_gate_context,
+)
 from repo_idea_miner.factory_review import (
     REQUIRED_OUTPUTS,
     build_fitness,
-    compute_protected_hashes,
-    read_gate_context,
     run_review_package,
     smoke_review,
 )

@@ -44,14 +44,15 @@ from repo_idea_miner.factory_autopilot_schemas import (
     validate_stage_gap_lane_consistency,
     write_schema_files,
 )
-from repo_idea_miner.factory_review import (
-    _find_product_viewer,
-    _first_replay_file,
-    _viewer_field_mismatches,
-    _viewer_reads_replay_evidence,
+from repo_idea_miner.factory_product_evidence import (
+    challenge_id_from_run,
     compare_protected_hashes,
     compute_protected_hashes,
+    find_product_viewer,
+    first_replay_file,
     read_gate_context,
+    viewer_field_mismatches,
+    viewer_reads_replay_evidence,
 )
 from repo_idea_miner.factory_run_layout import resolve_artifact_root, resolve_run_target
 
@@ -145,8 +146,8 @@ def _latest_fitness(run_dir: Path) -> dict:
 def _static_viewer_facts(run_dir: Path) -> dict:
     """review 산출물이 없어도 artifact에서 직접 확인 가능한 viewer 사실 (fixture/mock loop용)."""
     final_dir = resolve_artifact_root(run_dir)
-    viewer = _find_product_viewer(final_dir) if final_dir.is_dir() else None
-    _f, replay = _first_replay_file(final_dir) if final_dir.is_dir() else (None, None)
+    viewer = find_product_viewer(final_dir) if final_dir.is_dir() else None
+    _f, replay = first_replay_file(final_dir) if final_dir.is_dir() else (None, None)
     idx = _load_json(final_dir / "replay" / "index.json") or {}
     facts = {
         "viewer_exists": viewer is not None,
@@ -161,8 +162,8 @@ def _static_viewer_facts(run_dir: Path) -> dict:
     if viewer is not None:
         src = viewer.read_text(encoding="utf-8", errors="replace")
         facts["viewer_source"] = src
-        facts["viewer_reads_replay"] = len(_viewer_reads_replay_evidence(src, replay)) >= 2
-        facts["mismatches"] = _viewer_field_mismatches(replay, src)
+        facts["viewer_reads_replay"] = len(viewer_reads_replay_evidence(src, replay)) >= 2
+        facts["mismatches"] = viewer_field_mismatches(replay, src)
         facts["authoring_ui"] = bool(_AUTHORING_RE.search(src))
         facts["validation_ui"] = bool(_VALIDATION_UI_RE.search(src))
     return facts
@@ -1087,9 +1088,7 @@ def run_product_loop(
     run_dir = target
     review_dir = run_dir / REVIEW_SUBDIR
     result["review_dir"] = str(review_dir.as_posix())
-    from repo_idea_miner.factory_review import _challenge_id_from_run
-
-    result["challenge_id"] = tinfo.get("challenge_id") or _challenge_id_from_run(run_dir)
+    result["challenge_id"] = tinfo.get("challenge_id") or challenge_id_from_run(run_dir)
     live = mode == "live"
     use_llm = live or llm is not None
 

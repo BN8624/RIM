@@ -27,6 +27,7 @@
   - `factory_continue.py` — continuation delta loop, `factory_queue.py` — queue routing, `factory_frozen.py` — frozen hash guard (CANON-05).
   - `factory_spec_repair.py`(2B-1) / `factory_anti_hardcode.py`(2B-1b) — 단일 run 수리 명령 (CANON-05).
   - `factory_review.py`(2C-0) / `factory_product_polish.py`(2C-1) / `factory_product_editor.py`(2C-2) / `factory_draft_execution.py`(2C-3) — 제품화 체인 (CANON-06).
+  - `factory_product_evidence.py` — 제품 evidence 공통 정본: viewer/replay 탐색(find_product_viewer/first_replay_file), viewer field evidence(viewer_reads_replay_evidence/viewer_field_mismatches), protected hash(compute/compare_protected_hashes), gate context(read_gate_context), 공통 IO(load_json/write_json/write_text/sha256_file). 2C 체인·2D loop가 전부 여기서 import — 다른 모듈이 재구현하지 않는다.
   - `factory_autopilot_schemas/desks.py` + `factory_product_loop.py`(2D-0 judge) — Gemma autopilot (CANON-07).
   - `factory_product_capabilities.py`(capability profile+fresh probe) + `factory_lane_executors.py`(lane registry) + `factory_loop_executor.py`(closed loop) + `factory_product_acceptance.py`(acceptance 14검사) — 2D-1 (CANON-07).
   - `factory_validate.py` — run kind별 artifact 검증 + marker validator registry(MARKER_VALIDATORS, CANON-10), `factory_labels.py` — 대시보드 한국어 라벨, `factory_summary.py` — summary 3종.
@@ -63,6 +64,7 @@
 ## CANON-06 제품화 체인 (2C-0 → 2C-3)
 
 순서 고정, 각 단계가 다음 단계의 사전조건. 산출물은 `runs/<run>/review/phase2cX/`, validate는 marker 없으면 no-op.
+viewer/replay 탐색·field evidence·protected hash·gate context는 전 단계가 `factory_product_evidence.py`(CANON-02) 정본을 공유한다.
 
 1. **2C-0 review**: no-code-change smoke(임시 copy에서 runner 실행), 보호 artifact hash 불변, evidence 스코어 7항목 → recommended_fitness(PRODUCT_CANDIDATE/NEEDS_PRODUCT_POLISH/NEEDS_CORE_PATCH/NEEDS_SPEC_REPAIR/ARCHIVE). viewer 근거는 replay 실제 필드 참조 ≥2개, 불확실은 unknown.
 2. **2C-1 polish**: viewer `<script>`만 교체(normalize/deterministic layout). 사전조건 NEEDS_PRODUCT_POLISH. polish는 authoring을 추가하지 않으므로 결과 뷰어는 계속 NEEDS_PRODUCT_POLISH가 정상.

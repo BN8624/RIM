@@ -7,15 +7,17 @@ from pathlib import Path
 
 from repo_idea_miner.factory_run_layout import resolve_run_target
 
-from repo_idea_miner.factory_review import (
-    _find_product_viewer,
-    _first_replay_file,
-    _load_json,
-    _sha256,
-    _write_json,
-    _write_text,
-    build_fitness,
+from repo_idea_miner.factory_product_evidence import (
+    find_product_viewer,
+    first_replay_file,
+    load_json,
     read_gate_context,
+    sha256_file,
+    write_json,
+    write_text,
+)
+from repo_idea_miner.factory_review import (
+    build_fitness,
     smoke_review,
 )
 
@@ -814,7 +816,7 @@ def run_model_level_smoke(supported_types: list[str], replay: dict | None,
 def extract_supported_node_types(final_dir: Path) -> tuple[list[str], str]:
     """§8.1: contract 명시 → replay node types 순으로 추출. 없으면 ([], 'none')."""
     for cname in ("core_contract.json", "runner_contract.json"):
-        c = _load_json(final_dir / cname) or {}
+        c = load_json(final_dir / cname) or {}
         for key in ("supported_node_types", "node_types"):
             v = c.get(key)
             if isinstance(v, list) and v:
@@ -823,7 +825,7 @@ def extract_supported_node_types(final_dir: Path) -> tuple[list[str], str]:
     rdir = final_dir / "replay"
     if rdir.is_dir():
         for p in sorted(rdir.glob("replay_*.json")):
-            d = _load_json(p) or {}
+            d = load_json(p) or {}
             for nd in ((d.get("final_state") or {}).get("nodes") or {}).values():
                 if isinstance(nd, dict) and nd.get("type"):
                     types.add(str(nd["type"]))
@@ -969,23 +971,23 @@ def compute_editor_protected_hashes(run_dir: Path) -> dict[str, str]:
         for rel in _PROTECTED_CONTRACTS:
             p = base / rel
             if p.is_file():
-                out[f"{root_name}/{rel}"] = _sha256(p)
+                out[f"{root_name}/{rel}"] = sha256_file(p)
         for prefix in _PROTECTED_DIR_PREFIXES:
             d = base / prefix.rstrip("/")
             if not d.is_dir():
                 continue
             for p in sorted(d.rglob("*")):
                 if p.is_file() and "__pycache__" not in p.parts:
-                    out[f"{root_name}/{p.relative_to(base).as_posix()}"] = _sha256(p)
+                    out[f"{root_name}/{p.relative_to(base).as_posix()}"] = sha256_file(p)
     orr = run_dir / "oracle_risk_report.json"
     if orr.is_file():
-        out["oracle_risk_report.json"] = _sha256(orr)
+        out["oracle_risk_report.json"] = sha256_file(orr)
     for rev in _PROTECTED_REVIEW_DIRS:
         d = run_dir / rev
         if d.is_dir():
             for p in sorted(d.rglob("*")):
                 if p.is_file() and "__pycache__" not in p.parts:
-                    out[f"{rev}/{p.relative_to(d).as_posix()}"] = _sha256(p)
+                    out[f"{rev}/{p.relative_to(d).as_posix()}"] = sha256_file(p)
     return out
 
 
@@ -1007,7 +1009,7 @@ def _product_viewer_paths(run_dir: Path) -> list[Path]:
 
 
 def _product_hashes(paths: list[Path], run_dir: Path) -> dict[str, str]:
-    return {p.relative_to(run_dir).as_posix(): _sha256(p) for p in paths if p.is_file()}
+    return {p.relative_to(run_dir).as_posix(): sha256_file(p) for p in paths if p.is_file()}
 
 
 # ---------------------------------------------------------------- 대상/사전 조건 (§18, §19)
@@ -1031,7 +1033,7 @@ def _user_decision_ok(run_dir: Path) -> tuple[bool, str | None]:
 def check_editor_preconditions(run_dir: Path, gate: dict) -> list[str]:
     """§19 apply 전: 2C-1 fitness=NEEDS_PRODUCT_POLISH + verdict REVIEW_READY + green_base + 사용자 결정."""
     problems: list[str] = []
-    prior = _load_json(run_dir / "review" / "phase2c1" / "product_fitness_report_after_polish.json")
+    prior = load_json(run_dir / "review" / "phase2c1" / "product_fitness_report_after_polish.json")
     if prior is None:
         problems.append("Phase 2C-1 product_fitness_report_after_polish.json 없음 (2C-1 polish 먼저 필요)")
     elif prior.get("recommended_fitness") != "NEEDS_PRODUCT_POLISH":
@@ -1238,7 +1240,7 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
     gate = read_gate_context(run_dir)
     result["challenge_id"] = info.get("challenge_id") or _challenge_id(run_dir)
     supported_types, types_source = extract_supported_node_types(final_dir)
-    prior = _load_json(run_dir / "review" / "phase2c1"
+    prior = load_json(run_dir / "review" / "phase2c1"
                        / "product_fitness_report_after_polish.json") or {}
 
     problems = check_editor_preconditions(run_dir, gate)
@@ -1290,8 +1292,8 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
                                        if types_blocked else []),
         "status": "DRY_RUN_BLOCKED" if (problems or types_blocked) else "DRY_RUN_PASS",
     }
-    _write_json(review_dir / "phase2c2_editor_plan.json", plan)
-    _write_text(review_dir / "phase2c2_editor_plan.md", _plan_md(plan))
+    write_json(review_dir / "phase2c2_editor_plan.json", plan)
+    write_text(review_dir / "phase2c2_editor_plan.md", _plan_md(plan))
 
     if not apply:
         result["ok"] = not (problems or types_blocked)
@@ -1312,7 +1314,7 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
     # ---- Apply (§19)
     hash_before = compute_editor_protected_hashes(run_dir)
     prod_before = _product_hashes(_product_viewer_paths(run_dir), run_dir)
-    _write_json(review_dir / "phase2c2_hash_before.json", hash_before)
+    write_json(review_dir / "phase2c2_hash_before.json", hash_before)
 
     patched: list[str] = []
     for vp in _product_viewer_paths(run_dir):
@@ -1324,13 +1326,13 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
     hash_check = _compare(hash_before, hash_after)
     hash_check["note"] = ("Phase 2C-2는 product viewer만 수정 — "
                           "src/golden/fixtures/contract/replay/phase2c0/2c1 불변 (§4)")
-    _write_json(review_dir / "phase2c2_hash_after.json", hash_after)
-    _write_json(review_dir / "phase2c2_hash_check.json", hash_check)
+    write_json(review_dir / "phase2c2_hash_after.json", hash_after)
+    write_json(review_dir / "phase2c2_hash_check.json", hash_check)
     result["hash_status"] = hash_check["status"]
 
     prod_after = _product_hashes(_product_viewer_paths(run_dir), run_dir)
     prod_changed = sorted(k for k in prod_before if prod_before.get(k) != prod_after.get(k))
-    _write_json(review_dir / "phase2c2_diff_summary.json", {
+    write_json(review_dir / "phase2c2_diff_summary.json", {
         "run_dir": f"runs/{run_dir.name}", "challenge_id": result["challenge_id"],
         "patched_files": patched,
         "product_files_changed": prod_changed,
@@ -1341,25 +1343,25 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
     })
 
     # ---- 검증들
-    viewer = _find_product_viewer(final_dir)
+    viewer = find_product_viewer(final_dir)
     viewer_html = viewer.read_text(encoding="utf-8", errors="replace") if viewer else ""
     tmp_js = review_dir / "js_check"
     js_syntax = check_js_syntax(viewer, tmp_js) if viewer else {"status": "FAIL", "errors": ["viewer 없음"]}
     static_dom = check_static_dom(viewer_html)
     handler = check_handler_binding(viewer_html)
-    _write_json(review_dir / "viewer_js_syntax_check.json", js_syntax)
-    _write_json(review_dir / "viewer_static_dom_check.json", static_dom)
-    _write_json(review_dir / "viewer_handler_binding_check.json", handler)
+    write_json(review_dir / "viewer_js_syntax_check.json", js_syntax)
+    write_json(review_dir / "viewer_static_dom_check.json", static_dom)
+    write_json(review_dir / "viewer_handler_binding_check.json", handler)
 
     # ---- viewer smoke (temp copy, 원본 미변경) + editor model smoke
     viewer_smoke = smoke_review(run_dir, review_dir, timeout=timeout)
-    _write_json(review_dir / "viewer_smoke_after_editor.json", viewer_smoke)
+    write_json(review_dir / "viewer_smoke_after_editor.json", viewer_smoke)
 
-    _rf, replay = _first_replay_file(final_dir)
+    _rf, replay = first_replay_file(final_dir)
     model = run_model_level_smoke(supported_types, replay,
                                   f"runs/{run_dir.name}", result["challenge_id"])
     model["supported_types_count"] = len(supported_types)
-    _write_json(review_dir / "draft_schema_compatibility.json", {
+    write_json(review_dir / "draft_schema_compatibility.json", {
         "compatible": model["draft_schema_compatible"],
         "reasons": model["draft_schema_compatibility_reasons"],
         "from_to_only_edge_rejected": model["from_to_only_edge_rejected"],
@@ -1367,13 +1369,13 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
         "note": ("draft_schema_compatible = viewer/editor/replay display model과 구조적 호환. "
                  "runner_executable_draft 아님 (Phase 2C-3 범위)."),
     })
-    _write_json(review_dir / "draft_roundtrip_check.json", model["draft_roundtrip"])
+    write_json(review_dir / "draft_roundtrip_check.json", model["draft_roundtrip"])
 
     editor_smoke = build_editor_smoke(model, static_dom, handler, js_syntax,
                                       viewer_smoke, hash_check["status"])
     editor_smoke["supported_node_types_loaded"] = bool(supported_types)
     editor_smoke["model_steps"] = model["steps"]
-    _write_json(review_dir / "editor_smoke_review.json",
+    write_json(review_dir / "editor_smoke_review.json",
                 {k: v for k, v in editor_smoke.items() if k != "model_steps"} | {"model_steps": model["steps"]})
 
     # ---- product fitness 재평가 (base + editor 조건 조정)
@@ -1407,8 +1409,8 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
         "js_syntax_status": editor_smoke["js_syntax_status"],
         "original_replay_unchanged": editor_smoke["original_replay_unchanged"],
     }
-    _write_json(review_dir / "product_fitness_report_after_editor.json", fitness_json)
-    _write_text(review_dir / "product_fitness_report_after_editor.md", _fitness_md(fit, base_fitness))
+    write_json(review_dir / "product_fitness_report_after_editor.json", fitness_json)
+    write_text(review_dir / "product_fitness_report_after_editor.md", _fitness_md(fit, base_fitness))
 
     # ---- report + dashboard summary
     report = {
@@ -1420,10 +1422,10 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
         "draft_editor_candidate": fit["draft_editor_candidate"],
         "runner_backed_execution_limitation": fit["runner_backed_execution_limitation"],
     }
-    _write_json(review_dir / "phase2c2_editor_report.json", report)
-    _write_text(review_dir / "phase2c2_editor_report.md", _report_md(report))
+    write_json(review_dir / "phase2c2_editor_report.json", report)
+    write_text(review_dir / "phase2c2_editor_report.md", _report_md(report))
 
-    _write_json(review_dir / "phase2c2_dashboard_summary.json", {
+    write_json(review_dir / "phase2c2_dashboard_summary.json", {
         "phase": "2c2", "challenge_id": result["challenge_id"], "run_dir": f"runs/{run_dir.name}",
         "verdict": gate.get("verdict"), "green_base": gate.get("green_base"),
         "recommended_fitness": fit["recommended_fitness"],
@@ -1463,12 +1465,12 @@ def run_product_editor(run_dir=None, run_id=None, apply=False, db_conn=None,
 def _challenge_id(run_dir: Path):
     for name in ("phase2b1b_dashboard_summary.json",
                  "green_base_promotion_after_anti_hardcode_patch.json"):
-        d = _load_json(run_dir / name) or {}
+        d = load_json(run_dir / name) or {}
         if d.get("challenge_id") is not None:
             return d["challenge_id"]
     for rel in ("review/phase2c1/phase2c1_dashboard_summary.json",
                 "review/phase2c0/review_package.json"):
-        d = _load_json(run_dir / rel) or {}
+        d = load_json(run_dir / rel) or {}
         if d.get("challenge_id") is not None:
             return d["challenge_id"]
     return None
