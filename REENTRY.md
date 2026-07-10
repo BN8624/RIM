@@ -7,34 +7,39 @@
 
 ## 1. 현재 상태
 
-- BASE_HEAD `3363bb6`, **R0~R5 완료** HEAD `82366fc`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
-- **R5 완료**: CLI/Dashboard 분리(§15). cli.py 1034→235줄(parser/dispatch/exit code만,
-  실행·출력은 cli_handlers.py HANDLERS registry — parser command 집합과 1:1 회귀 가드).
-  challenge_dashboard.py 1848→1439줄(렌더링·route·POST만), read model은
-  challenge_dashboard_data.py(SQL 조회·phase 요약 로더·preview 화이트리스트/traversal 차단),
-  QA 종합 판정은 factory_summary.overall_qa_status 정본 1개 — presentation의 SQL/JSON 파싱 0을
-  회귀 테스트가 고정. 보안 의미 보존(127.0.0.1 기본·escaping·secret 마스킹 테스트 PASS).
-  **전체 pytest 983 PASS(257s)**. CANON-02·03·09 갱신. README는 사용자 명령 무변경이라 그대로.
-- **R4 완료**: failure 의미 정본 factory_continue 수렴, import cycle 0, factory 계열 private
-  cross-import 0, §14.5 stale queue verdict read 시 canonical 계산. CANON-02·05 갱신.
-- **R3/R2/R1/R0 완료**: 제품 체인 정본화 / validation registry / run layout 정본 / flaky 근본 수정.
+- BASE_HEAD `3363bb6`, **R0~R6 완료** HEAD `bb54552`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
+- **R6 완료**: dead 심볼 6건 삭제(전수 참조 스캔 — errors 예외 3종, format_verdict_desc,
+  queue.SPEC_REPAIR_REVIEW_RESULTS, review.FITNESS_GRADES) + 중복 상수 정본 수렴
+  (FROZEN_FILES/PREFIXES→factory_frozen, validate.LANES→continue, validate.MIN_SRC_FILES→gates).
+  의미 다른 동명(2C-2/2C-3 check_*, viewer.detect_run_kind, JSON_RULES 3본)은 보존.
+  **miner 3건 private cross-import는 §5.1 보존 우선 의도적 예외 확정**(CANON-11 기록,
+  R7 architecture-check에서 allowlist). 임시 shim 0, 테스트 삭제 0.
+  **전체 pytest 983 PASS(247s)**. CANON-02·11 갱신.
+- **R5 완료**: CLI/Dashboard 분리 — cli.py는 parser/dispatch만(실행은 cli_handlers HANDLERS),
+  dashboard는 렌더링·HTTP만(read model은 challenge_dashboard_data, QA 종합 판정은
+  factory_summary.overall_qa_status). CANON-02·03·09 갱신.
+- **R4~R0 완료**: failure 의미 정본/cycle 0 · 제품 체인 정본화 · validation registry ·
+  run layout 정본 · flaky 근본 수정.
 - #47/#54 closed loop 상태는 characterization 테스트가 고정(둘 다 HOLD_FOR_HUMAN, base hash PASS).
-- 잔여 private cross-import 3건은 전부 miner 계열(§5.1 무변경 보존과 충돌, R6/R8 결정) — state.json notes.
 
-## 2. 다음 작업 (R6부터, 주문서 §16~§18 순서)
+## 2. 다음 작업 (R7부터, 주문서 §17~§18 순서)
 
-1. **R6 dead code 제거**(주문서 §16) — 삭제 기준 7항목 전부 만족 시에만 삭제(runtime caller 0,
-   CLI entry 0, dynamic import 0, compat 불필요, canon 비현역, 대체 구현·테스트 존재).
-   삭제 전 읽기 전용 adversarial review. old/new 정본 중복 0, 임시 shim 0, 루트 md 5개 유지.
-   miner 계열 private import 3건 처리 여부 결정. **완료 시 전체 pytest 필수(§9.2)**.
-2. R6 후 R7 Architecture Atlas(§17) → R8 최종(3회 pytest+다섯 문서 갱신, §18).
+1. **R7 Architecture Atlas**(주문서 §17) — architecture/(manifest.toml, atlas.schema.json,
+   atlas.json, index.html — 새 md 금지). scanner는 architecture_scanner.py 확장(재작성 금지).
+   CLI: architecture-build/check/summary(+선택 serve, 새 웹 framework 금지). 결정론(§17.9
+   byte-identical), structural fingerprint(§17.10), check 20항목(§17.11 — private import는
+   miner 3건 allowlist, root md whitelist는 git tracked 기준으로 구현해 untracked 주문서와
+   충돌 방지). 모바일 360px/다크모드/외부 CDN 0(§17.8). 테스트 §17.13.
+   완료 시 CANON-12 추가 + AI_INDEX 라우팅 + README Atlas 사용법(같은 commit).
+2. R7 후 R8 최종(§18) — pytest 3회 연속, CLI smoke, 기존 run 회귀, #47/#54, 다섯 문서 전면
+   정합, checklist에 완료 섹션 1개 추가, 최종 보고(응답으로만).
 
 ## 3. 규칙 (주문서 요지)
 
 - 루트 md는 정확히 5개 유지, 새 md 금지(작업 상태는 state.json에만).
 - 원본 run 무손상·기존 CLI/DB/run 판독 보존·golden 의미 약화 금지(CANON-11).
 - 구조 커밋마다 관련 CANON 섹션 동커밋 갱신. 테스트 실패 상태 커밋 금지.
-- 전체 pytest는 R6/R8 완료 시점에만(작은 이동마다 반복 금지). 최종 3회 연속 PASS.
+- 전체 pytest는 R8 완료 시점(3회 연속 PASS). 작은 이동마다 반복 금지.
 - 같은 실패 signature 2회면 slice 되돌리고 더 작게 재설계(§21).
 
 ## 4. 검증 명령
