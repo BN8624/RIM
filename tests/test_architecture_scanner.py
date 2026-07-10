@@ -59,12 +59,19 @@ def test_import_cycle_detected(tmp_path):
     assert cycles == [["repo_idea_miner.a", "repo_idea_miner.b"]]
 
 
-def test_known_private_import_visible_in_baseline():
-    """§8.1 실측: loop_executor→product_loop private import가 baseline에 잡혀야 한다."""
+def test_product_chain_private_imports_removed():
+    """§8.1/§8.2 회귀 가드(R3): product judgment/closed loop/제품화 체인에
+    private cross-import가 다시 생기면 FAIL. (감지 능력 자체는 위 합성 fixture 테스트가 증명)"""
     base = build_baseline(REPO_ROOT)
     pairs = {(d["module"], d["from"]) for d in base["private_cross_imports"]}
     assert ("repo_idea_miner.factory_loop_executor",
-            "repo_idea_miner.factory_product_loop") in pairs
+            "repo_idea_miner.factory_product_loop") not in pairs
+    chain = ("factory_product_loop", "factory_loop_executor", "factory_review",
+             "factory_product_polish", "factory_product_editor", "factory_draft_execution",
+             "factory_product_evidence", "factory_lane_executors", "factory_product_acceptance")
+    offenders = [d for d in base["private_cross_imports"]
+                 if d["module"].split(".")[-1] in chain or d["from"].split(".")[-1] in chain]
+    assert offenders == []
 
 
 def test_baseline_counts_sane():
