@@ -170,6 +170,68 @@ def test_hard_blocker_stops_gemma_overclaim(tmp_path):
     assert problems  # hard blocker를 넘을 수 없다 (§6)
 
 
+# ---- 2C-3 실행 evidence 반영 — 이미 닫힌 gap을 다시 요구하면 안 된다
+
+_EXEC_SMOKE_2C3 = {
+    "can_execute_input": True,
+    "can_see_result_from_created_input": True,
+    "result_reflects_edit": True,
+    "revise_cycle_changes_result": True,
+    "original_replay_unchanged": True,
+    "product_loop_closed": True,
+    "execution_smoke_pass": True,
+}
+
+
+def _2c3_executed_run(tmp_path, applied=True, included=True) -> Path:
+    """#47류 run에 2C-3 runner-backed execution apply 산출물까지 있는 상태."""
+    run = _47_like_run(tmp_path)
+    _dump(run / "review" / "phase2c3" / "phase2c3_execution_report.json", {
+        "run_dir": f"runs/{run.name}", "applied": applied,
+        "runner_backed_execution_included": included,
+        "product_loop_closed": included,
+        "recommended_fitness": "PRODUCT_CANDIDATE" if included else "NEEDS_PRODUCT_POLISH",
+        "execution_smoke": dict(_EXEC_SMOKE_2C3),
+    })
+    return run
+
+
+def test_evidence_reads_2c3_execution_report(tmp_path):
+    run = _2c3_executed_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    loop = ev["product_loop"]
+    assert ev["facts"]["has_execution_report"] is True
+    assert ev["facts"]["runner_backed_execution_included"] is True
+    assert loop["can_execute_primary_action"] is True
+    assert loop["can_observe_state_change"] is True
+    assert loop["can_revise_and_retry"] is True
+    assert loop["product_loop_closed"] is True
+    assert "phase2c3_execution_report.runner_backed_execution_included=true" in ev["known_refs"]
+    assert "phase2c3_execution_smoke.can_execute_input=true" in ev["known_refs"]
+
+
+def test_hard_blockers_lifted_after_2c3_execution(tmp_path):
+    run = _2c3_executed_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    assert hard["product_candidate_blocked"] is False
+    label = mock_product_judge(ev, q, hard)
+    gap = mock_gap_classifier(ev, q, label)
+    assert label["stage"] == "PRODUCT_CANDIDATE"
+    assert gap["primary_gap"] is None  # 이미 실증된 실행을 다시 gap으로 내지 않는다
+
+
+def test_2c3_dry_run_or_unproven_report_ignored(tmp_path):
+    # apply되지 않았거나 smoke 실증이 없는 report는 실행 evidence로 인정하지 않는다
+    for name, kwargs in (("not_applied", {"applied": False}), ("unproven", {"included": False})):
+        sub = tmp_path / name
+        sub.mkdir()
+        run = _2c3_executed_run(sub, **kwargs)
+        ev, q, hard = _evidence(run)
+        assert ev["facts"]["has_execution_report"] is False
+        assert ev["product_loop"]["can_execute_primary_action"] is False
+        assert hard["product_candidate_blocked"] is True
+
+
 # ---------------------------------------------------------------- Group B: stage fixtures (§26, 테스트 39~45)
 
 def test_stage_core_green_no_viewer(tmp_path):

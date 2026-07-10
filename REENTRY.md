@@ -25,11 +25,13 @@ Architecture Atlas는 `architecture/`(빌드·검사는 CANON-12).
   architecture manifest allowlist). "private import 0" 목표는 이 예외와 함께 달성으로 간주.
 - 500 LOC 초과 23개 / 800 LOC 초과 12개 module 잔존 — 총 LOC 감소는 필수 목표가 아니었음.
 - 제품 쪽 오픈 이슈(checklist 참조): #47/#54 hold packet 응답 대기, lane 실패 escalation 미설계,
-  UX_POLISH lane stub, 다수 run batch 자동화 미착수, queue의 run 5 stale 분류.
+  UX_POLISH lane stub, 다수 run batch 자동화 미착수. (queue run 5 stale 분류는 R4 수정으로 해소 확인.)
 
 ## 3. 다음 권장 작업
 
-1. #47 hold packet 응답 처리 — RUNNER_BACKED_DRAFT_EXECUTION lane 사람 승인 여부 결정 후 loop 재개.
+1. #47 최종 검수/출시 결정 — hold의 blocking gap은 stale evidence였음이 확인·수정됨(2026-07-10,
+   extract_artifact_evidence가 2C-3 실행 실증을 읽도록 보강). 수정 후 evidence 재파생은
+   stage=PRODUCT_CANDIDATE·gap 없음. 새 판정 기록이 필요하면 loop 재실행.
 2. #54 hold packet 응답 처리 — spec repair(golden root_node/target_id) + viewer mock fallback 제거 후 loop 재실행.
 3. escalation(lane 실패 정보의 다음 iteration 전달) 설계 — 착수 시 CANON-07 갱신부터.
 4. 구조 변경 커밋 시 `architecture-build` 재실행 + `architecture-check` PASS 유지(CANON-12 규칙).

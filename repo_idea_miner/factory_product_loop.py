@@ -123,8 +123,9 @@ def _b(v) -> str:
 # ---------------------------------------------------------------- Artifact Evidence 추출 (§7, §15.1)
 
 def _latest_smoke(run_dir: Path) -> dict:
-    """가장 최신 phase의 smoke 사실을 읽는다 (2c2 → 2c1 → 2c0 순)."""
-    for rel in ("review/phase2c2/viewer_smoke_after_editor.json",
+    """가장 최신 phase의 smoke 사실을 읽는다 (2c3 → 2c2 → 2c1 → 2c0 순)."""
+    for rel in ("review/phase2c3/viewer_smoke_after_execution.json",
+                "review/phase2c2/viewer_smoke_after_editor.json",
                 "review/phase2c1/artifact_smoke_review_after_polish.json",
                 "review/phase2c0/artifact_smoke_review.json"):
         d = _load_json(run_dir / rel)
@@ -134,7 +135,8 @@ def _latest_smoke(run_dir: Path) -> dict:
 
 
 def _latest_fitness(run_dir: Path) -> dict:
-    for rel in ("review/phase2c2/product_fitness_report_after_editor.json",
+    for rel in ("review/phase2c3/product_fitness_report_after_execution.json",
+                "review/phase2c2/product_fitness_report_after_editor.json",
                 "review/phase2c1/product_fitness_report_after_polish.json",
                 "review/phase2c0/product_fitness_report.json"):
         d = _load_json(run_dir / rel)
@@ -183,9 +185,15 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         _load_json(run_dir / "review/phase2c2/editor_smoke_review.json") or {}
     js_check = _load_json(run_dir / "review/phase2c2/viewer_js_syntax_check.json") or {}
     hb_check = _load_json(run_dir / "review/phase2c2/viewer_handler_binding_check.json") or {}
+    exec_report = _load_json(run_dir / "review/phase2c3/phase2c3_execution_report.json") or {}
+    exec_smoke = exec_report.get("execution_smoke") or \
+        _load_json(run_dir / "review/phase2c3/execution_smoke.json") or {}
     static = _static_viewer_facts(run_dir)
 
     has_editor = bool(editor_smoke)
+    # 2C-3 실행 evidence는 apply 완료 + smoke 실증(included=true)일 때만 인정한다 — dry-run/실패 run 오탐 방지
+    has_execution = bool(exec_smoke) and exec_report.get("applied") is True \
+        and exec_report.get("runner_backed_execution_included") is True
     facts: dict = {
         "viewer_exists": bool(smoke.get("product_viewer_exists", static["viewer_exists"])),
         "viewer_path": smoke.get("product_viewer_path") or static["viewer_path"],
@@ -209,8 +217,9 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         "critical_red_flags": fitness.get("critical_red_flags") or [],
         "limitations": fitness.get("limitations") or [],
         "has_editor_report": has_editor,
-        "runner_backed_execution_included": editor_smoke.get("runner_backed_execution_included")
-        if has_editor else None,
+        "has_execution_report": has_execution,
+        "runner_backed_execution_included": True if has_execution
+        else (editor_smoke.get("runner_backed_execution_included") if has_editor else None),
         "draft_export_supported": editor_smoke.get("draft_export_supported") if has_editor else None,
         "graph_validation_supported": editor_smoke.get("graph_validation_supported")
         if has_editor else None,
@@ -227,10 +236,18 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         if facts["authoring_ui"] else False
     can_validate = bool(editor_smoke.get("graph_validation_supported")) if has_editor \
         else bool(facts["authoring_ui"] and static["validation_ui"])
-    can_execute = bool(editor_smoke.get("runner_backed_execution_included")) if has_editor else False
-    can_see_result = bool(editor_smoke.get("draft_execution_result_visible")) and can_execute
-    can_understand_failure = bool(editor_smoke.get("draft_failure_feedback_visible")) and can_execute
-    can_revise = bool(editor_smoke.get("draft_revise_and_rerun_supported")) and can_execute
+    # 실행 계열은 2C-3 execution smoke가 실증 정본 — 없으면 editor 기록 기반(하위 호환)
+    if has_execution:
+        can_execute = bool(exec_smoke.get("can_execute_input"))
+        can_see_result = bool(exec_smoke.get("can_see_result_from_created_input")) and can_execute
+        # 실패 이해: draft validation 피드백(2C-2)이 실행 경로와 함께 있으면 근거로 인정
+        can_understand_failure = bool(editor_smoke.get("graph_validation_supported")) and can_execute
+        can_revise = bool(exec_smoke.get("revise_cycle_changes_result")) and can_execute
+    else:
+        can_execute = bool(editor_smoke.get("runner_backed_execution_included")) if has_editor else False
+        can_see_result = bool(editor_smoke.get("draft_execution_result_visible")) and can_execute
+        can_understand_failure = bool(editor_smoke.get("draft_failure_feedback_visible")) and can_execute
+        can_revise = bool(editor_smoke.get("draft_revise_and_rerun_supported")) and can_execute
     # 공통 evidence 이름 (Phase 2D-1 §6) — 도메인 상세는 adapter evidence(2C-2/2C-3 report)에만 둔다.
     # can_understand_success는 실행 결과가 화면에 보이는 것(성공 피드백)과 같은 근거에서 파생된다.
     loop = {
@@ -280,6 +297,13 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
             f"{_b(editor_smoke.get('runner_backed_execution_included'))}")
         refs["editor.draft_export_supported"] = (
             f"editor_smoke_review.draft_export_supported={_b(editor_smoke.get('draft_export_supported'))}")
+    if has_execution:
+        refs["execution.runner_backed_execution_included"] = (
+            "phase2c3_execution_report.runner_backed_execution_included=true")
+        for key in ("can_execute_input", "can_see_result_from_created_input",
+                    "result_reflects_edit", "revise_cycle_changes_result",
+                    "original_replay_unchanged"):
+            refs[f"execution.{key}"] = f"phase2c3_execution_smoke.{key}={_b(exec_smoke.get(key))}"
     if facts["js_syntax_status"]:
         refs["check.js_syntax"] = f"viewer_js_syntax_check.status={facts['js_syntax_status']}"
     if facts["handler_binding_status"]:

@@ -238,7 +238,8 @@ v1.0 (RIM_FANAL.md §35/§37 기준) 2026-07-08 완료.
 
 # 현재 오픈 이슈 (2026-07-10 기준, 상세는 REENTRY.md)
 
-- [ ] #47 hold packet 응답 — RUNNER_BACKED_DRAFT_EXECUTION lane 사람 승인 여부.
+- [ ] #47 — hold의 blocking gap(RUNNER_BACKED_EXECUTION_REQUIRED)은 2D-1 evidence 추출이 2C-3 산출물을 안 읽던 **stale evidence였음이 확인·수정됨**(2026-07-10). 수정 후 evidence 재파생은 stage=PRODUCT_CANDIDATE·gap 없음. 남은 것: 사람 최종 검수/출시 결정(원하면 loop 재실행으로 새 판정 기록 생성).
 - [ ] #54 hold packet 응답 — spec repair(golden root_node/target_id, §8이 막는 부류) + viewer mock fallback 제거 후 loop 재실행.
 - [ ] lane 실패 정보의 다음 iteration 전달(escalation) 미설계 — 도입하려면 CANON-07 갱신부터.
-- [ ] UX_POLISH lane stub / 다수 run batch 자동화 / queue의 run 5 stale 분류.
+- [ ] UX_POLISH lane stub / 다수 run batch 자동화.
+- [x] ~~queue의 run 5 stale 분류~~ — R4 stale verdict 수정으로 해소 확인(2026-07-10, run 5 = REVIEW_ONLY 정상 분류).

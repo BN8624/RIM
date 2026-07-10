@@ -532,6 +532,10 @@
    "review/phase2c2/viewer_handler_binding_check.json",
    "review/phase2c2/viewer_js_syntax_check.json",
    "review/phase2c2/viewer_smoke_after_editor.json",
+   "review/phase2c3/execution_smoke.json",
+   "review/phase2c3/phase2c3_execution_report.json",
+   "review/phase2c3/product_fitness_report_after_execution.json",
+   "review/phase2c3/viewer_smoke_after_execution.json",
    "rollback_or_failure_conditions.json",
    "schema_repair_report.json",
    "scope_guard.json",
@@ -1180,7 +1184,7 @@
    "source": "repo_idea_miner.cli_handlers"
   }
  ],
- "commit": "a1da6c19bf9c531e256c1d1ba9cc5ed819c0d786",
+ "commit": "15c6cf24c0e77029e3473374f9eacd509f5b47ca",
  "components": {
   "atlas": {
    "canon_id": "CANON-12",
@@ -1348,7 +1352,7 @@
   "REENTRY.md": "SESSION STATE",
   "checklist.md": "DELIVERY HISTORY"
  },
- "fingerprint": "46890aca885fdb794bc64df58bd3dfe68f24fae6e595b5a5556ae5e6a0d55cd9",
+ "fingerprint": "df0720b8b85641d7a910ac37f9a5b43fb14a0a01ea2144ea075b94a566b49806",
  "health": {
   "import_cycles": [],
   "module_count": 74,
@@ -1416,7 +1420,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 939,
+  "test_count": 942,
   "unknown_component": []
  },
  "manifest": {
@@ -5689,6 +5693,10 @@
     "review/phase2c2/viewer_handler_binding_check.json",
     "review/phase2c2/viewer_js_syntax_check.json",
     "review/phase2c2/viewer_smoke_after_editor.json",
+    "review/phase2c3/execution_smoke.json",
+    "review/phase2c3/phase2c3_execution_report.json",
+    "review/phase2c3/product_fitness_report_after_execution.json",
+    "review/phase2c3/viewer_smoke_after_execution.json",
     "rollback_or_failure_conditions.json",
     "schema_repair_report.json",
     "scope_guard.json",
@@ -5785,7 +5793,7 @@
      ]
     }
    ],
-   "loc": 1412,
+   "loc": 1436,
    "module": "repo_idea_miner.factory_product_loop",
    "path": "repo_idea_miner/factory_product_loop.py",
    "private_symbols": [
