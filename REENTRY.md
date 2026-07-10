@@ -7,28 +7,27 @@
 
 ## 1. 현재 상태
 
-- BASE_HEAD `3363bb6`, **R0~R3 완료** HEAD `490e2f7`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
-- **R3 완료**: `factory_product_evidence.py` 정본 신설(§8.2 — viewer/replay 탐색·field evidence·
-  protected hash·gate context·공통 IO, 구현 이동·의미 불변) + `run_judgment_desks` 공개 API(§8.1) +
-  scanner 특성화를 재유입 방지 가드로 전환. **제품 체인 private cross-import 0**,
-  **전체 pytest 979 PASS**(R3 게이트). CANON-02·06·07 동커밋 갱신.
-- **R2 완료**: run kind 감지 정본화(`factory_run_layout.detect_run_kind`) + validator registry
-  (`factory_validate.MARKER_VALIDATORS` — 선언 순서=검사 순서, core/continuation 공유). CANON-02·04·05·10 갱신.
-- **R1 완료**: factory_run_layout.py 정본(resolve_artifact_root/resolve_run_target).
-- **R0 완료**: architecture_scanner.py + baseline.json, flaky 근본 수정(.pyc stale bytecode), characterization.
+- BASE_HEAD `3363bb6`, **R0~R4 완료** HEAD `aa7dd7f`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
+- **R4 완료**: failure 의미 정본을 factory_continue로 수렴(§14.4 — assess_failure_patch_safety+
+  PATCH_SAFE/CONDITIONAL/NEVER+proposal/review 빌더, queue·2B가 import), **import cycle 0**,
+  compute_build_review/src_code_files/clip 공개화 + spec_repair·anti_hardcode IO를
+  factory_product_evidence로 수렴 → **factory 계열 private cross-import 0**.
+  §14.5 stale queue verdict는 read 시 canonical 계산(reconcile command 없음)+회귀 fixture 2종.
+  targeted 292 PASS(repair 185+legacy 60+queue 47). CANON-02·05 갱신.
+- **R3 완료**: factory_product_evidence.py 정본(§8.2) + run_judgment_desks 공개 API(§8.1).
+  제품 체인 private import 0, 전체 pytest 979 PASS. CANON-02·06·07 갱신.
+- **R2 완료**: detect_run_kind 정본 + MARKER_VALIDATORS registry. CANON-02·04·05·10 갱신.
+- **R1/R0 완료**: run layout 정본 / scanner+baseline+flaky 근본 수정+characterization.
 - #47/#54 closed loop 상태는 characterization 테스트가 고정(둘 다 HOLD_FOR_HUMAN, base hash PASS).
-- 잔여 private cross-import 10건(전부 R4 대상 repair/build 계열 + miner 계열)과 cycle 1건
-  (factory_continue↔factory_queue)은 state.json notes에 목록 있음.
+- 잔여 private cross-import 3건은 전부 miner 계열(§5.1 무변경 보존과 충돌, R6/R8 결정) — state.json notes.
 
-## 2. 다음 작업 (R4부터, 주문서 §14~§18 순서)
+## 2. 다음 작업 (R5부터, 주문서 §15~§18 순서)
 
-1. **R4 build/continuation/repair 수렴**(주문서 §14) — factory_pipeline/core_pipeline/continue/queue/
-   spec_repair/anti_hardcode caller·contract 조사(증거 없이 삭제 금지, legacy active 명시),
-   repair 결과·failure 의미 정본화, continue↔queue cycle 해소, repair 계열 private import 정리,
-   stale queue 상태 회귀 fixture(§14.5). 완료 시 CANON-02·03·05·08 갱신.
-2. R4 후 R5 CLI/Dashboard 분리 → R6 dead code → R7 Architecture Atlas → R8 최종(3회 pytest+문서).
-- state.json notes의 private_imports_remaining_10이 R4의 작업 대상 목록이다. miner 계열 3건은
-  §5.1 무변경 보존과 충돌 — R6/R8에서 결정.
+1. **R5 CLI/Dashboard 분리**(주문서 §15) — cli.py는 parser/registration/dispatch/exit code만,
+   business logic은 handler·정본 service로. challenge_dashboard.py에서 read model/판정 분리
+   (presentation이 stage/gap/lane 독자 계산 금지). CLI command 회귀 테스트. 보안 유지.
+   **완료 시 전체 pytest 필수(§9.2)**, CANON-03·09 갱신.
+2. R5 후 R6 dead code → R7 Architecture Atlas → R8 최종(3회 pytest+문서).
 
 ## 3. 규칙 (주문서 요지)
 
