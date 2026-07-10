@@ -233,6 +233,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_phase2c0(run_dir)
     problems += _check_phase2c1(run_dir)
     problems += _check_phase2c2(run_dir)
+    problems += _check_phase2c3(run_dir)
     problems += _check_phase2d0(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
@@ -790,6 +791,114 @@ def _check_phase2c2(run_dir: Path) -> list[str]:
     return p
 
 
+# ---------------------------------------------------------------- Phase 2C-3 Runner-backed Draft Execution 검증
+
+PHASE2C3_SUBDIR = "review/phase2c3"
+PHASE2C3_REQUIRED = (
+    "phase2c3_execution_plan.json", "phase2c3_execution_report.json",
+    "phase2c3_diff_summary.json", "phase2c3_hash_check.json",
+    "adapter_check.json", "execution_smoke.json",
+    "viewer_js_syntax_check.json", "viewer_static_dom_check.json",
+    "viewer_handler_binding_check.json", "viewer_smoke_after_execution.json",
+    "product_fitness_report_after_execution.json", "phase2c3_dashboard_summary.json",
+)
+PHASE2C3_MARKERS = (
+    "phase2c3_dashboard_summary.json", "phase2c3_execution_report.json",
+    "product_fitness_report_after_execution.json",
+)
+_PHASE2C3_ALLOWED_PREFIXES = (
+    "final_artifact/product/", "workspace/product/",
+    "final_artifact/src/adapters/", "workspace/src/adapters/",
+)
+
+
+def detect_phase2c3_run(run_dir: str | Path) -> bool:
+    """Phase 2C-3 marker(review/phase2c3/ 아래 산출물)가 있는 run인지 감지한다."""
+    d = Path(run_dir) / PHASE2C3_SUBDIR
+    return any((d / m).is_file() for m in PHASE2C3_MARKERS)
+
+
+def _check_phase2c3(run_dir: Path) -> list[str]:
+    """Phase 2C-3 marker가 있는 run만 runner-backed execution 산출물/정합성을 검사한다."""
+    if not detect_phase2c3_run(run_dir):
+        return []
+    rd = run_dir / PHASE2C3_SUBDIR
+    p: list[str] = []
+    for rel in PHASE2C3_REQUIRED:
+        if not (rd / rel).is_file():
+            p.append(f"Phase 2C-3 산출물 없음: {PHASE2C3_SUBDIR}/{rel}")
+
+    hash_check = _load_json(rd / "phase2c3_hash_check.json") or {}
+    diff = _load_json(rd / "phase2c3_diff_summary.json") or {}
+    es = _load_json(rd / "execution_smoke.json") or {}
+    adapter = _load_json(rd / "adapter_check.json") or {}
+    js = _load_json(rd / "viewer_js_syntax_check.json") or {}
+    dom = _load_json(rd / "viewer_static_dom_check.json") or {}
+    hb = _load_json(rd / "viewer_handler_binding_check.json") or {}
+    fitness = _load_json(rd / "product_fitness_report_after_execution.json") or {}
+
+    # 보호 대상(golden/fixtures/replay/src/core/runner/contract/phase2c0·2c1·2c2) 불변
+    if hash_check and hash_check.get("status") != "PASS":
+        detail = hash_check.get("changed") or hash_check.get("added") or hash_check.get("removed")
+        p.append(f"Phase 2C-3: 보호 대상 artifact 변경됨: {detail}")
+    for changed in diff.get("patched_files") or []:
+        norm = changed.replace("\\", "/")
+        if not any(norm.startswith(pref) for pref in _PHASE2C3_ALLOWED_PREFIXES):
+            p.append(f"Phase 2C-3: 허용 범위 밖 파일 변경: {changed}")
+    if diff.get("out_of_scope_changes"):
+        p.append(f"Phase 2C-3: out_of_scope_changes 존재: {diff['out_of_scope_changes']}")
+    for changed in (hash_check.get("changed") or []):
+        if changed.startswith("review/phase2c"):
+            p.append(f"Phase 2C-3: 기존 review 산출물 변경됨: {changed}")
+
+    # 원본 replay 불변 필수
+    if es.get("original_replay_unchanged") is False:
+        p.append("Phase 2C-3: original_replay_unchanged=false")
+
+    rec = fitness.get("recommended_fitness")
+    if rec is None:
+        p.append("Phase 2C-3: recommended_fitness 없음")
+    elif rec not in FITNESS_GRADES:
+        p.append(f"Phase 2C-3: 알 수 없는 recommended_fitness: {rec}")
+
+    # product_loop_closed / runner_backed_execution_included 는 실증 없이 true 금지
+    if fitness.get("runner_backed_execution_included") is True:
+        if not (es.get("can_execute_input") and es.get("can_see_result_from_created_input")):
+            p.append("Phase 2C-3: runner_backed_execution_included=true인데 실행 실증 없음")
+    if fitness.get("product_loop_closed") is True and es.get("product_loop_closed") is not True:
+        p.append("Phase 2C-3: fitness product_loop_closed=true인데 smoke는 미완결")
+
+    # auto_order §14: PRODUCT_CANDIDATE 엄격 검증
+    if rec == "PRODUCT_CANDIDATE":
+        checks = {
+            "adapter_ok": es.get("adapter_ok"),
+            "runner_execution_ok": es.get("runner_execution_ok"),
+            "result_reflects_edit": es.get("result_reflects_edit"),
+            "revise_cycle_changes_result": es.get("revise_cycle_changes_result"),
+            "bridge_server_ok": es.get("bridge_server_ok"),
+            "execution_smoke_pass": es.get("execution_smoke_pass"),
+            "product_loop_closed": es.get("product_loop_closed"),
+            "original_replay_unchanged": es.get("original_replay_unchanged"),
+        }
+        for key, val in checks.items():
+            if val is not True:
+                p.append(f"Phase 2C-3: PRODUCT_CANDIDATE인데 {key} != true ({val})")
+        if adapter.get("status") == "FAIL":
+            p.append("Phase 2C-3: PRODUCT_CANDIDATE인데 adapter check FAIL")
+        if js.get("status") == "FAIL":
+            p.append("Phase 2C-3: PRODUCT_CANDIDATE인데 JS syntax check FAIL")
+        if dom.get("status") == "FAIL":
+            p.append("Phase 2C-3: PRODUCT_CANDIDATE인데 static DOM evidence FAIL")
+        if hb.get("status") == "FAIL":
+            p.append("Phase 2C-3: PRODUCT_CANDIDATE인데 handler binding evidence FAIL")
+        if fitness.get("runner_backed_execution_included") is not True:
+            p.append("Phase 2C-3: PRODUCT_CANDIDATE인데 runner_backed_execution_included != true")
+        if es.get("failures"):
+            p.append(f"Phase 2C-3: PRODUCT_CANDIDATE인데 smoke failure 존재: {es.get('failures')}")
+
+    return p
+
+
 # ---------------------------------------------------------------- Phase 2D-0 Autopilot 검증 (§30)
 
 PHASE2D0_SUBDIR = "review/phase2d0"
@@ -1311,6 +1420,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_phase2c0(run_dir)
     problems += _check_phase2c1(run_dir)
     problems += _check_phase2c2(run_dir)
+    problems += _check_phase2c3(run_dir)
     problems += _check_phase2d0(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)

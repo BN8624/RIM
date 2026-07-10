@@ -173,6 +173,15 @@ def build_parser() -> argparse.ArgumentParser:
     fpe_p.add_argument("--apply", action="store_true", help="viewer에 editor mode를 실제 주입")
     fpe_p.add_argument("--db", default="challenge.db")
 
+    fde_p = sub.add_parser("factory-draft-execution",
+                           help="draft editor에 runner-backed 실행 추가 (Phase 2C-3, 기본 dry-run)")
+    fde_p.add_argument("--run-dir", default=None, help="대상 run 디렉터리 (권장)")
+    fde_p.add_argument("--run-id", type=int, default=None, help="보조: product run id")
+    fde_p.add_argument("--dry-run", action="store_true", help="실행 계획만 생성 (기본 동작)")
+    fde_p.add_argument("--apply", action="store_true",
+                       help="어댑터/브리지/viewer 실행 패널을 실제 기록 (사용자 승인 필요)")
+    fde_p.add_argument("--db", default="challenge.db")
+
     fpl_p = sub.add_parser("factory-product-loop",
                            help="Gemma Productization Autopilot 최소 루프 (Phase 2D-0, apply 없음)")
     fpl_p.add_argument("--run-dir", default=None, help="대상 run 디렉터리 (권장)")
@@ -777,6 +786,49 @@ def main(argv: list[str] | None = None) -> int:
                       f"JS syntax: {es.get('js_syntax_status')}")
                 print(f"- recommended_fitness: {out.get('recommended_fitness')} "
                       f"(draft editor candidate: {(out.get('fitness') or {}).get('draft_editor_candidate')})")
+            print(f"- review dir: {out.get('review_dir')}")
+            return 0 if out.get("ok") else 1
+
+        if args.command == "factory-draft-execution":
+            from pathlib import Path as _Path
+
+            from repo_idea_miner.factory_db import open_factory_db
+            from repo_idea_miner.factory_draft_execution import run_draft_execution
+
+            if not (args.run_dir or args.run_id):
+                print("오류: --run-dir 또는 --run-id가 필요합니다.", file=sys.stderr)
+                return 1
+            if args.dry_run and args.apply:
+                print("오류: --dry-run과 --apply는 동시에 쓸 수 없습니다.", file=sys.stderr)
+                return 1
+            db_conn = open_factory_db(args.db) if _Path(args.db).exists() else None
+            if args.run_id and db_conn is None:
+                print("오류: --run-id는 DB가 필요합니다.", file=sys.stderr)
+                return 1
+            try:
+                out = run_draft_execution(run_dir=args.run_dir, run_id=args.run_id,
+                                          apply=args.apply, db_conn=db_conn)
+            finally:
+                if db_conn is not None:
+                    db_conn.close()
+            print("RUNNER-BACKED DRAFT EXECUTION" + (" (apply)" if args.apply else " (dry-run)"))
+            print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
+            print(f"- challenge_id: {out.get('challenge_id')} / status: {out.get('status')}")
+            for p in out.get("problems") or []:
+                print(f"  BLOCKED: {p}")
+            if out.get("error"):
+                print(f"오류: {out['error']}", file=sys.stderr)
+            if out.get("applied"):
+                es = out.get("execution_smoke") or {}
+                print(f"- patched files: {out['patched_files']}")
+                print(f"- protected hash: {out['hash_status']}")
+                print(f"- execution smoke: adapter={es.get('adapter_ok')} "
+                      f"runner={es.get('runner_execution_ok')} bridge={es.get('bridge_server_ok')} "
+                      f"revise={es.get('revise_cycle_changes_result')}")
+                print(f"- product_loop_closed: {es.get('product_loop_closed')}")
+                print(f"- recommended_fitness: {out.get('recommended_fitness')} "
+                      f"(runner_backed_execution_included: "
+                      f"{(out.get('fitness') or {}).get('runner_backed_execution_included')})")
             print(f"- review dir: {out.get('review_dir')}")
             return 0 if out.get("ok") else 1
 

@@ -161,6 +161,15 @@ _PRODUCT_REPORT_TABS = [
     ("fitness_after_editor", ("run", "review/phase2c2/product_fitness_report_after_editor.md", "editor 후 제품성")),
     ("phase2c2_hash_check", ("run", "review/phase2c2/phase2c2_hash_check.json", "editor hash 검사")),
     ("phase2c2_dashboard_summary", ("run", "review/phase2c2/phase2c2_dashboard_summary.json", "phase2c2_dashboard_summary")),
+    # Phase 2C-3 runner-backed draft execution (review/phase2c3/ — 상세 페이지 전용)
+    ("phase2c3_execution_report", ("run", "review/phase2c3/phase2c3_execution_report.md", "실행 리포트")),
+    ("phase2c3_execution_plan", ("run", "review/phase2c3/phase2c3_execution_plan.md", "실행 계획")),
+    ("execution_smoke", ("run", "review/phase2c3/execution_smoke.md", "실행 스모크")),
+    ("adapter_check", ("run", "review/phase2c3/adapter_check.json", "어댑터 검사")),
+    ("viewer_smoke_after_execution", ("run", "review/phase2c3/viewer_smoke_after_execution.json", "실행 후 스모크")),
+    ("fitness_after_execution", ("run", "review/phase2c3/product_fitness_report_after_execution.md", "실행 후 제품성")),
+    ("phase2c3_hash_check", ("run", "review/phase2c3/phase2c3_hash_check.json", "실행 hash 검사")),
+    ("phase2c3_dashboard_summary", ("run", "review/phase2c3/phase2c3_dashboard_summary.json", "phase2c3_dashboard_summary")),
     # Phase 2D-0 autopilot (review/phase2d0/ — 상세 페이지 전용)
     ("product_stage_label", ("run", "review/phase2d0/product_stage_label.md", "autopilot stage")),
     ("product_gap_classification", ("run", "review/phase2d0/product_gap_classification.md", "gap 분류")),
@@ -934,6 +943,68 @@ def _phase2c2_panel(p2c2: dict | None) -> str:
 </section>"""
 
 
+_PHASE2C3_SUBDIR = "review/phase2c3"
+
+
+def _load_phase2c3(run_root: Path | None) -> dict | None:
+    """Phase 2C-3 runner-backed execution 요약(review/phase2c3/)을 읽는다. 없으면 None."""
+    if run_root is None:
+        return None
+    p = run_root / _PHASE2C3_SUBDIR / "phase2c3_dashboard_summary.json"
+    if not p.is_file():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _phase2c3_card_lines(p2c3: dict | None) -> str:
+    """목록 카드에 추가하는 4줄: 제품성 추천 · 검수 상태 · 실행 상태 · 사용자 다음 액션."""
+    if not p2c3:
+        return ""
+    rec = p2c3.get("recommended_fitness")
+    ko = _fitness_ko(rec)
+    loop = " · product loop closed" if p2c3.get("product_loop_closed") else ""
+    return (
+        f'<p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or "-")}){_e(loop)}</p>'
+        f'<p class="meta">검수 상태: {_e(p2c3.get("review_status") or "-")}</p>'
+        f'<p class="meta">실행 상태: {_e(p2c3.get("execution_status") or "-")}</p>'
+        f'<p class="meta">사용자 다음 액션: {_e(p2c3.get("user_next_action") or "-")}</p>'
+    )
+
+
+def _phase2c3_panel(p2c3: dict | None) -> str:
+    """상세 페이지 Phase 2C-3 패널: 어댑터/runner/브리지/revise 사이클 + 실행 방법."""
+    if not p2c3:
+        return ""
+    rec = p2c3.get("recommended_fitness")
+    ko = _fitness_ko(rec)
+    lims = p2c3.get("limitations") or []
+    flags = p2c3.get("critical_red_flags") or []
+
+    def _pf(v):
+        return "PASS" if v else "FAIL"
+
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2C-3 Runner-backed Draft Execution (초안을 실제 엔진으로 실행)</h2>
+  <p class="meta">실행 스모크: <b>{_pf(p2c3.get('execution_smoke_pass'))}</b>
+    · 수정→재실행 반영(revise): {_pf(p2c3.get('revise_cycle_changes_result'))}
+    · 실행 서버: {_pf(p2c3.get('bridge_server_ok'))}
+    · 원본 replay 불변: {_pf(p2c3.get('original_replay_unchanged'))}</p>
+  <p class="meta">product loop closed: <b>{_e(str(p2c3.get('product_loop_closed')))}</b>
+    · runner-backed execution included: {_e(str(p2c3.get('runner_backed_execution_included')))}
+    · 보호 대상 hash: {_e(p2c3.get('hash_status') or '-')}</p>
+  <p class="meta">제품성 추천: <b>{_e(ko)}</b> ({_e(rec or '-')})
+    · 검수 상태: {_e(p2c3.get('review_status') or '-')}</p>
+  <p class="meta">실행 방법: 아티팩트 루트에서 <code>{_e(p2c3.get('bridge_command') or '-')}</code>
+    실행 후 viewer에서 Execute Draft 버튼</p>
+  <div class="field"><span class="k">한계</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in lims) or '<li class="muted">없음</li>'}</ul></div>
+  <div class="field"><span class="k">red flags</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in flags) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 _PHASE2D0_SUBDIR = "review/phase2d0"
 
 
@@ -1217,9 +1288,12 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
                 f'<p class="meta">추천 {_e(recommended)}</p>'
                 f'{_lane_line(p2a, None)}'
             )
+        p2c3 = _load_phase2c3(run_root)
         p2c2 = _load_phase2c2(run_root)
         p2c1 = _load_phase2c1(run_root)
-        if p2c2:
+        if p2c3:
+            body_lines += _phase2c3_card_lines(p2c3)
+        elif p2c2:
             body_lines += _phase2c2_card_lines(p2c2)
         elif p2c1:
             body_lines += _phase2c1_card_lines(p2c1)
@@ -1487,6 +1561,7 @@ def render_product_detail(
         + hero + ch_summary + p2a_html + _phase2c0_panel(_load_phase2c0(run_root))
         + _phase2c1_panel(_load_phase2c1(run_root))
         + _phase2c2_panel(_load_phase2c2(run_root))
+        + _phase2c3_panel(_load_phase2c3(run_root))
         + _phase2d0_panel(_load_phase2d0(run_root), run_root)
         + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
