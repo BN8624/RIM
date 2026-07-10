@@ -148,6 +148,9 @@
    },
    "type": "array"
   },
+  "test_paths": {
+   "type": "object"
+  },
   "tests": {
    "type": "object"
   },
@@ -167,6 +170,7 @@
   "invariants",
   "validators",
   "tests",
+  "test_paths",
   "document_routes",
   "health"
  ],

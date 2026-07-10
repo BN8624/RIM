@@ -5,6 +5,6 @@
  "required_primary_files": ["repo_idea_miner/architecture_scanner.py"],
  "required_symbols": [],
  "required_invariants": ["INV-AI-DOCUMENTS-ONLY"],
- "required_tests": ["test_architecture_scanner", "test_architecture_atlas"],
+ "required_tests": ["tests/test_architecture_scanner.py", "tests/test_architecture_atlas.py"],
  "forbidden_files": ["repo_idea_miner/challenge_pipeline.py", "repo_idea_miner/pipeline.py"]
 }

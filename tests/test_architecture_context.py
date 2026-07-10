@@ -44,7 +44,7 @@ def test_canon_selector_builds_closed_loop_slice():
     assert {x["contract_id"] for x in c["contracts"]} >= {
         "product_evidence", "product_decision", "closed_loop_iteration"}
     assert any(i["invariant_id"] == "INV-BASE-RUN-IMMUTABLE" for i in c["invariants"])
-    assert "test_factory_phase2d1_loop" in c["tests_to_run"]
+    assert "tests/test_factory_phase2d1_loop.py" in c["tests_to_run"]  # §10 실제 path
     assert any("architecture-check" in v for v in c["verification_commands"])
     assert any("pipeline.py" in d for d in c["do_not_modify"])
 
@@ -108,6 +108,59 @@ def test_component_selector_and_ai_index_queries():
         cc = _ctx({parts[0].lstrip("-"): [parts[1]]})
         assert not any("selector 불일치" in w for w in cc["warnings"]), row
         assert cc["read_first"], row
+
+
+def test_ambiguous_module_selector_returns_deterministic_error(monkeypatch):
+    """A7 §9.3 — duplicate stem에서 short selector는 자동 선택 금지, stable sort candidates."""
+    real = ac.load_atlas(REPO_ROOT)
+    fake = json.loads(json.dumps(real))
+    base = next(m for m in fake["modules"]
+                if m["module"] == "repo_idea_miner.factory_validate")
+    dup = json.loads(json.dumps(base))
+    dup["module"] = "repo_idea_miner.subpkg.factory_validate"
+    fake["modules"].append(dup)
+    monkeypatch.setattr(ac, "load_atlas", lambda root: fake)
+
+    err = build_context(REPO_ROOT, {"module": ["factory_validate"]})
+    assert err == {
+        "error": "AMBIGUOUS_MODULE_SELECTOR",
+        "selector": "factory_validate",
+        "candidates": ["repo_idea_miner.factory_validate",
+                       "repo_idea_miner.subpkg.factory_validate"],
+    }
+    # full module ID는 정본이므로 그대로 동작한다 (§9.2)
+    ok = build_context(REPO_ROOT, {"module": ["repo_idea_miner.factory_validate"]})
+    assert "error" not in ok
+    assert any(e["path"].endswith("factory_validate.py") for e in ok["read_first"])
+
+
+def test_ambiguous_symbol_selector_returns_candidates(monkeypatch):
+    """A7 §9.5 — 짧은 symbol 이름이 여러 개와 일치하면 자동 선택 금지."""
+    real = ac.load_atlas(REPO_ROOT)
+    fake = json.loads(json.dumps(real))
+    dup = json.loads(json.dumps(fake["symbols"][0]))
+    orig_id = dup["symbol_id"]
+    short = orig_id.split(".")[-1]
+    dup["symbol_id"] = f"repo_idea_miner.other_module.{short}"
+    fake["symbols"].append(dup)
+    monkeypatch.setattr(ac, "load_atlas", lambda root: fake)
+
+    err = build_context(REPO_ROOT, {"symbol": [short]})
+    assert err["error"] == "AMBIGUOUS_SYMBOL_SELECTOR"
+    assert err["candidates"] == sorted([orig_id, dup["symbol_id"]])
+    # full symbol ID는 정확 일치로 통과
+    ok = build_context(REPO_ROOT, {"symbol": [orig_id]})
+    assert "error" not in ok
+
+
+def test_tests_to_run_are_real_paths():
+    """A7 §10 — tests_to_run/verification_commands는 실제 repo-relative path."""
+    c = _ctx({"canon": ["CANON-07"]})
+    assert c["tests_to_run"]
+    for t in c["tests_to_run"]:
+        assert t.startswith("tests/") and t.endswith(".py"), t
+        assert (REPO_ROOT / t).is_file(), t
+    assert c["verification_commands"][0].startswith("python -m pytest tests/")
 
 
 def _cf(path: str, status: str = "MODIFIED", old: str | None = None) -> dict:

@@ -7981,7 +7981,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 968,
+  "test_count": 971,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -8184,7 +8184,7 @@
      ]
     }
    ],
-   "loc": 836,
+   "loc": 887,
    "module": "repo_idea_miner.architecture_atlas",
    "path": "repo_idea_miner/architecture_atlas.py",
    "private_symbols": [
@@ -8248,7 +8248,7 @@
      ]
     }
    ],
-   "loc": 447,
+   "loc": 470,
    "module": "repo_idea_miner.architecture_context",
    "path": "repo_idea_miner/architecture_context.py",
    "private_symbols": [
@@ -9646,7 +9646,7 @@
      ]
     }
    ],
-   "loc": 911,
+   "loc": 914,
    "module": "repo_idea_miner.cli_handlers",
    "path": "repo_idea_miner/cli_handlers.py",
    "private_symbols": [
@@ -14410,9 +14410,9 @@
   }
  ],
  "repository": {
-  "head": "98cd9ad695171e169e6c0115d21c2f823eaa5080",
+  "head": "0b5cc83eb45d774f9df9c088d58f43feaa634117",
   "structural_diff": true,
-  "structural_fingerprint": "832e43ea97da40a9a32630d8aba3ebd4b94498e76f1d9f22cf7676e52da199f5",
+  "structural_fingerprint": "915eaae7f560ed018874601561b647c3faa80736e1b4d9d4cfe0b6cf49d0225d",
   "structure_snapshot": "845ec77d9279f203662b1daa9486bea74aa7e982344d2f924f18da229ee9906d"
  },
  "routes": [
@@ -14623,7 +14623,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 750,
+   "end_line": 793,
    "kind": "function",
    "path": "repo_idea_miner/architecture_atlas.py",
    "related_tests": [
@@ -14634,7 +14634,7 @@
     "orchestrator"
    ],
    "signature": "def run_architecture_check(root: Path, secrets: list[str] | None=None, warnings: list[str] | None=None) -> list[str]",
-   "start_line": 448,
+   "start_line": 454,
    "symbol_id": "repo_idea_miner.architecture_atlas.run_architecture_check"
   },
   {
@@ -14642,7 +14642,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 398,
+   "end_line": 404,
    "kind": "function",
    "path": "repo_idea_miner/architecture_atlas.py",
    "related_tests": [
@@ -14652,7 +14652,7 @@
     "orchestrator"
    ],
    "signature": "def write_atlas(root: Path) -> dict",
-   "start_line": 387,
+   "start_line": 393,
    "symbol_id": "repo_idea_miner.architecture_atlas.write_atlas"
   },
   {
@@ -14660,7 +14660,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 302,
+   "end_line": 323,
    "kind": "function",
    "path": "repo_idea_miner/architecture_context.py",
    "related_tests": [
@@ -14806,7 +14806,7 @@
     "CANON-12"
    ],
    "component_id": "cli",
-   "end_line": 872,
+   "end_line": 875,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14818,7 +14818,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_architecture_check(args) -> int",
-   "start_line": 859,
+   "start_line": 862,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_architecture_check"
   },
   {
@@ -14826,7 +14826,7 @@
     "CANON-12"
    ],
    "component_id": "cli",
-   "end_line": 856,
+   "end_line": 859,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -16083,6 +16083,73 @@
    "symbol_id": "repo_idea_miner.search_pipeline.run_search"
   }
  ],
+ "test_paths": {
+  "conftest": "tests/conftest.py",
+  "test_ai_task_fixtures": "tests/test_ai_task_fixtures.py",
+  "test_architecture_atlas": "tests/test_architecture_atlas.py",
+  "test_architecture_context": "tests/test_architecture_context.py",
+  "test_architecture_scanner": "tests/test_architecture_scanner.py",
+  "test_ceiling": "tests/test_ceiling.py",
+  "test_challenge_calibration": "tests/test_challenge_calibration.py",
+  "test_challenge_cli": "tests/test_challenge_cli.py",
+  "test_challenge_daemon": "tests/test_challenge_daemon.py",
+  "test_challenge_dashboard": "tests/test_challenge_dashboard.py",
+  "test_challenge_db": "tests/test_challenge_db.py",
+  "test_challenge_key_scheduler": "tests/test_challenge_key_scheduler.py",
+  "test_challenge_pipeline_mock": "tests/test_challenge_pipeline_mock.py",
+  "test_challenge_schemas": "tests/test_challenge_schemas.py",
+  "test_challenge_search_mock": "tests/test_challenge_search_mock.py",
+  "test_challenge_validate": "tests/test_challenge_validate.py",
+  "test_collector": "tests/test_collector.py",
+  "test_dependency": "tests/test_dependency.py",
+  "test_factory_anti_hardcode_2b1b": "tests/test_factory_anti_hardcode_2b1b.py",
+  "test_factory_cli": "tests/test_factory_cli.py",
+  "test_factory_continue_17": "tests/test_factory_continue_17.py",
+  "test_factory_continue_validate_17b": "tests/test_factory_continue_validate_17b.py",
+  "test_factory_core_gates": "tests/test_factory_core_gates.py",
+  "test_factory_core_hardening_16b": "tests/test_factory_core_hardening_16b.py",
+  "test_factory_core_pipeline_mock": "tests/test_factory_core_pipeline_mock.py",
+  "test_factory_core_schemas": "tests/test_factory_core_schemas.py",
+  "test_factory_dashboard": "tests/test_factory_dashboard.py",
+  "test_factory_db": "tests/test_factory_db.py",
+  "test_factory_draft_execution_2c3": "tests/test_factory_draft_execution_2c3.py",
+  "test_factory_gates": "tests/test_factory_gates.py",
+  "test_factory_phase2d1_capabilities": "tests/test_factory_phase2d1_capabilities.py",
+  "test_factory_phase2d1_cli_dashboard": "tests/test_factory_phase2d1_cli_dashboard.py",
+  "test_factory_phase2d1_loop": "tests/test_factory_phase2d1_loop.py",
+  "test_factory_phase2d1_p0": "tests/test_factory_phase2d1_p0.py",
+  "test_factory_pipeline_mock": "tests/test_factory_pipeline_mock.py",
+  "test_factory_product_editor_2c2": "tests/test_factory_product_editor_2c2.py",
+  "test_factory_product_loop_2d0": "tests/test_factory_product_loop_2d0.py",
+  "test_factory_product_polish_2c1": "tests/test_factory_product_polish_2c1.py",
+  "test_factory_queue_2a": "tests/test_factory_queue_2a.py",
+  "test_factory_review_2c0": "tests/test_factory_review_2c0.py",
+  "test_factory_run_layout": "tests/test_factory_run_layout.py",
+  "test_factory_sandbox": "tests/test_factory_sandbox.py",
+  "test_factory_schemas": "tests/test_factory_schemas.py",
+  "test_factory_spec_repair_2b1": "tests/test_factory_spec_repair_2b1.py",
+  "test_factory_validate": "tests/test_factory_validate.py",
+  "test_followup": "tests/test_followup.py",
+  "test_golden_representation_lint": "tests/test_golden_representation_lint.py",
+  "test_json_repair": "tests/test_json_repair.py",
+  "test_key_pool": "tests/test_key_pool.py",
+  "test_llm_client": "tests/test_llm_client.py",
+  "test_pipeline_mock": "tests/test_pipeline_mock.py",
+  "test_preflight": "tests/test_preflight.py",
+  "test_product_dashboard_phase15": "tests/test_product_dashboard_phase15.py",
+  "test_product_dashboard_phase16": "tests/test_product_dashboard_phase16.py",
+  "test_product_labels": "tests/test_product_labels.py",
+  "test_redaction": "tests/test_redaction.py",
+  "test_renderer": "tests/test_renderer.py",
+  "test_sampler": "tests/test_sampler.py",
+  "test_schema_validation": "tests/test_schema_validation.py",
+  "test_serve": "tests/test_serve.py",
+  "test_signals": "tests/test_signals.py",
+  "test_structural_reset_characterization": "tests/test_structural_reset_characterization.py",
+  "test_truncation": "tests/test_truncation.py",
+  "test_url_parser": "tests/test_url_parser.py",
+  "test_viewer": "tests/test_viewer.py"
+ },
  "tests": {
   "conftest": [
    "workers"

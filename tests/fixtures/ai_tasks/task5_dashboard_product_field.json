@@ -7,6 +7,6 @@
  "required_symbols": ["repo_idea_miner.challenge_dashboard.serve_dashboard",
                       "repo_idea_miner.challenge_dashboard_data.load_phase2d1_details"],
  "required_invariants": ["INV-PRESENTATION-NO-JUDGMENT"],
- "required_tests": ["test_challenge_dashboard", "test_product_dashboard_phase16"],
+ "required_tests": ["tests/test_challenge_dashboard.py", "tests/test_product_dashboard_phase16.py"],
  "forbidden_files": ["repo_idea_miner/factory_product_loop.py", "repo_idea_miner/pipeline.py"]
 }

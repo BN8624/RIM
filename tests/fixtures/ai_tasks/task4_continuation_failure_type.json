@@ -5,7 +5,7 @@
  "required_primary_files": ["repo_idea_miner/factory_continue.py"],
  "required_symbols": ["repo_idea_miner.factory_continue.run_continuation"],
  "required_invariants": ["INV-SPEC-REPAIR-PROTECTION", "INV-PROTECTED-HASH"],
- "required_tests": ["test_factory_continue_17"],
+ "required_tests": ["tests/test_factory_continue_17.py"],
  "required_contracts": ["continuation_summary"],
  "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
 }

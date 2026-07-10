@@ -82,8 +82,16 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
     modules = atlas["modules"]
     mod_by_stem = {m["module"].split(".")[-1]: m for m in modules}
     module_stems = set(mod_by_stem)
+    mods_by_stem: dict[str, list[dict]] = {}
+    for m in modules:
+        mods_by_stem.setdefault(m["module"].split(".")[-1], []).append(m)
+    mod_by_full = {m["module"]: m for m in modules}
     routes_by_id = {r["route_id"]: r for r in atlas["routes"]}
     symbols_by_id = {s["symbol_id"]: s for s in atlas["symbols"]}
+    test_paths: dict[str, str] = atlas.get("test_paths", {})
+
+    def _test_path(stem: str) -> str:
+        return test_paths.get(stem, f"tests/{stem}.py")
 
     sel_canons: set[str] = set()
     sel_routes: list[str] = []       # 선언 순서 유지 (read_first 랭킹)
@@ -127,14 +135,27 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
         for stem in sorted(comp["modules"]):
             add_stem(stem)
     for mod in selectors.get("module", []):
-        stem = mod.split(".")[-1]
-        if stem in module_stems:
-            add_stem(stem)
+        # 정본 ID는 full import path (§9.2); dot 없는 stem은 유일 일치일 때만 alias 허용 (§9.3)
+        if mod in mod_by_full:
+            add_stem(mod.split(".")[-1])
+            continue
+        cands = mods_by_stem.get(mod, []) if "." not in mod else []
+        if len(cands) > 1:
+            return {"error": "AMBIGUOUS_MODULE_SELECTOR", "selector": mod,
+                    "candidates": sorted(c["module"] for c in cands)}
+        if len(cands) == 1:
+            add_stem(mod)
         else:
             warnings.append(f"selector 불일치: module {mod}")
     for sym in selectors.get("symbol", []):
-        matches = [sid for sid in sorted(symbols_by_id)
-                   if sid == sym or sid.endswith("." + sym)]
+        # full symbol ID는 정확 일치; 짧은 이름은 유일 일치일 때만 (§9.5 자동 선택 금지)
+        if sym in symbols_by_id:
+            matches = [sym]
+        else:
+            matches = [sid for sid in sorted(symbols_by_id) if sid.endswith("." + sym)]
+            if len(matches) > 1:
+                return {"error": "AMBIGUOUS_SYMBOL_SELECTOR", "selector": sym,
+                        "candidates": matches}
         if not matches:
             warnings.append(f"selector 불일치: symbol {sym}")
         for sid in matches:
@@ -264,17 +285,17 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
               or _symbol_module_stem(a["symbol_id"], module_stems) in sel_stems)),
         key=lambda a: (a["artifact_id"], a["role"], a["symbol_id"], a["provenance"]))
 
-    # ---- tests / verification / do_not_modify
+    # ---- tests / verification / do_not_modify (§10 — 실제 repo-relative test path)
     tests = set()
     for stem in sel_stems:
         tests.update(mod_by_stem[stem]["tests"])
     for i in invariants:
         tests.update(i["tests"])
-    tests_to_run = sorted(tests)
+    tests_to_run = sorted(_test_path(t) for t in tests)
     verification_commands = []
     if tests_to_run:
         verification_commands.append(
-            "python -m pytest " + " ".join(f"tests/{t}.py" for t in tests_to_run) + " -q")
+            "python -m pytest " + " ".join(tests_to_run) + " -q")
     verification_commands.append("python -m repo_idea_miner architecture-check")
     do_not_modify = sorted(
         manifest.get("rules", {}).get("do_not_modify", {}).get("entries", []))
@@ -396,7 +417,9 @@ def _direct_static_impact(atlas: dict, sel_stems: list[str],
             "related_canon_ids": sorted(
                 {c for s in sel_stems
                  for c in atlas["components"][mod_by_stem[s]["component"]]["canon_ids"]}),
-            "tests_to_run": sorted(related_tests),
+            "tests_to_run": sorted(
+                atlas.get("test_paths", {}).get(t, f"tests/{t}.py")
+                for t in related_tests),
             "changed_tests": change_info.get("test_changes", []),
             "pending_build_files": pending,
             "deleted_modules": deleted_modules,

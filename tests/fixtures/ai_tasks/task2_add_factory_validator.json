@@ -6,6 +6,6 @@
  "required_symbols": ["repo_idea_miner.factory_validate.run_marker_validators",
                       "repo_idea_miner.factory_validate.validate_product_run_dir"],
  "required_invariants": ["INV-FRESH-VERIFICATION"],
- "required_tests": ["test_factory_validate"],
+ "required_tests": ["tests/test_factory_validate.py"],
  "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
 }

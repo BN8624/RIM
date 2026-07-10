@@ -849,6 +849,9 @@ def _cmd_architecture_context(args) -> int:
     except FileNotFoundError as exc:
         print(f"오류: {exc}", file=sys.stderr)
         return 1
+    if "error" in ctx:  # AMBIGUOUS_*_SELECTOR (§9.3) — deterministic error JSON
+        print(json.dumps(ctx, ensure_ascii=False, sort_keys=True, indent=1))
+        return 1
     if args.compact:
         print(render_compact(ctx))
     else:

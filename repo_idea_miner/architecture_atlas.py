@@ -70,17 +70,20 @@ def _committed_structural_fingerprint(root: Path) -> str | None:
     return None
 
 
-def _test_mapping(modules: list[dict]) -> dict[str, list[str]]:
-    """test 모듈 → import하는 production 모듈 (짧은 이름)."""
+def _test_mapping(modules: list[dict]) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """test 모듈 → import하는 production 모듈 (짧은 이름) + 실제 repo-relative path (§10)."""
     out: dict[str, list[str]] = {}
+    paths: dict[str, str] = {}
     for m in modules:
         if not m["module"].startswith("tests."):
             continue
+        stem = m["module"].split(".")[-1]
+        paths[stem] = m["path"]
         srcs = sorted({imp["from"].split(".")[-1] for imp in m["imports"]
                        if imp["from"].startswith(PACKAGE)})
         if srcs:
-            out[m["module"].split(".")[-1]] = srcs
-    return out
+            out[stem] = srcs
+    return out, paths
 
 
 def _cli_handlers_map(root: Path) -> dict[str, str]:
@@ -203,6 +206,7 @@ def compute_fingerprint(atlas: dict) -> str:
         "cli": atlas["cli"],
         "validators": atlas["validators"],
         "tests": atlas["tests"],
+        "test_paths": atlas.get("test_paths", {}),
         "document_routes": atlas["document_routes"],
     }
     payload = json.dumps(basis, ensure_ascii=False, sort_keys=True, default=list)
@@ -222,7 +226,7 @@ def build_atlas(root: Path) -> dict:
     for m in prod:
         for imp in m["imports"]:
             imported_by.setdefault(imp["from"], []).append(m["module"])
-    tests = _test_mapping(base["modules"])
+    tests, test_paths = _test_mapping(base["modules"])
     tests_by_src: dict[str, list[str]] = {}
     for t, srcs in tests.items():
         for s in srcs:
@@ -318,6 +322,7 @@ def build_atlas(root: Path) -> dict:
         ],
         "validators": {"checks": base["validator_checks"], "run_kinds": base["run_kinds"]},
         "tests": tests,
+        "test_paths": test_paths,
         "document_routes": _document_routes(root),
         "health": {
             "import_cycles": base["import_cycles"],
@@ -351,7 +356,7 @@ _SCHEMA = {
     "type": "object",
     "required": ["schema_version", "repository", "components", "modules", "symbols",
                  "routes", "artifacts", "contracts", "invariants", "validators",
-                 "tests", "document_routes", "health"],
+                 "tests", "test_paths", "document_routes", "health"],
     "properties": {
         "schema_version": {"const": 2},
         "repository": {"type": "object", "required": [
@@ -377,6 +382,7 @@ _SCHEMA = {
         "cli": {"type": "array", "items": {"type": "object", "required": ["command", "handler", "options"]}},
         "validators": {"type": "object"},
         "tests": {"type": "object"},
+        "test_paths": {"type": "object"},
         "document_routes": {"type": "array", "items": {"type": "object", "required": [
             "route_id", "selectors", "canon_ids", "atlas_query"]}},
         "health": {"type": "object"},
@@ -635,8 +641,45 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None,
         elif iid not in _INV_ID_RE.findall(bodies.get(cid2, "")):
             problems.append(f"invariant {iid}: PROJECT_CANON {cid2} 섹션에 등재되지 않음")
         for t in inv["tests"]:
-            if not (root / "tests" / f"{t}.py").is_file():
+            tp = atlas["test_paths"].get(t)
+            if tp is None or not (root / tp).is_file():
                 problems.append(f"invariant {iid}: 없는 테스트 {t}")
+
+    # 18e. canonical reference는 full ID여야 한다 (A7 §9.4/§17.1-5/-6) — short stem 금지
+    def _full_symbol(ref: str) -> bool:
+        return ref.startswith(PACKAGE + ".") and ref.count(".") >= 2
+
+    for r in atlas["routes"]:
+        for s in r["steps"]:
+            if not _full_symbol(s):
+                problems.append(f"route {r['route_id']}: full symbol ID가 아닌 step {s}")
+    for c in atlas["contracts"]:
+        for s in [c["owner_symbol"]] + c["consumer_symbols"] + c["validator_symbols"]:
+            if s and not _full_symbol(s):
+                problems.append(f"contract {c['contract_id']}: full symbol ID가 아닌 참조 {s}")
+    for inv in atlas["invariants"]:
+        for s in inv["applies_to"]:  # full module ID 또는 full symbol ID 허용, bare stem 금지
+            if not s.startswith(PACKAGE + "."):
+                problems.append(f"invariant {inv['invariant_id']}: full ID가 아닌 참조 {s}")
+
+    # 18f. duplicate stem이 존재하면 manifest의 short-stem canonical reference는 hard fail (§9.4)
+    all_stems = [m["module"].split(".")[-1] for m in atlas["modules"]]
+    dup_stems = {s for s in all_stems if all_stems.count(s) > 1}
+    if dup_stems:
+        for cid, comp in atlas["components"].items():
+            for mod in comp["modules"]:
+                if mod in dup_stems:
+                    problems.append(
+                        f"manifest component {cid}: ambiguous stem {mod}을 canonical reference로 사용 — full module ID 필요")
+
+    # 18g. test mapping이 실제 path인지 (A7 §10/§17.1-7): 추정 stem path 금지, 파일 실재
+    for stem, tp in atlas["test_paths"].items():
+        if not (root / tp).is_file():
+            problems.append(f"test_paths: 실재하지 않는 test path {tp} ({stem})")
+    for m in atlas["modules"]:
+        for t in m["tests"]:
+            if t not in atlas["test_paths"]:
+                problems.append(f"module {m['module']}: test {t}가 test_paths에 없음 (추정 stem path 금지)")
 
     # 19. README의 주요 CLI 실재
     readme = (root / "README.md").read_text(encoding="utf-8")
@@ -784,7 +827,7 @@ def _collect_warnings(root: Path, atlas: dict) -> list[str]:
             ctx = build_context(root, {parts[0].lstrip("-"): [parts[1]]})
         except FileNotFoundError:
             break
-        for w in ctx["warnings"]:
+        for w in ctx.get("warnings", []):  # ambiguous selector error dict면 warnings 없음
             if "primary file 제한 초과" in w:
                 out.append(f"AI_INDEX {row['route_id']}: {w}")
 
@@ -819,7 +862,15 @@ def _collect_warnings(root: Path, atlas: dict) -> list[str]:
         if size > limit:
             out.append(f"문서 크기 초과: {name} {size}B > {limit}B")
 
-    # 8. committed Atlas에 아직 없는 새 production 모듈 (A7 §17.2-7 — rebuild 전 상태 안내)
+    # 8. duplicate module stem / duplicate short symbol name (A7 §17.2-1/-2 — 비차단)
+    stems = [m["module"].split(".")[-1] for m in atlas["modules"]]
+    for s in sorted({x for x in stems if stems.count(x) > 1}):
+        out.append(f"duplicate module stem: {s} — short selector는 AMBIGUOUS 오류가 된다")
+    shorts = [s["symbol_id"].split(".")[-1] for s in atlas["symbols"]]
+    for s in sorted({x for x in shorts if shorts.count(x) > 1}):
+        out.append(f"duplicate short symbol name: {s} — short selector는 AMBIGUOUS 오류가 된다")
+
+    # 9. committed Atlas에 아직 없는 새 production 모듈 (A7 §17.2-7 — rebuild 전 상태 안내)
     #    라이브 빌드는 untracked 파일도 스캔하므로, 기준은 커밋된 atlas.json이다.
     committed_path = root / ATLAS_DIR / ATLAS_JSON
     if committed_path.is_file():
