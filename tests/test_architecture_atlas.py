@@ -1,6 +1,5 @@
-# R7 Architecture Atlas 테스트 — 결정론/지문/검사/HTML 계약 (§17.13).
+# Architecture Atlas 테스트 — 결정론/지문/검사/AI-only 계약 (HTML 없음).
 import json
-import re
 from pathlib import Path
 
 from repo_idea_miner.architecture_atlas import (
@@ -12,7 +11,6 @@ from repo_idea_miner.architecture_atlas import (
     module_component_map,
     run_architecture_check,
 )
-from repo_idea_miner.architecture_render import render_index
 from repo_idea_miner.architecture_scanner import (
     extract_cli_details,
     find_import_cycles,
@@ -31,11 +29,10 @@ def _atlas():
 # ---------------------------------------------------------------- 결정론/지문
 
 def test_build_deterministic():
-    """같은 HEAD·manifest에서 두 번 빌드하면 동일하다 (§17.9)."""
+    """같은 HEAD·manifest에서 두 번 빌드하면 동일하다."""
     a1 = build_atlas(REPO_ROOT)
     a2 = build_atlas(REPO_ROOT)
     assert a1 == a2
-    assert render_index(a1) == render_index(a2)
 
 
 def test_fingerprint_ignores_internal_only_change():
@@ -79,7 +76,6 @@ def test_cli_extraction_matches_handlers():
     assert {c["command"] for c in a["cli"]} == set(HANDLERS)
     details = {d["command"]: d["options"] for d in extract_cli_details(REPO_ROOT)}
     assert "--execute" in details["factory-product-loop"]
-    assert "--port" in details["architecture-serve"]
 
 
 def test_validator_and_test_mapping():
@@ -130,38 +126,23 @@ def test_root_markdown_whitelist_constant():
         "AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md", "checklist.md"}
 
 
-# ---------------------------------------------------------------- HTML 계약
+# ---------------------------------------------------------------- AI-only 계약 (HTML 없음)
 
-def _html():
-    return (REPO_ROOT / "architecture/index.html").read_text(encoding="utf-8")
+def test_no_human_atlas_surface():
+    """AI-only Atlas: HTML/renderer/serve·summary CLI가 존재하지 않는다."""
+    from repo_idea_miner.cli_handlers import HANDLERS
 
-
-def test_html_standalone_no_external():
-    html = _html()
-    assert not re.search(r"https?://", html)  # 외부 CDN/URL 0 (§17.8)
-    assert '<link' not in html and 'src="' not in html  # 전부 인라인
-
-
-def test_html_mobile_and_dark():
-    html = _html()
-    assert 'name="viewport"' in html
-    assert "prefers-color-scheme" in html
+    assert not (REPO_ROOT / "architecture/index.html").exists()
+    assert not (REPO_ROOT / "repo_idea_miner/architecture_render.py").exists()
+    assert "architecture-serve" not in HANDLERS
+    assert "architecture-summary" not in HANDLERS
 
 
-def test_html_search_filter_drawer():
-    html = _html()
-    for marker in ('id="q"', 'id="fcomp"', 'id="drawer"', 'id="modlist"'):
-        assert marker in html
-    for screen in ("System Overview", "Canonical Pipeline", "Architecture Health",
-                   "Document Governance"):
-        assert screen in html
-
-
-def test_html_no_secret_values():
+def test_atlas_outputs_no_secret_values():
     from repo_idea_miner.config import load_settings
 
     secrets = [s for s in load_settings().secret_values() if s]
-    html = _html()
-    atlas_text = (REPO_ROOT / "architecture/atlas.json").read_text(encoding="utf-8")
-    for s in secrets:
-        assert s not in html and s not in atlas_text
+    for name in ("architecture/atlas.json", "architecture/manifest.toml"):
+        text = (REPO_ROOT / name).read_text(encoding="utf-8")
+        for s in secrets:
+            assert s not in text

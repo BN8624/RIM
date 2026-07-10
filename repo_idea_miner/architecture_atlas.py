@@ -18,14 +18,12 @@ ATLAS_DIR = "architecture"
 MANIFEST_NAME = "manifest.toml"
 ATLAS_JSON = "atlas.json"
 ATLAS_SCHEMA = "atlas.schema.json"
-ATLAS_HTML = "index.html"
 
 ROOT_MD_WHITELIST = ("AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md", "checklist.md")
 
 _CANON_ID_RE = re.compile(r"^## (CANON-\d{2})\b", re.M)
 _INDEX_ID_RE = re.compile(r"\*\*(CANON-\d{2})\b")
 _MD_LINK_RE = re.compile(r"\]\(([^)#`\s]+\.md)\)")
-_EXTERNAL_URL_RE = re.compile(r"https?://")
 
 
 # ---------------------------------------------------------------- manifest
@@ -211,9 +209,7 @@ _SCHEMA = {
 
 
 def write_atlas(root: Path) -> dict:
-    """atlas.json / atlas.schema.json / index.html을 생성한다 (byte-deterministic)."""
-    from repo_idea_miner.architecture_render import render_index
-
+    """atlas.json / atlas.schema.json을 생성한다 (byte-deterministic, AI 전용 — HTML 없음)."""
     atlas = build_atlas(root)
     out_dir = root / ATLAS_DIR
     out_dir.mkdir(exist_ok=True)
@@ -223,7 +219,6 @@ def write_atlas(root: Path) -> dict:
     (out_dir / ATLAS_SCHEMA).write_text(
         json.dumps(_SCHEMA, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
         encoding="utf-8", newline="\n")
-    (out_dir / ATLAS_HTML).write_text(render_index(atlas), encoding="utf-8", newline="\n")
     return atlas
 
 
@@ -371,14 +366,15 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
     else:
         problems.append("Atlas 없음: architecture-build를 먼저 실행")
 
-    # 16. 외부 CDN/URL 없음 (index.html)
-    html_path = root / ATLAS_DIR / ATLAS_HTML
-    if html_path.is_file() and _EXTERNAL_URL_RE.search(html_path.read_text(encoding="utf-8")):
-        problems.append("index.html에 외부 URL/CDN 참조 존재")
+    # 16. 사람용 Atlas HTML/renderer 부재 (AI-only Atlas)
+    if (root / ATLAS_DIR / "index.html").is_file():
+        problems.append("architecture/index.html 존재 — AI-only Atlas는 HTML을 갖지 않음")
+    if (root / PACKAGE / "architecture_render.py").is_file():
+        problems.append("architecture_render.py 존재 — HTML renderer는 제거 대상")
 
     # 17. secret 미포함 (생성 산출물)
     if secrets:
-        for name in (ATLAS_JSON, ATLAS_HTML, MANIFEST_NAME):
+        for name in (ATLAS_JSON, ATLAS_SCHEMA, MANIFEST_NAME):
             p = root / ATLAS_DIR / name
             if p.is_file():
                 text = p.read_text(encoding="utf-8", errors="replace")
@@ -416,22 +412,3 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
     return problems
 
 
-def atlas_summary(root: Path) -> dict:
-    """architecture-summary용 핵심 지표."""
-    atlas = build_atlas(root)
-    h = atlas["health"]
-    return {
-        "commit": atlas["commit"],
-        "fingerprint": atlas["fingerprint"][:16],
-        "modules": h["module_count"],
-        "tests": h["test_count"],
-        "components": len(atlas["components"]),
-        "cli_commands": len(atlas["cli"]),
-        "import_cycles": len(h["import_cycles"]),
-        "private_cross_imports": len(h["private_cross_imports"]),
-        "private_outside_allowlist": len(h["private_cross_imports_outside_allowlist"]),
-        "orphans": len(h["orphan_modules"]),
-        "unknown_component": len(h["unknown_component"]),
-        "over_500_loc": len(h["over_500_loc"]),
-        "over_800_loc": len(h["over_800_loc"]),
-    }

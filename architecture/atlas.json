@@ -861,21 +861,6 @@
    "source": "repo_idea_miner.cli_handlers"
   },
   {
-   "command": "architecture-serve",
-   "handler": "_cmd_architecture_serve",
-   "options": [
-    "--host",
-    "--port"
-   ],
-   "source": "repo_idea_miner.cli_handlers"
-  },
-  {
-   "command": "architecture-summary",
-   "handler": "_cmd_architecture_summary",
-   "options": [],
-   "source": "repo_idea_miner.cli_handlers"
-  },
-  {
    "command": "challenge",
    "handler": "_cmd_challenge",
    "options": [
@@ -1184,14 +1169,13 @@
    "source": "repo_idea_miner.cli_handlers"
   }
  ],
- "commit": "15c6cf24c0e77029e3473374f9eacd509f5b47ca",
+ "commit": "d84c0522aee622628f4a2b92f9ec6a434cccb7fe",
  "components": {
   "atlas": {
    "canon_id": "CANON-12",
    "label": "Architecture Atlas",
    "modules": [
     "architecture_atlas",
-    "architecture_render",
     "architecture_scanner"
    ],
    "status": "canonical"
@@ -1352,10 +1336,10 @@
   "REENTRY.md": "SESSION STATE",
   "checklist.md": "DELIVERY HISTORY"
  },
- "fingerprint": "df0720b8b85641d7a910ac37f9a5b43fb14a0a01ea2144ea075b94a566b49806",
+ "fingerprint": "cb5570433b886e58e2ec0fb3040d55186bee55ee79703c22ad14546da998e127",
  "health": {
   "import_cycles": [],
-  "module_count": 74,
+  "module_count": 73,
   "orphan_modules": [],
   "over_500_loc": [
    "repo_idea_miner/challenge_dashboard.py",
@@ -1420,7 +1404,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 942,
+  "test_count": 940,
   "unknown_component": []
  },
  "manifest": {
@@ -1466,8 +1450,7 @@
     "label": "Architecture Atlas",
     "modules": [
      "architecture_scanner",
-     "architecture_atlas",
-     "architecture_render"
+     "architecture_atlas"
     ],
     "status": "canonical"
    },
@@ -1766,12 +1749,6 @@
    ],
    "imports": [
     {
-     "from": "repo_idea_miner.architecture_render",
-     "names": [
-      "render_index"
-     ]
-    },
-    {
      "from": "repo_idea_miner.architecture_scanner",
      "names": [
       "PACKAGE",
@@ -1780,12 +1757,11 @@
      ]
     }
    ],
-   "loc": 437,
+   "loc": 414,
    "module": "repo_idea_miner.architecture_atlas",
    "path": "repo_idea_miner/architecture_atlas.py",
    "private_symbols": [
     "_CANON_ID_RE",
-    "_EXTERNAL_URL_RE",
     "_INDEX_ID_RE",
     "_MD_LINK_RE",
     "_SCHEMA",
@@ -1798,47 +1774,16 @@
    ],
    "public_symbols": [
     "ATLAS_DIR",
-    "ATLAS_HTML",
     "ATLAS_JSON",
     "ATLAS_SCHEMA",
     "MANIFEST_NAME",
     "ROOT_MD_WHITELIST",
-    "atlas_summary",
     "build_atlas",
     "compute_fingerprint",
     "load_manifest",
     "module_component_map",
     "run_architecture_check",
     "write_atlas"
-   ],
-   "tests": [
-    "test_architecture_atlas"
-   ]
-  },
-  {
-   "artifact_refs": [],
-   "component": "atlas",
-   "imported_by": [
-    "repo_idea_miner.architecture_atlas"
-   ],
-   "imports": [],
-   "loc": 278,
-   "module": "repo_idea_miner.architecture_render",
-   "path": "repo_idea_miner/architecture_render.py",
-   "private_symbols": [
-    "_CSS",
-    "_JS",
-    "_artifacts",
-    "_cli",
-    "_docs",
-    "_e",
-    "_gates_tests",
-    "_health",
-    "_overview",
-    "_pill"
-   ],
-   "public_symbols": [
-    "render_index"
    ],
    "tests": [
     "test_architecture_atlas"
@@ -2903,7 +2848,7 @@
      ]
     }
    ],
-   "loc": 245,
+   "loc": 239,
    "module": "repo_idea_miner.cli",
    "path": "repo_idea_miner/cli.py",
    "private_symbols": [],
@@ -2933,19 +2878,6 @@
     "repo_idea_miner.cli"
    ],
    "imports": [
-    {
-     "from": "repo_idea_miner.architecture_atlas",
-     "names": [
-      "ATLAS_DIR",
-      "ATLAS_HTML"
-     ]
-    },
-    {
-     "from": "repo_idea_miner.architecture_atlas",
-     "names": [
-      "atlas_summary"
-     ]
-    },
     {
      "from": "repo_idea_miner.architecture_atlas",
      "names": [
@@ -3187,12 +3119,6 @@
      ]
     },
     {
-     "from": "repo_idea_miner.serve",
-     "names": [
-      "serve"
-     ]
-    },
-    {
      "from": "repo_idea_miner.validate_run",
      "names": [
       "validate_run_dir"
@@ -3205,14 +3131,12 @@
      ]
     }
    ],
-   "loc": 897,
+   "loc": 872,
    "module": "repo_idea_miner.cli_handlers",
    "path": "repo_idea_miner/cli_handlers.py",
    "private_symbols": [
     "_cmd_architecture_build",
     "_cmd_architecture_check",
-    "_cmd_architecture_serve",
-    "_cmd_architecture_summary",
     "_cmd_challenge",
     "_cmd_challenge_search",
     "_cmd_daemon",
@@ -8041,7 +7965,6 @@
   ],
   "test_architecture_atlas": [
    "architecture_atlas",
-   "architecture_render",
    "architecture_scanner",
    "cli_handlers",
    "config"

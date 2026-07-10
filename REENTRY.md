@@ -40,6 +40,5 @@ Architecture Atlas는 `architecture/`(빌드·검사는 CANON-12).
 
 - `python -m pytest tests/test_structural_reset_characterization.py -q` — #47/#54 의미 보존 확인(8건).
 - `python -m pytest -q` — 전체(약 4분 15초, 1000건).
-- `python -m repo_idea_miner architecture-check` / `architecture-summary` — 구조 검사·지표.
+- `python -m repo_idea_miner architecture-check` — 구조·문서 거버넌스 검사.
 - `python -m repo_idea_miner architecture-build` — atlas 재생성(결정론, 2회 빌드 diff 0이어야 정상).
-- `python -m repo_idea_miner architecture-serve` — Atlas 로컬 열람(모바일 360px/다크모드 지원).

@@ -94,7 +94,7 @@ modules = ["config", "errors", "redaction", "llm_client", "key_pool", "jsonutil"
 label = "Architecture Atlas"
 status = "canonical"
 canon_id = "CANON-12"
-modules = ["architecture_scanner", "architecture_atlas", "architecture_render"]
+modules = ["architecture_scanner", "architecture_atlas"]
 
 [rules.dependencies]
 # component 수준 금지 의존 (모듈 import edge를 component로 접어 검사)
