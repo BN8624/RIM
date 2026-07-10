@@ -5,10 +5,6 @@ class RIMError(Exception):
     """Repo Idea Miner 기본 예외."""
 
 
-class ConfigError(RIMError):
-    """설정/환경변수 오류."""
-
-
 class LLMCallError(RIMError):
     """LLM 호출 실패 (재시도 소진 포함)."""
 
@@ -40,10 +36,3 @@ class GitHubAuthError(GitHubError):
 class GitHubRateLimitError(GitHubError):
     """metadata도 수집 불가한 rate limit."""
 
-
-class ValidationFailError(RIMError):
-    """worker JSON 구조 검증 실패."""
-
-
-class SecretLeakError(RIMError):
-    """산출물에 secret이 남아 있음."""

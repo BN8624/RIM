@@ -5,6 +5,15 @@ import hashlib
 import json
 from pathlib import Path
 
+# patch가 건드리면 안 되는 동결 파일 (계약/시나리오/골든 — continue·core pipeline 공용 정본)
+FROZEN_FILES = (
+    "core_contract.json",
+    "state_contract.json",
+    "action_contract.json",
+    "runner_contract.json",
+)
+FROZEN_PATH_PREFIXES = ("fixtures/", "golden/", "replay/")
+
 # hash 보호 대상 (주문서 §4.6, §4.7)
 FROZEN_HASH_FILES = (
     "core_contract.json",

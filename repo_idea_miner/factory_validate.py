@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_idea_miner.factory_continue import LANES
+from repo_idea_miner.factory_gates import MIN_SRC_FILES
 from repo_idea_miner.factory_pipeline import FINAL_ARTIFACT_REQUIRED_FILES
 from repo_idea_miner.factory_run_layout import (
     RUN_KIND_CONTINUATION,
@@ -17,7 +19,6 @@ from repo_idea_miner.factory_run_layout import (
 from repo_idea_miner.factory_schemas import PRODUCT_VERDICT_LABELS
 from repo_idea_miner.redaction import scan_files_for_secrets
 
-MIN_SRC_FILES = 2
 
 # 확장자 뒤 경계 요구: scenario_001.json 의 .js 부분을 스크립트로 오인하지 않는다
 _SCRIPT_TOKEN_RE = re.compile(r"(\S+\.(?:py|js|mjs))(?![\w.])")
@@ -303,7 +304,6 @@ FROZEN_TOKENS = ("golden", "fixtures", "contract")
 
 # ---------------------------------------------------------------- Phase 2A lane / spec repair (§10)
 
-LANES = ("PATCH_CONTINUATION", "SPEC_REPAIR", "EXCLUDED", "REVIEW_ONLY")
 SPEC_REPAIR_REVIEW_RESULTS = (
     "APPROVE_FOR_PHASE2B", "NEEDS_REVISION", "REJECT", "REQUIRES_HUMAN_REVIEW",
 )

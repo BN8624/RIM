@@ -28,7 +28,12 @@ from repo_idea_miner.factory_db import (
     update_product_run,
 )
 from repo_idea_miner.factory_desks import DeskError, DeskExecutor
-from repo_idea_miner.factory_frozen import compute_frozen_hashes, write_frozen_hash_guard
+from repo_idea_miner.factory_frozen import (
+    FROZEN_FILES,
+    FROZEN_PATH_PREFIXES,
+    compute_frozen_hashes,
+    write_frozen_hash_guard,
+)
 from repo_idea_miner.factory_pipeline import FactorySettings, load_factory_settings, make_factory_run_dir
 from repo_idea_miner.factory_workspace import (
     list_workspace_files,
@@ -58,13 +63,6 @@ FAILURE_TYPES = (
 MAX_CONTINUATION_PATCH_ATTEMPTS = 2
 MAX_PATCH_TRANSIENT_RETRIES = 2
 
-FROZEN_FILES = (
-    "core_contract.json",
-    "state_contract.json",
-    "action_contract.json",
-    "runner_contract.json",
-)
-FROZEN_PATH_PREFIXES = ("fixtures/", "golden/", "replay/")
 ALLOWED_TOUCH_PREFIXES = ("src/", "product/")
 ALLOWED_TOUCH_FILES = ("README.md", "run_instructions.md")
 

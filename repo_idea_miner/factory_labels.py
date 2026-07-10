@@ -16,16 +16,6 @@ VERDICT_LABELS = {
     "RUNS_BUT_WEAK": "코어 약함",
 }
 
-VERDICT_DESC = {
-    "PROMOTE_TO_CODEX": "Codex/Claude에 넘겨 정리·확장할 만한 후보",
-    "KEEP_CANDIDATE": "지금 바로 제품화하긴 애매하지만 남겨둘 만한 후보",
-    "NEEDS_MORE_GEMMA_LOOP": "가능성은 있지만 아직 기능 연결이나 완성도가 부족해 한 번 더 개선해야 하는 후보",
-    "TOO_WEAK": "실행은 되지만 제품 느낌이나 핵심 기능이 부족한 후보",
-    "DROP": "더 진행할 가치가 낮은 후보",
-    "REVIEW_READY": "core 검증을 통과해 직접 실행해보고 판단할 만한 후보",
-    "RUNS_BUT_WEAK": "기본 실행은 되지만 core system이 약해 성장 가치가 낮은 후보",
-}
-
 # ---------------------------------------------------------------- Artifact Class (Phase 1.6 §5.6)
 
 ARTIFACT_CLASS_LABELS = {
@@ -140,10 +130,6 @@ def format_verdict_label(verdict: str | None) -> str:
     if not verdict:
         return "판정 없음"
     return VERDICT_LABELS.get(verdict, verdict)
-
-
-def format_verdict_desc(verdict: str | None) -> str:
-    return VERDICT_DESC.get(verdict or "", "")
 
 
 def format_status_label(status: str | None) -> str:

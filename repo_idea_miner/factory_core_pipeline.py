@@ -77,6 +77,7 @@ from repo_idea_miner.factory_db import (
     update_product_run,
 )
 from repo_idea_miner.factory_desks import DeskError, DeskExecutor
+from repo_idea_miner.factory_frozen import FROZEN_FILES, FROZEN_PATH_PREFIXES
 from repo_idea_miner.factory_labels import ARTIFACT_CLASS_LABELS
 from repo_idea_miner.factory_pipeline import (
     FactorySettings,
@@ -95,15 +96,6 @@ from repo_idea_miner.factory_workspace import (
 )
 from repo_idea_miner.llm_client import LLMCallLogger, MockLLMClient
 from repo_idea_miner.redaction import redact_text, scan_files_for_secrets
-
-# 계약/시나리오/골든은 patch가 건드리면 안 되는 동결 파일 (§9.5)
-FROZEN_PATH_PREFIXES = ("fixtures/", "golden/", "replay/")
-FROZEN_FILES = (
-    "core_contract.json",
-    "state_contract.json",
-    "action_contract.json",
-    "runner_contract.json",
-)
 
 # Phase 1.6 완주 산출물 최소 목록 (§15) — factory-validate에서 사용
 CORE_RUN_REQUIRED_RUN_DOCS = (

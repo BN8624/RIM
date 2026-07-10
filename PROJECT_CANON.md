@@ -24,7 +24,7 @@
 - Challenge Mode: `challenge_*.py` 11개 (dashboard 포함). Challenge 관련 수정은 이 파일들만. `challenge_dashboard.py`는 HTML 렌더링+HTTP만, 조회·phase 요약 로더·preview 화이트리스트 접근은 `challenge_dashboard_data.py`(대시보드 read model, CANON-09).
 - Product Factory (`factory_*.py`):
   - `factory_core_schemas/prompts/gates/pipeline.py` — 7-Stage core harness (CANON-04).
-  - `factory_continue.py` — continuation delta loop + failure 의미 정본(assess_failure_patch_safety, spec repair proposal/review 빌더 — queue·2B가 import), `factory_queue.py` — queue routing/discovery(판단은 continue의 정본 사용), `factory_frozen.py` — frozen hash guard (CANON-05).
+  - `factory_continue.py` — continuation delta loop + failure 의미 정본(assess_failure_patch_safety, spec repair proposal/review 빌더 — queue·2B가 import), `factory_queue.py` — queue routing/discovery(판단은 continue의 정본 사용), `factory_frozen.py` — frozen hash guard + patch 금지 동결 파일 정본(FROZEN_FILES/FROZEN_PATH_PREFIXES — continue·core pipeline이 import) (CANON-05).
   - `factory_spec_repair.py`(2B-1) / `factory_anti_hardcode.py`(2B-1b) — 단일 run 수리 명령 (CANON-05).
   - `factory_review.py`(2C-0) / `factory_product_polish.py`(2C-1) / `factory_product_editor.py`(2C-2) / `factory_draft_execution.py`(2C-3) — 제품화 체인 (CANON-06).
   - `factory_product_evidence.py` — 제품 evidence 공통 정본: viewer/replay 탐색(find_product_viewer/first_replay_file), viewer field evidence(viewer_reads_replay_evidence/viewer_field_mismatches), protected hash(compute/compare_protected_hashes), gate context(read_gate_context), 공통 IO(load_json/write_json/write_text/sha256_file). 2C 체인·2D loop가 전부 여기서 import — 다른 모듈이 재구현하지 않는다.
@@ -115,5 +115,5 @@ viewer/replay 탐색·field evidence·protected hash·gate context는 전 단계
 ## CANON-11 Secret / 불변 규칙
 
 - `.env`의 `GOOGLE_API_KEY_1~11`(AQ. prefix)과 `GITHUB_TOKEN`은 **절대 출력/커밋/로그 금지** — redaction.py가 마스킹, 산출물에는 key index만 기록.
-- Miner core(pipeline/search_pipeline/schemas)는 무변경 보존.
+- Miner core(pipeline/search_pipeline/schemas)는 무변경 보존. 이 보존 때문에 miner 계열 private cross-import 3건(challenge_search_pipeline·viewer←search_pipeline `_safe_name`, search_pipeline←pipeline `_key_pool_report`)은 의도적 예외로 유지한다 — 공개화(보존 파일 수정)·복제(중복 구현)·wrapper(은닉) 전부 금지 규칙과 충돌하므로 그대로 두고 Atlas health에서 allowlist 처리한다.
 - spec repair §8 보호를 우회하는 자동화 금지. 원본 base run 직접 수정 금지(§13). 기록된 report보다 fresh 관측 우선(§7).

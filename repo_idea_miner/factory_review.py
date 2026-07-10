@@ -47,14 +47,6 @@ REQUIRED_OUTPUTS = (
     "review_no_code_hash_check.json",
 )
 
-FITNESS_GRADES = (
-    "PRODUCT_CANDIDATE",
-    "NEEDS_PRODUCT_POLISH",
-    "NEEDS_CORE_PATCH",
-    "NEEDS_SPEC_REPAIR",
-    "ARCHIVE",
-)
-
 # runner 출력 계약 필드 — smoke가 replay/viewer 대응을 볼 때 기준으로 삼는다 (§6.2)
 _CORE_OUTPUT_FIELDS = ("ok", "final_state", "events", "summary", "errors")
 
