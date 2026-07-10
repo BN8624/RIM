@@ -812,11 +812,12 @@ def _cmd_architecture_build(args) -> int:
 
     atlas = write_atlas(Path.cwd())
     h = atlas["health"]
+    rep = atlas["repository"]
     print("ARCHITECTURE BUILD")
-    print(f"- commit: {atlas['commit']}")
-    print(f"- fingerprint: {atlas['fingerprint']}")
+    print(f"- head: {rep['head']}")
+    print(f"- structural_fingerprint: {rep['structural_fingerprint']}")
     print(f"- modules: {h['module_count']} / components: {len(atlas['components'])} "
-          f"/ cli: {len(atlas['cli'])}")
+          f"/ symbols: {len(atlas['symbols'])} / routes: {len(atlas['routes'])}")
     print("- 생성: architecture/atlas.json, atlas.schema.json")
     return 0
 

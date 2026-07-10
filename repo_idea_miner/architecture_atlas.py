@@ -1,4 +1,4 @@
-# Architecture Atlas 빌더/검사기 — scanner 사실 + manifest 의미를 결정론적 atlas.json으로 만들고 구조 규칙을 검사한다.
+# Architecture Atlas 빌더/검사기 — scanner 사실 + manifest 의미를 결정론적 atlas.json(schema V2)으로 만들고 구조 규칙을 검사한다.
 from __future__ import annotations
 
 import hashlib
@@ -12,6 +12,7 @@ from repo_idea_miner.architecture_scanner import (
     PACKAGE,
     build_baseline,
     extract_cli_details,
+    resolve_symbols,
 )
 
 ATLAS_DIR = "architecture"
@@ -21,8 +22,13 @@ ATLAS_SCHEMA = "atlas.schema.json"
 
 ROOT_MD_WHITELIST = ("AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md")
 
+ARTIFACT_ROLES = ("PRODUCES", "CONSUMES", "VALIDATES", "LITERAL_REFERENCE")
+ARTIFACT_PROVENANCES = ("AST_IMPORT", "AST_IO_CALL", "REGISTRY", "MANIFEST", "AST_STRING_LITERAL")
+
 _CANON_ID_RE = re.compile(r"^## (CANON-\d{2})\b", re.M)
+_CANON_SECTION_RE = re.compile(r"^## (CANON-\d{2})[^\n]*$", re.M)
 _INDEX_ID_RE = re.compile(r"\b(CANON-\d{2})\b")
+_INV_ID_RE = re.compile(r"\b(INV-[A-Z0-9-]+)\b")
 _MD_LINK_RE = re.compile(r"\]\(([^)#`\s]+\.md)\)")
 
 
@@ -52,6 +58,20 @@ def _git_head(root: Path) -> str:
         return "unknown"
 
 
+def _committed_structural_fingerprint(root: Path) -> str | None:
+    """git HEAD에 커밋된 atlas.json의 구조 지문 (structural_diff 기준선 — 같은 HEAD면 결정론)."""
+    try:
+        r = subprocess.run(["git", "show", f"HEAD:{ATLAS_DIR}/{ATLAS_JSON}"], cwd=root,
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and r.stdout:
+            data = json.loads(r.stdout)
+            return data.get("repository", {}).get("structural_fingerprint") \
+                or data.get("fingerprint")
+    except (OSError, json.JSONDecodeError):
+        pass
+    return None
+
+
 def _test_mapping(modules: list[dict]) -> dict[str, list[str]]:
     """test 모듈 → import하는 production 모듈 (짧은 이름)."""
     out: dict[str, list[str]] = {}
@@ -77,26 +97,122 @@ def _cli_handlers_map(root: Path) -> dict[str, str]:
     return {}
 
 
+def _document_routes(root: Path) -> list[dict]:
+    """AI_INDEX.md 라우팅 표를 기계 구조로 파싱한다 (§10.1 document_routes)."""
+    rows: list[dict] = []
+    for line in (root / "AI_INDEX.md").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) != 4 or cells[0] == "ROUTE_ID" or set(cells[0]) <= {"-"}:
+            continue
+        rows.append({
+            "route_id": cells[0],
+            "selectors": [s.strip() for s in cells[1].split(",") if s.strip()],
+            "canon_ids": [s.strip() for s in cells[2].split(",") if s.strip()],
+            "atlas_query": cells[3],
+        })
+    return rows
+
+
+def _collect_symbol_specs(manifest: dict, handlers: dict[str, str]) \
+        -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """§11 수집 대상 symbol id → roles / canon_ids. private helper는 수집하지 않는다."""
+    roles: dict[str, set[str]] = {}
+    canon: dict[str, set[str]] = {}
+
+    def add(sid: str, role: str, cids=()) -> None:
+        roles.setdefault(sid, set()).add(role)
+        canon.setdefault(sid, set()).update(cids)
+
+    for _cmd, fn in sorted(handlers.items()):
+        add(f"{PACKAGE}.cli_handlers.{fn}", "cli_handler")
+    for r in manifest.get("routes", []):
+        for i, step in enumerate(r.get("steps", [])):
+            add(step, "entrypoint" if i == 0 else "orchestrator", r.get("canon_ids", []))
+    for c in manifest.get("contracts", []):
+        add(c["owner_symbol"], "contract_owner", c.get("canon_ids", []))
+        for s in c.get("consumer_symbols", []):
+            add(s, "contract_consumer", c.get("canon_ids", []))
+        for s in c.get("validator_symbols", []):
+            add(s, "validator", c.get("canon_ids", []))
+    for inv in manifest.get("invariants", []):
+        for s in inv.get("applies_to", []):
+            add(s, "invariant_target", [inv["canon_id"]])
+    return roles, canon
+
+
+def _artifact_id(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower()
+
+
+def _build_artifacts(manifest: dict, prod: list[dict]) -> list[dict]:
+    """§13 artifact 관계 — role + provenance. 애매한 문자열은 LITERAL_REFERENCE로만 남긴다."""
+    entries: dict[tuple, dict] = {}
+
+    def add(name: str, role: str, symbol_id: str, provenance: str,
+            source_path: str, source_line: int) -> None:
+        key = (_artifact_id(name), role, symbol_id, provenance)
+        cur = entries.get(key)
+        if cur is None or source_line < cur["source_line"]:
+            entries[key] = {
+                "artifact_id": _artifact_id(name),
+                "path_pattern": name,
+                "role": role,
+                "symbol_id": symbol_id,
+                "provenance": provenance,
+                "source_path": source_path,
+                "source_line": source_line,
+            }
+
+    for fname, mods in sorted(manifest.get("artifact_producers", {}).items()):
+        for mod in mods:
+            add(fname, "PRODUCES", f"{PACKAGE}.{mod}", "MANIFEST",
+                f"{ATLAS_DIR}/{MANIFEST_NAME}", 0)
+    for m in prod:
+        io_names = {io["name"] for io in m["artifact_io_calls"]}
+        for io in m["artifact_io_calls"]:
+            add(io["name"], io["role"], m["module"], "AST_IO_CALL", m["path"], io["line"])
+        for ref in m["artifact_refs"]:
+            if ref not in io_names:
+                add(ref, "LITERAL_REFERENCE", m["module"], "AST_STRING_LITERAL", m["path"], 0)
+    return [entries[k] for k in sorted(entries)]
+
+
 def compute_fingerprint(atlas: dict) -> str:
-    """구조 지문 (§17.10) — 함수 내부 구현만 바뀌면 변하지 않는다."""
+    """구조 지문 — 함수 내부 구현·라인 이동만으로는 변하지 않는다 (line 번호는 basis 제외)."""
     basis = {
+        "components": atlas["components"],
         "modules": [
             {"module": m["module"], "public": m["public_symbols"],
              "imports": [(i["from"], tuple(i["names"])) for i in m["imports"]]}
             for m in atlas["modules"]
         ],
+        "symbols": [
+            {k: s[k] for k in ("symbol_id", "kind", "signature", "component_id",
+                               "roles", "canon_ids")}
+            for s in atlas["symbols"]
+        ],
+        "routes": atlas["routes"],
+        "contracts": atlas["contracts"],
+        "invariants": atlas["invariants"],
+        "artifacts": [
+            {k: a[k] for k in ("artifact_id", "path_pattern", "role", "symbol_id",
+                               "provenance")}
+            for a in atlas["artifacts"]
+        ],
         "cli": atlas["cli"],
         "validators": atlas["validators"],
-        "artifacts": atlas["artifacts"],
         "tests": atlas["tests"],
-        "manifest": atlas["manifest"],
+        "document_routes": atlas["document_routes"],
     }
     payload = json.dumps(basis, ensure_ascii=False, sort_keys=True, default=list)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def build_atlas(root: Path) -> dict:
-    """scanner 사실 + manifest 의미 → atlas dict. 같은 HEAD·manifest면 결정론적으로 동일하다."""
+    """scanner 사실 + manifest 의미 → atlas dict (schema V2 §10). 같은 HEAD·manifest면 결정론적으로 동일하다."""
     manifest = load_manifest(root)
     comp_map = module_component_map(manifest)
     base = build_baseline(root)
@@ -130,6 +246,48 @@ def build_atlas(root: Path) -> dict:
             "tests": sorted(set(tests_by_src.get(stem, []))),
         })
 
+    # §11 core symbol index — manifest·HANDLERS가 지정한 canonical symbol만 AST로 해상한다.
+    sym_roles, sym_canon = _collect_symbol_specs(manifest, handlers)
+    resolved = resolve_symbols(root, sorted(sym_roles))
+    symbols, unresolved = [], []
+    for sid in sorted(sym_roles):
+        info = resolved.get(sid)
+        if info is None:
+            unresolved.append(sid)
+            continue
+        stem = sid.rsplit(".", 2)[-2]
+        comp = comp_map.get(stem, "unknown")
+        cids = sym_canon.get(sid) or set()
+        if not cids:
+            comp_decl = manifest.get("components", {}).get(comp, {})
+            cids = set(comp_decl.get("canon_ids", []))
+        symbols.append({
+            **info,
+            "component_id": comp,
+            "roles": sorted(sym_roles[sid]),
+            "canon_ids": sorted(cids),
+            "related_tests": sorted(set(tests_by_src.get(stem, []))),
+        })
+
+    routes = [
+        {"route_id": r["id"], "canon_ids": r.get("canon_ids", []), "cli": r.get("cli", ""),
+         "steps": r.get("steps", [])}
+        for r in manifest.get("routes", [])
+    ]
+    contracts = [
+        {"contract_id": c["id"], "owner_symbol": c["owner_symbol"],
+         "consumer_symbols": c.get("consumer_symbols", []),
+         "validator_symbols": c.get("validator_symbols", []),
+         "canon_ids": c.get("canon_ids", []),
+         "compatibility": c.get("compatibility", ""), "risk": c.get("risk", "")}
+        for c in manifest.get("contracts", [])
+    ]
+    invariants = [
+        {"invariant_id": i["id"], "canon_id": i["canon_id"],
+         "applies_to": i.get("applies_to", []), "tests": i.get("tests", [])}
+        for i in manifest.get("invariants", [])
+    ]
+
     private_allow = set(manifest.get("rules", {}).get("private_import_allowlist", {}).get("entries", []))
     private_extra = [
         p for p in base["private_cross_imports"]
@@ -143,43 +301,49 @@ def build_atlas(root: Path) -> dict:
     )
 
     atlas = {
-        "schema_version": 1,
-        "commit": _git_head(root),
+        "schema_version": 2,
         "components": {
-            cid: {"label": c["label"], "status": c["status"], "canon_id": c["canon_id"],
-                  "modules": sorted(c["modules"])}
+            cid: {"component_id": cid, "status": c["status"],
+                  "canon_ids": sorted(c["canon_ids"]), "modules": sorted(c["modules"])}
             for cid, c in sorted(manifest["components"].items())
         },
         "modules": modules,
+        "symbols": symbols,
+        "routes": routes,
+        "artifacts": _build_artifacts(manifest, prod),
+        "contracts": contracts,
+        "invariants": invariants,
         "cli": [
             {"command": cmd, "handler": handlers.get(cmd, ""), "options": cli_details.get(cmd, []),
              "source": f"{PACKAGE}.cli_handlers"}
             for cmd in base["cli_commands"]
         ],
         "validators": {"checks": base["validator_checks"], "run_kinds": base["run_kinds"]},
-        "artifacts": base["artifact_refs_by_module"],
         "tests": tests,
-        "pipeline": [
-            {"node": p["node"], "modules": p["modules"]} for p in manifest.get("pipeline", [])
-        ],
-        "manifest": manifest,
+        "document_routes": _document_routes(root),
         "health": {
             "import_cycles": base["import_cycles"],
             "private_cross_imports": base["private_cross_imports"],
             "private_cross_imports_outside_allowlist": private_extra,
             "orphan_modules": orphans,
             "unknown_component": sorted(m["module"] for m in modules if m["component"] == "unknown"),
+            "unresolved_symbols": unresolved,
             "over_500_loc": base["over_500_loc"],
             "over_800_loc": base["over_800_loc"],
             "module_count": base["python_module_count"],
             "test_count": base["test_count"],
         },
-        "documents": {
-            "README.md": "AI BOOTSTRAP", "AI_INDEX.md": "ROUTING TABLE",
-            "PROJECT_CANON.md": "SEMANTIC CONTRACTS", "REENTRY.md": "STATE PACKET",
-        },
     }
-    atlas["fingerprint"] = compute_fingerprint(atlas)
+    fp = compute_fingerprint(atlas)
+    committed_fp = _committed_structural_fingerprint(root)
+    atlas["repository"] = {
+        "head": _git_head(root),
+        "structure_snapshot": hashlib.sha256(
+            json.dumps([m["path"] for m in modules], sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        "structural_fingerprint": fp,
+        "structural_diff": committed_fp is not None and committed_fp != fp,
+    }
     return atlas
 
 
@@ -187,22 +351,37 @@ _SCHEMA = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "RIM Architecture Atlas",
     "type": "object",
-    "required": ["schema_version", "commit", "fingerprint", "components", "modules",
-                 "cli", "validators", "tests", "pipeline", "health", "documents"],
+    "required": ["schema_version", "repository", "components", "modules", "symbols",
+                 "routes", "artifacts", "contracts", "invariants", "validators",
+                 "tests", "document_routes", "health"],
     "properties": {
-        "schema_version": {"type": "integer"},
-        "commit": {"type": "string"},
-        "fingerprint": {"type": "string"},
+        "schema_version": {"const": 2},
+        "repository": {"type": "object", "required": [
+            "head", "structure_snapshot", "structural_fingerprint", "structural_diff"]},
         "components": {"type": "object"},
         "modules": {"type": "array", "items": {"type": "object", "required": [
             "module", "path", "loc", "component", "public_symbols", "imports", "imported_by"]}},
+        "symbols": {"type": "array", "items": {"type": "object", "required": [
+            "symbol_id", "kind", "path", "start_line", "end_line", "signature",
+            "component_id", "roles", "canon_ids", "related_tests"]}},
+        "routes": {"type": "array", "items": {"type": "object", "required": [
+            "route_id", "canon_ids", "cli", "steps"]}},
+        "artifacts": {"type": "array", "items": {"type": "object", "required": [
+            "artifact_id", "path_pattern", "role", "symbol_id", "provenance",
+            "source_path", "source_line"],
+            "properties": {"role": {"enum": list(ARTIFACT_ROLES)},
+                           "provenance": {"enum": list(ARTIFACT_PROVENANCES)}}}},
+        "contracts": {"type": "array", "items": {"type": "object", "required": [
+            "contract_id", "owner_symbol", "consumer_symbols", "validator_symbols",
+            "canon_ids", "compatibility", "risk"]}},
+        "invariants": {"type": "array", "items": {"type": "object", "required": [
+            "invariant_id", "canon_id", "applies_to", "tests"]}},
         "cli": {"type": "array", "items": {"type": "object", "required": ["command", "handler", "options"]}},
         "validators": {"type": "object"},
-        "artifacts": {"type": "object"},
         "tests": {"type": "object"},
-        "pipeline": {"type": "array"},
+        "document_routes": {"type": "array", "items": {"type": "object", "required": [
+            "route_id", "selectors", "canon_ids", "atlas_query"]}},
         "health": {"type": "object"},
-        "documents": {"type": "object"},
     },
 }
 
@@ -221,7 +400,7 @@ def write_atlas(root: Path) -> dict:
     return atlas
 
 
-# ---------------------------------------------------------------- architecture-check (§17.11)
+# ---------------------------------------------------------------- architecture-check
 
 def _tracked_md(root: Path) -> list[str] | None:
     """git tracked *.md 전체 (repo-relative posix path). git 없으면 None."""
@@ -239,6 +418,13 @@ def _canon_ids(root: Path) -> tuple[set[str], set[str]]:
     return set(canon), set(index)
 
 
+def _canon_section_bodies(root: Path) -> dict[str, str]:
+    """CANON-ID → 섹션 본문 (invariant 소속 검증용)."""
+    text = (root / "PROJECT_CANON.md").read_text(encoding="utf-8")
+    parts = _CANON_SECTION_RE.split(text)
+    return {parts[i]: parts[i + 1] for i in range(1, len(parts) - 1, 2)}
+
+
 def _last_commit_files(root: Path) -> set[str]:
     try:
         r = subprocess.run(["git", "show", "--name-only", "--format=", "HEAD"], cwd=root,
@@ -249,10 +435,10 @@ def _last_commit_files(root: Path) -> set[str]:
 
 
 def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list[str]:
-    """§17.11 검사 20항목 — 문제 목록을 돌려준다 (비면 PASS)."""
+    """구조·문서 governance 검사 — 문제 목록을 돌려준다 (비면 PASS)."""
     problems: list[str] = []
     atlas = build_atlas(root)
-    manifest = atlas["manifest"]
+    manifest = load_manifest(root)
     h = atlas["health"]
 
     # 1. root Markdown 정확히 4개 (git tracked 기준 — untracked 주문서와 충돌 방지)
@@ -274,12 +460,13 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
     if canon != index:
         problems.append(f"CANON/AI_INDEX 불일치: canon만={sorted(canon - index)} index만={sorted(index - canon)}")
 
-    # 3. manifest canon_id 실재
+    # 3. manifest canon_ids 실재
     for cid, comp in atlas["components"].items():
-        if comp["canon_id"] not in canon:
-            problems.append(f"manifest component {cid}의 canon_id {comp['canon_id']}가 PROJECT_CANON에 없음")
+        for c in comp["canon_ids"]:
+            if c not in canon:
+                problems.append(f"manifest component {cid}의 canon_id {c}가 PROJECT_CANON에 없음")
 
-    # 4. 존재하지 않는 md 링크 (다섯 문서 안)
+    # 4. 존재하지 않는 md 링크 (네 문서 안)
     for name in ROOT_MD_WHITELIST:
         text = (root / name).read_text(encoding="utf-8")
         for link in _MD_LINK_RE.findall(text):
@@ -298,10 +485,6 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
         for mod in comp["modules"]:
             if mod not in actual:
                 problems.append(f"manifest component {cid}가 없는 모듈 참조: {mod}")
-    for node in atlas["pipeline"]:
-        for mod in node["modules"]:
-            if mod not in actual:
-                problems.append(f"pipeline node '{node['node']}'가 없는 모듈 참조: {mod}")
 
     # 7. forbidden dependency
     comp_map = module_component_map(manifest)
@@ -327,7 +510,7 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
         problems.append(f"duplicate CLI command: {dup}")
 
     # 11. artifact producer 정합: 선언 producer 실재·파일명 참조, 미선언 summary 부재
-    #     (writer는 정적으로 판별 불가 — manifest 선언이 사람 정의 진실, §17.7 F 과장 금지)
+    #     (writer는 정적으로 판별 불가 — manifest 선언이 사람 정의 진실, §13 과장 금지)
     producers = manifest.get("artifact_producers", {})
     refs_by_stem = {m["module"].split(".")[-1]: set(m["artifact_refs"]) for m in atlas["modules"]}
     for fname, mods in sorted(producers.items()):
@@ -337,12 +520,12 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
             elif fname not in refs_by_stem.get(mod, set()):
                 problems.append(f"선언된 producer {mod}가 {fname}을 참조하지 않음")
     summary_re = re.compile(r"^(phase\w+|product_loop)_dashboard_summary\.json$")
-    for mod, refs in atlas["artifacts"].items():
-        if mod.split(".")[-1].startswith("architecture_"):
+    for m in atlas["modules"]:
+        if m["module"].split(".")[-1].startswith("architecture_"):
             continue
-        for r in refs:
+        for r in m["artifact_refs"]:
             if summary_re.match(r) and r not in producers:
-                problems.append(f"producer 미선언 dashboard summary: {r} (참조: {mod})")
+                problems.append(f"producer 미선언 dashboard summary: {r} (참조: {m['module']})")
 
     # 12. validator 관련 test 존재 (factory_validate를 import하는 테스트가 최소 1개)
     if not any("factory_validate" in srcs for srcs in atlas["tests"].values()):
@@ -363,12 +546,14 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
     if "conn.execute(" in dash_src or "json.loads(" in dash_src:
         problems.append("presentation(challenge_dashboard)이 SQL/JSON 파싱을 소유")
 
-    # 15. committed Atlas stale (fingerprint 비교)
+    # 15. committed Atlas stale (구조 지문 비교)
     committed = root / ATLAS_DIR / ATLAS_JSON
+    current_fp = atlas["repository"]["structural_fingerprint"]
     if committed.is_file():
         try:
             old = json.loads(committed.read_text(encoding="utf-8"))
-            if old.get("fingerprint") != atlas["fingerprint"]:
+            old_fp = old.get("repository", {}).get("structural_fingerprint") or old.get("fingerprint")
+            if old_fp != current_fp:
                 problems.append("Atlas stale: committed atlas.json fingerprint가 현재 구조와 다름 — architecture-build 재실행 필요")
         except json.JSONDecodeError:
             problems.append("Atlas stale: atlas.json 파싱 불가")
@@ -390,34 +575,78 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
                 if any(s and s in text for s in secrets):
                     problems.append(f"secret 노출: architecture/{name}")
 
-    # 18. canonical pipeline node ↔ module 연결 (6에서 실재 검증, 여기서는 비어있지 않은지)
-    if not atlas["pipeline"]:
-        problems.append("canonical pipeline 정의 없음 (manifest [[pipeline]])")
+    # 18. canonical routes 정합 (§12): 선언 존재, cli 실재, 첫 step=handler, symbol 해상,
+    #     canon 실재, related test 존재
+    if not atlas["routes"]:
+        problems.append("canonical route 정의 없음 (manifest [[routes]])")
+    handlers = _cli_handlers_map(root)
+    known_cmds = set(cmds)
+    resolved_ids = {s["symbol_id"] for s in atlas["symbols"]}
+    tests_by_src: dict[str, set[str]] = {}
+    for t, srcs in atlas["tests"].items():
+        for s in srcs:
+            tests_by_src.setdefault(s, set()).add(t)
+    for r in atlas["routes"]:
+        rid = r["route_id"]
+        if r["cli"] not in known_cmds:
+            problems.append(f"route {rid}: 존재하지 않는 CLI {r['cli']}")
+        elif r["steps"]:
+            expect = f"{PACKAGE}.cli_handlers.{handlers.get(r['cli'], '')}"
+            if r["steps"][0] != expect:
+                problems.append(f"route {rid}: 첫 step이 {r['cli']} handler({expect})가 아님")
+        if not r["steps"]:
+            problems.append(f"route {rid}: step 없음")
+        for c in r["canon_ids"]:
+            if c not in canon:
+                problems.append(f"route {rid}: 없는 CANON {c}")
+        step_stems = {s.rsplit(".", 2)[-2] for s in r["steps"]}
+        if not any(tests_by_src.get(st) for st in step_stems):
+            problems.append(f"route {rid}: 관련 테스트 없음")
+
+    # 18b. 해상 실패 symbol (routes/contracts/invariants가 참조하는 canonical symbol 실재)
+    for sid in h["unresolved_symbols"]:
+        problems.append(f"manifest가 없는 symbol 참조: {sid}")
+
+    # 18c. contracts 정합 (§14.1)
+    for c in atlas["contracts"]:
+        for cid2 in c["canon_ids"]:
+            if cid2 not in canon:
+                problems.append(f"contract {c['contract_id']}: 없는 CANON {cid2}")
+
+    # 18d. invariants 정합 (§14.2): CANON 실재 + 해당 섹션 INVARIANTS에 등재 + test 실재
+    bodies = _canon_section_bodies(root)
+    for inv in atlas["invariants"]:
+        iid, cid2 = inv["invariant_id"], inv["canon_id"]
+        if cid2 not in canon:
+            problems.append(f"invariant {iid}: 없는 CANON {cid2}")
+        elif iid not in _INV_ID_RE.findall(bodies.get(cid2, "")):
+            problems.append(f"invariant {iid}: PROJECT_CANON {cid2} 섹션에 등재되지 않음")
+        for t in inv["tests"]:
+            if not (root / "tests" / f"{t}.py").is_file():
+                problems.append(f"invariant {iid}: 없는 테스트 {t}")
 
     # 19. README의 주요 CLI 실재
     readme = (root / "README.md").read_text(encoding="utf-8")
-    known = set(cmds)
     for m in re.finditer(r"python -m repo_idea_miner\s+([a-z][a-z0-9-]*)", readme):
-        if m.group(1) not in known:
+        if m.group(1) not in known_cmds:
             problems.append(f"README가 없는 CLI를 안내: {m.group(1)}")
 
-    # 20. 삭제된 과거 문서로 가는 실제 md 링크 잔존 (이력 서술 속 단순 언급은 checklist 역할상 허용)
+    # 20. 삭제된 과거 문서로 가는 실제 md 링크 잔존
     for name in ROOT_MD_WHITELIST:
         text = (root / name).read_text(encoding="utf-8")
-        for ghost in ("SCOPE.md", "VERIFICATION.md", "CURRENT_STATE.md", "ARCHITECTURE.md"):
+        for ghost in ("SCOPE.md", "VERIFICATION.md", "CURRENT_STATE.md", "ARCHITECTURE.md", "checklist.md"):
             if f"]({ghost}" in text:
                 problems.append(f"{name}: 삭제된 문서 링크 {ghost}")
 
     # §17.12 문서 정책: 구조 fingerprint가 바뀌었는데 마지막 commit에 PROJECT_CANON.md가 없으면 FAIL
     if committed.is_file():
         try:
-            old_fp = json.loads(committed.read_text(encoding="utf-8")).get("fingerprint")
+            old = json.loads(committed.read_text(encoding="utf-8"))
+            old_fp = old.get("repository", {}).get("structural_fingerprint") or old.get("fingerprint")
         except json.JSONDecodeError:
             old_fp = None
-        if old_fp and old_fp != atlas["fingerprint"] \
+        if old_fp and old_fp != current_fp \
                 and "PROJECT_CANON.md" not in _last_commit_files(root):
             problems.append("구조 변경이 커밋되지 않았거나 PROJECT_CANON.md가 같은 커밋에 없음 (§17.12)")
 
     return problems
-
-

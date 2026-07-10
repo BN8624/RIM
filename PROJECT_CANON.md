@@ -395,8 +395,11 @@ COMPATIBILITY:
 - structural fingerprint ignores function-internal changes; stale fingerprint = check FAIL
 
 NOTES:
-- outputs: `architecture/manifest.toml` (human-declared meaning) + generated `atlas.json` +
-  `atlas.schema.json`
+- outputs: `architecture/manifest.toml` (human-declared meaning: routes/contracts/invariants)
+  + generated `atlas.json` (schema V2: repository/symbols/routes/artifacts role+provenance/
+  contracts/invariants/document_routes) + `atlas.schema.json`
+- artifact roles: ambiguous string literals stay LITERAL_REFERENCE — promotion to
+  PRODUCES/CONSUMES requires AST_IO_CALL or MANIFEST provenance
 - AI protocol: read order README→REENTRY→AI_INDEX→selected CANON→context; before edit:
   `--impact`/invariants/do_not_modify/tests_to_run; after edit: targeted tests →
   `--changed --impact` → `architecture-check` → rebuild atlas on structural change,

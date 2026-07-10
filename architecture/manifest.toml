@@ -1,10 +1,9 @@
-# RIM Architecture Atlas manifest — scanner가 알 수 없는 사람 정의 의미만 기록한다 (§17.4).
-schema_version = 1
+# RIM Architecture Atlas manifest — scanner가 알 수 없는 사람 정의 의미만 기록한다 (AI-Only 주문서 §10~§14).
+schema_version = 2
 
 [components.miner]
-label = "Idea Miner"
 status = "canonical"
-canon_id = "CANON-01"
+canon_ids = ["CANON-01"]
 modules = [
   "pipeline", "search_pipeline", "schemas", "github_api", "workers", "evidence",
   "sampler", "signals", "truncation", "url_parser", "renderer", "viewer", "serve",
@@ -12,9 +11,8 @@ modules = [
 ]
 
 [components.challenge]
-label = "Challenge Mode"
 status = "canonical"
-canon_id = "CANON-02"
+canon_ids = ["CANON-02"]
 modules = [
   "challenge_pipeline", "challenge_search_pipeline", "challenge_daemon",
   "challenge_prompts", "challenge_schemas", "challenge_validate",
@@ -22,15 +20,13 @@ modules = [
 ]
 
 [components.storage]
-label = "Storage (DB & Run Layout)"
 status = "canonical"
-canon_id = "CANON-08"
+canon_ids = ["CANON-08"]
 modules = ["challenge_db", "factory_db", "factory_run_layout"]
 
 [components.product_build]
-label = "Product Build (Core Harness)"
 status = "canonical"
-canon_id = "CANON-04"
+canon_ids = ["CANON-04"]
 modules = [
   "factory_pipeline", "factory_core_pipeline", "factory_core_gates",
   "factory_core_prompts", "factory_core_schemas", "factory_runner", "factory_desks",
@@ -39,27 +35,24 @@ modules = [
 ]
 
 [components.repair]
-label = "Continuation & Repair"
 status = "canonical"
-canon_id = "CANON-05"
+canon_ids = ["CANON-05"]
 modules = [
   "factory_continue", "factory_queue", "factory_spec_repair",
   "factory_anti_hardcode", "factory_frozen",
 ]
 
 [components.productization]
-label = "Productization Chain (2C)"
 status = "canonical"
-canon_id = "CANON-06"
+canon_ids = ["CANON-06"]
 modules = [
   "factory_review", "factory_product_polish", "factory_product_editor",
   "factory_draft_execution", "factory_product_evidence",
 ]
 
 [components.autopilot]
-label = "Autopilot & Closed Loop (2D)"
 status = "canonical"
-canon_id = "CANON-07"
+canon_ids = ["CANON-07"]
 modules = [
   "factory_product_loop", "factory_loop_executor", "factory_lane_executors",
   "factory_product_capabilities", "factory_product_acceptance",
@@ -67,33 +60,28 @@ modules = [
 ]
 
 [components.validation]
-label = "Validation"
 status = "canonical"
-canon_id = "CANON-10"
+canon_ids = ["CANON-10"]
 modules = ["factory_validate"]
 
 [components.cli]
-label = "CLI"
 status = "canonical"
-canon_id = "CANON-03"
+canon_ids = ["CANON-03"]
 modules = ["cli", "cli_handlers", "__main__"]
 
 [components.dashboard]
-label = "Dashboard"
 status = "canonical"
-canon_id = "CANON-09"
+canon_ids = ["CANON-09"]
 modules = ["challenge_dashboard", "challenge_dashboard_data"]
 
 [components.support]
-label = "Support & Security"
 status = "canonical"
-canon_id = "CANON-11"
+canon_ids = ["CANON-11"]
 modules = ["config", "errors", "redaction", "llm_client", "key_pool", "jsonutil", "__init__"]
 
 [components.atlas]
-label = "Architecture Atlas"
 status = "canonical"
-canon_id = "CANON-12"
+canon_ids = ["CANON-12"]
 modules = ["architecture_scanner", "architecture_atlas"]
 
 [rules.dependencies]
@@ -119,8 +107,9 @@ entries = [
   "repo_idea_miner.viewer <- repo_idea_miner.search_pipeline:_safe_name",
 ]
 
-# dashboard summary artifact의 producer 선언 (§17.5 Artifact — writer는 정적으로 판별 불가하므로 사람 정의).
-# check는 (1) producer 실재 (2) producer가 파일명을 참조 (3) 미선언 summary 부재를 검증한다.
+# dashboard summary artifact의 producer 선언 (§13 MANIFEST provenance — writer는 정적으로 판별
+# 불가하므로 사람 정의). check는 (1) producer 실재 (2) producer가 파일명을 참조 (3) 미선언
+# summary 부재를 검증한다.
 [artifact_producers]
 "dashboard_summary.json" = ["factory_core_pipeline"]
 "phase17_dashboard_summary.json" = ["factory_continue"]
@@ -134,43 +123,329 @@ entries = [
 "phase2d1_dashboard_summary.json" = ["factory_loop_executor"]
 "product_loop_dashboard_summary.json" = ["factory_product_loop"]
 
-# Canonical Pipeline (§17.7 B) — 각 노드를 실제 module에 연결
-[[pipeline]]
-node = "Challenge"
-modules = ["challenge_pipeline"]
+# ---------------------------------------------------------------- Canonical Routes (§12)
+# 각 route: 첫 step은 cli command의 HANDLERS handler, 이후 step은 orchestrator/entrypoint.
+# helper call graph는 만들지 않는다. architecture_context route는 A4에서 CLI와 함께 추가한다.
 
-[[pipeline]]
-node = "Build"
-modules = ["factory_core_pipeline"]
+[[routes]]
+id = "miner_direct"
+canon_ids = ["CANON-01"]
+cli = "run"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_run",
+  "repo_idea_miner.pipeline.run_single_repo",
+]
 
-[[pipeline]]
-node = "Validate"
-modules = ["factory_core_gates", "factory_validate"]
+[[routes]]
+id = "miner_search"
+canon_ids = ["CANON-01"]
+cli = "search"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_search",
+  "repo_idea_miner.search_pipeline.run_search",
+]
 
-[[pipeline]]
-node = "Probe"
-modules = ["factory_product_capabilities"]
+[[routes]]
+id = "challenge_single"
+canon_ids = ["CANON-02"]
+cli = "challenge"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_challenge",
+  "repo_idea_miner.challenge_pipeline.run_challenge",
+]
 
-[[pipeline]]
-node = "Judge"
-modules = ["factory_product_loop"]
+[[routes]]
+id = "challenge_daemon"
+canon_ids = ["CANON-02"]
+cli = "daemon"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_daemon",
+  "repo_idea_miner.challenge_daemon.ChallengeDaemon",
+]
 
-[[pipeline]]
-node = "Lane"
-modules = ["factory_lane_executors"]
+[[routes]]
+id = "legacy_factory"
+canon_ids = ["CANON-04"]
+cli = "factory"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory",
+  "repo_idea_miner.factory_pipeline.run_product_factory",
+]
 
-[[pipeline]]
-node = "Child Repair"
-modules = ["factory_continue", "factory_spec_repair", "factory_anti_hardcode"]
+[[routes]]
+id = "core_factory_build"
+canon_ids = ["CANON-04", "CANON-10"]
+cli = "factory-build"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_build",
+  "repo_idea_miner.factory_core_pipeline.run_core_factory",
+]
 
-[[pipeline]]
-node = "Progress & Promote"
-modules = ["factory_loop_executor"]
+[[routes]]
+id = "continuation"
+canon_ids = ["CANON-05", "CANON-10"]
+cli = "factory-continue"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_continue",
+  "repo_idea_miner.factory_continue.run_continuation",
+]
 
-[[pipeline]]
-node = "Storage"
-modules = ["factory_db"]
+[[routes]]
+id = "spec_repair"
+canon_ids = ["CANON-05", "CANON-10"]
+cli = "factory-spec-repair-apply"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_spec_repair_apply",
+  "repo_idea_miner.factory_spec_repair.run_spec_repair_apply",
+]
 
-[[pipeline]]
-node = "Presentation"
-modules = ["challenge_dashboard"]
+[[routes]]
+id = "anti_hardcode_repair"
+canon_ids = ["CANON-05", "CANON-10"]
+cli = "factory-anti-hardcode-patch"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_anti_hardcode_patch",
+  "repo_idea_miner.factory_anti_hardcode.run_anti_hardcode_patch",
+]
+
+[[routes]]
+id = "productization_chain"
+canon_ids = ["CANON-06", "CANON-11"]
+cli = "factory-review"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_review",
+  "repo_idea_miner.factory_review.run_review_package",
+  "repo_idea_miner.factory_product_polish.run_product_polish",
+  "repo_idea_miner.factory_product_editor.run_product_editor",
+  "repo_idea_miner.factory_draft_execution.run_draft_execution",
+]
+
+[[routes]]
+id = "factory_judge_only"
+canon_ids = ["CANON-07", "CANON-10"]
+cli = "factory-product-loop"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_product_loop",
+  "repo_idea_miner.factory_product_loop.run_product_loop",
+]
+
+[[routes]]
+id = "factory_closed_loop"
+canon_ids = ["CANON-07", "CANON-10", "CANON-11"]
+cli = "factory-product-loop"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_product_loop",
+  "repo_idea_miner.factory_loop_executor.run_closed_product_loop",
+]
+
+[[routes]]
+id = "factory_validate"
+canon_ids = ["CANON-10"]
+cli = "factory-validate"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_factory_validate",
+  "repo_idea_miner.factory_validate.validate_product_run_dir",
+  "repo_idea_miner.factory_validate.validate_continuation_run_dir",
+]
+
+[[routes]]
+id = "dashboard_read"
+canon_ids = ["CANON-09"]
+cli = "dashboard"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_dashboard",
+  "repo_idea_miner.challenge_dashboard.serve_dashboard",
+]
+
+[[routes]]
+id = "architecture_build"
+canon_ids = ["CANON-12"]
+cli = "architecture-build"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_architecture_build",
+  "repo_idea_miner.architecture_atlas.write_atlas",
+]
+
+[[routes]]
+id = "architecture_check"
+canon_ids = ["CANON-12"]
+cli = "architecture-check"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_architecture_check",
+  "repo_idea_miner.architecture_atlas.run_architecture_check",
+]
+
+# ---------------------------------------------------------------- Contracts (§14.1)
+# 고위험 외부·단계 간 계약만. schema 필드는 복제하지 않는다 — owner symbol을 직접 읽게 한다.
+
+[[contracts]]
+id = "core_contract"
+owner_symbol = "repo_idea_miner.factory_core_schemas.CoreContract"
+consumer_symbols = ["repo_idea_miner.factory_core_pipeline.run_core_factory"]
+validator_symbols = ["repo_idea_miner.factory_validate.validate_core_run_dir"]
+canon_ids = ["CANON-04"]
+compatibility = "backward-readable"
+risk = "high"
+
+[[contracts]]
+id = "output_representation"
+owner_symbol = "repo_idea_miner.factory_core_schemas.OutputRepresentation"
+consumer_symbols = ["repo_idea_miner.factory_core_pipeline.run_core_factory"]
+validator_symbols = ["repo_idea_miner.factory_core_gates.lint_golden_representation"]
+canon_ids = ["CANON-04"]
+compatibility = "harness_schema_version<2 runs keep lenient lint (NOT_DECLARED allowed)"
+risk = "high"
+
+[[contracts]]
+id = "golden_representation"
+owner_symbol = "repo_idea_miner.factory_core_schemas.ScenarioGoldenOutput"
+consumer_symbols = ["repo_idea_miner.factory_core_gates.lint_golden_representation"]
+validator_symbols = ["repo_idea_miner.factory_validate.validate_core_run_dir"]
+canon_ids = ["CANON-04"]
+compatibility = "backward-readable"
+risk = "high"
+
+[[contracts]]
+id = "runner_result"
+owner_symbol = "repo_idea_miner.factory_core_schemas.RunnerContract"
+consumer_symbols = ["repo_idea_miner.factory_core_pipeline.run_core_factory"]
+validator_symbols = ["repo_idea_miner.factory_validate.validate_core_run_dir"]
+canon_ids = ["CANON-04"]
+compatibility = "runner stdout stays ASCII-safe JSON"
+risk = "high"
+
+[[contracts]]
+id = "continuation_summary"
+owner_symbol = "repo_idea_miner.factory_continue.run_continuation"
+consumer_symbols = ["repo_idea_miner.factory_queue.run_continuation_queue"]
+validator_symbols = ["repo_idea_miner.factory_validate.validate_continuation_run_dir"]
+canon_ids = ["CANON-05"]
+compatibility = "pre-2A runs stay readable (inferred_lane)"
+risk = "high"
+
+[[contracts]]
+id = "repair_execution_result"
+owner_symbol = "repo_idea_miner.factory_spec_repair.run_spec_repair_apply"
+consumer_symbols = ["repo_idea_miner.factory_queue.run_continuation_queue"]
+validator_symbols = ["repo_idea_miner.factory_validate.run_marker_validators"]
+canon_ids = ["CANON-05"]
+compatibility = "backward-readable"
+risk = "high"
+
+[[contracts]]
+id = "product_evidence"
+owner_symbol = "repo_idea_miner.factory_autopilot_schemas.ProductLoopEvidence"
+consumer_symbols = [
+  "repo_idea_miner.factory_product_loop.extract_artifact_evidence",
+  "repo_idea_miner.factory_loop_executor.verify_candidate",
+]
+validator_symbols = ["repo_idea_miner.factory_validate.run_marker_validators"]
+canon_ids = ["CANON-06", "CANON-07"]
+compatibility = "backward-readable"
+risk = "high"
+
+[[contracts]]
+id = "product_decision"
+owner_symbol = "repo_idea_miner.factory_autopilot_schemas.UnifiedDecisionPacket"
+consumer_symbols = [
+  "repo_idea_miner.factory_product_loop.run_product_loop",
+  "repo_idea_miner.factory_loop_executor.run_closed_product_loop",
+]
+validator_symbols = ["repo_idea_miner.factory_autopilot_schemas.validate_desk_output"]
+canon_ids = ["CANON-07"]
+compatibility = "backward-readable"
+risk = "high"
+
+[[contracts]]
+id = "closed_loop_iteration"
+owner_symbol = "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
+consumer_symbols = ["repo_idea_miner.challenge_dashboard_data.load_phase2d1_details"]
+validator_symbols = ["repo_idea_miner.factory_validate.run_marker_validators"]
+canon_ids = ["CANON-07"]
+compatibility = "historical loop records preserved as-is"
+risk = "high"
+
+[[contracts]]
+id = "closed_loop_summary"
+owner_symbol = "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
+consumer_symbols = ["repo_idea_miner.challenge_dashboard_data.load_phase2d1_details"]
+validator_symbols = ["repo_idea_miner.factory_validate.run_marker_validators"]
+canon_ids = ["CANON-07"]
+compatibility = "historical loop records preserved as-is"
+risk = "high"
+
+# ---------------------------------------------------------------- Invariants (§14.2)
+# 의미 전문은 PROJECT_CANON에만 둔다. canon_id 섹션의 INVARIANTS 리스트가 id를 포함해야 한다.
+# tests는 tests/<stem>.py 모듈 stem — check가 실재를 검증한다.
+
+[[invariants]]
+id = "INV-MINER-CORE-PRESERVED"
+canon_id = "CANON-01"
+applies_to = [
+  "repo_idea_miner.pipeline.run_single_repo",
+  "repo_idea_miner.search_pipeline.run_search",
+]
+tests = ["test_pipeline_mock", "test_dependency"]
+
+[[invariants]]
+id = "INV-BASE-RUN-IMMUTABLE"
+canon_id = "CANON-07"
+applies_to = ["repo_idea_miner.factory_loop_executor.run_closed_product_loop"]
+tests = ["test_factory_phase2d1_loop"]
+
+[[invariants]]
+id = "INV-FRESH-VERIFICATION"
+canon_id = "CANON-11"
+applies_to = [
+  "repo_idea_miner.factory_loop_executor.verify_candidate",
+  "repo_idea_miner.factory_validate.validate_product_run_dir",
+]
+tests = ["test_factory_phase2d1_loop", "test_factory_validate"]
+
+[[invariants]]
+id = "INV-HARD-RUNG-DETERMINISTIC"
+canon_id = "CANON-07"
+applies_to = ["repo_idea_miner.factory_product_loop.apply_hard_blockers"]
+tests = ["test_factory_product_loop_2d0"]
+
+[[invariants]]
+id = "INV-SPEC-REPAIR-PROTECTION"
+canon_id = "CANON-05"
+applies_to = ["repo_idea_miner.factory_spec_repair.run_spec_repair_apply"]
+tests = ["test_factory_spec_repair_2b1"]
+
+[[invariants]]
+id = "INV-SUMMARY-STRING"
+canon_id = "CANON-04"
+applies_to = ["repo_idea_miner.factory_core_schemas.GoldenExpected"]
+tests = ["test_factory_core_schemas"]
+
+[[invariants]]
+id = "INV-PROTECTED-HASH"
+canon_id = "CANON-05"
+applies_to = ["repo_idea_miner.factory_product_evidence.compute_protected_hashes"]
+tests = ["test_factory_product_polish_2c1", "test_factory_spec_repair_2b1"]
+
+[[invariants]]
+id = "INV-MOCK-FALLBACK-NOT-PRODUCT"
+canon_id = "CANON-04"
+applies_to = ["repo_idea_miner.factory_core_pipeline.run_core_factory"]
+tests = ["test_factory_core_pipeline_mock"]
+
+[[invariants]]
+id = "INV-SECRET-NONDISCLOSURE"
+canon_id = "CANON-11"
+applies_to = ["repo_idea_miner.redaction.redact_text"]
+tests = ["test_redaction"]
+
+[[invariants]]
+id = "INV-PRESENTATION-NO-JUDGMENT"
+canon_id = "CANON-09"
+applies_to = ["repo_idea_miner.challenge_dashboard.render_detail"]
+tests = ["test_challenge_dashboard"]
+
+[[invariants]]
+id = "INV-AI-DOCUMENTS-ONLY"
+canon_id = "CANON-12"
+applies_to = ["repo_idea_miner.architecture_atlas.run_architecture_check"]
+tests = ["test_architecture_atlas"]

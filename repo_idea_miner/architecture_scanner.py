@@ -10,6 +10,10 @@ PACKAGE = "repo_idea_miner"
 _ARTIFACT_RE = re.compile(r"^[\w./-]+\.(json|md|html|toml|jsonl)$")
 _RUN_KIND_RE = re.compile(r"^[A-Z][A-Z0-9_]*_RUN$")
 
+# AST IO call 감지 대상 (§13 AST_IO_CALL) — 파일명 리터럴이 인자에 있을 때만 사실로 기록한다.
+_IO_WRITE_FUNCS = frozenset({"write_json", "write_text", "_write_json", "_write_text"})
+_IO_READ_FUNCS = frozenset({"load_json", "read_json", "_load_json", "read_text"})
+
 
 def _iter_py(root: Path) -> list[Path]:
     """패키지와 tests의 .py를 정렬된 순서로 돌려준다 (filesystem 순서 비의존)."""
@@ -37,6 +41,7 @@ def scan_module(root: Path, path: Path) -> dict:
         "private_symbols": [],
         "imports": [],           # 패키지 내부 from-import: {"from": module, "names": [...]}
         "artifact_refs": [],
+        "artifact_io_calls": [],  # {"name", "role" PRODUCES|CONSUMES, "line"} — AST IO call 실증
         "parse_error": None,
     }
     try:
@@ -57,7 +62,15 @@ def scan_module(root: Path, path: Path) -> dict:
             info[key].append(name)
 
     artifacts: set[str] = set()
+    io_calls: dict[tuple[str, str], int] = {}  # (name, role) → 최초 line
     for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            role = _io_call_role(node)
+            if role:
+                for name in _literal_artifact_names(node):
+                    key = (name, role)
+                    if key not in io_calls or node.lineno < io_calls[key]:
+                        io_calls[key] = node.lineno
         if isinstance(node, ast.ImportFrom) and node.module \
                 and node.module.split(".")[0] == PACKAGE:
             info["imports"].append({
@@ -75,7 +88,93 @@ def scan_module(root: Path, path: Path) -> dict:
     info["public_symbols"].sort()
     info["private_symbols"].sort()
     info["artifact_refs"] = sorted(artifacts)
+    info["artifact_io_calls"] = [
+        {"name": n, "role": r, "line": line}
+        for (n, r), line in sorted(io_calls.items())
+    ]
     return info
+
+
+def _io_call_role(node: ast.Call) -> str | None:
+    """IO call이면 PRODUCES/CONSUMES, 아니면 None. 애매하면 승격하지 않는다 (§13)."""
+    func = node.func
+    fname = func.attr if isinstance(func, ast.Attribute) else (
+        func.id if isinstance(func, ast.Name) else None)
+    if fname in _IO_WRITE_FUNCS:
+        return "PRODUCES"
+    if fname in _IO_READ_FUNCS:
+        return "CONSUMES"
+    if fname == "open":
+        mode = None
+        if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+            mode = node.args[1].value
+        for kw in node.keywords:
+            if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                mode = kw.value.value
+        if isinstance(mode, str):
+            return "PRODUCES" if any(c in mode for c in "wax+") else "CONSUMES"
+        return "CONSUMES"  # open() 기본 mode는 read
+    return None
+
+
+def _literal_artifact_names(call: ast.Call) -> list[str]:
+    """call 인자 표현식 안의 artifact 파일명 리터럴 (Path / \"x.json\" BinOp 포함)."""
+    out: set[str] = set()
+    for arg in list(call.args) + [kw.value for kw in call.keywords]:
+        for sub in ast.walk(arg):
+            if isinstance(sub, ast.Constant) and isinstance(sub.value, str) \
+                    and _ARTIFACT_RE.match(sub.value):
+                out.add(sub.value)
+    return sorted(out)
+
+
+def resolve_symbols(root: Path, symbol_ids: list[str]) -> dict[str, dict | None]:
+    """canonical symbol id(repo_idea_miner.module.attr)를 AST로 해상한다 (§11).
+    top-level def/class/단일 대입만 — private helper 수집이 아니라 지정 심볼 조회다."""
+    by_module: dict[str, list[str]] = {}
+    for sid in symbol_ids:
+        by_module.setdefault(sid.rsplit(".", 1)[0], []).append(sid)
+
+    out: dict[str, dict | None] = {}
+    for module, sids in sorted(by_module.items()):
+        parts = module.split(".")
+        path = root.joinpath(*parts).with_suffix(".py")
+        nodes: dict[str, ast.AST] = {}
+        if path.is_file():
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    nodes[node.name] = node
+                elif isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                        and isinstance(node.targets[0], ast.Name):
+                    nodes[node.targets[0].id] = node
+        for sid in sids:
+            node = nodes.get(sid.rsplit(".", 1)[1])
+            if node is None:
+                out[sid] = None
+                continue
+            name = sid.rsplit(".", 1)[1]
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                kind = "function"
+                sig = f"def {name}({ast.unparse(node.args)})"
+                if node.returns is not None:
+                    sig += f" -> {ast.unparse(node.returns)}"
+            elif isinstance(node, ast.ClassDef):
+                kind = "class"
+                bases = ", ".join(ast.unparse(b) for b in node.bases)
+                sig = f"class {name}({bases})" if bases else f"class {name}"
+            else:
+                kind = "constant"
+                sig = f"{name} = ..."
+            out[sid] = {
+                "symbol_id": sid,
+                "kind": kind,
+                "path": path.relative_to(root).as_posix(),
+                "start_line": node.lineno,
+                "end_line": node.end_lineno or node.lineno,
+                "signature": sig,
+            }
+    return out
 
 
 def find_private_imports(modules: list[dict]) -> list[dict]:

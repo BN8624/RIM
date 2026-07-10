@@ -2,7 +2,38 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "properties": {
   "artifacts": {
-   "type": "object"
+   "items": {
+    "properties": {
+     "provenance": {
+      "enum": [
+       "AST_IMPORT",
+       "AST_IO_CALL",
+       "REGISTRY",
+       "MANIFEST",
+       "AST_STRING_LITERAL"
+      ]
+     },
+     "role": {
+      "enum": [
+       "PRODUCES",
+       "CONSUMES",
+       "VALIDATES",
+       "LITERAL_REFERENCE"
+      ]
+     }
+    },
+    "required": [
+     "artifact_id",
+     "path_pattern",
+     "role",
+     "symbol_id",
+     "provenance",
+     "source_path",
+     "source_line"
+    ],
+    "type": "object"
+   },
+   "type": "array"
   },
   "cli": {
    "items": {
@@ -15,20 +46,50 @@
    },
    "type": "array"
   },
-  "commit": {
-   "type": "string"
-  },
   "components": {
    "type": "object"
   },
-  "documents": {
-   "type": "object"
+  "contracts": {
+   "items": {
+    "required": [
+     "contract_id",
+     "owner_symbol",
+     "consumer_symbols",
+     "validator_symbols",
+     "canon_ids",
+     "compatibility",
+     "risk"
+    ],
+    "type": "object"
+   },
+   "type": "array"
   },
-  "fingerprint": {
-   "type": "string"
+  "document_routes": {
+   "items": {
+    "required": [
+     "route_id",
+     "selectors",
+     "canon_ids",
+     "atlas_query"
+    ],
+    "type": "object"
+   },
+   "type": "array"
   },
   "health": {
    "type": "object"
+  },
+  "invariants": {
+   "items": {
+    "required": [
+     "invariant_id",
+     "canon_id",
+     "applies_to",
+     "tests"
+    ],
+    "type": "object"
+   },
+   "type": "array"
   },
   "modules": {
    "items": {
@@ -45,11 +106,47 @@
    },
    "type": "array"
   },
-  "pipeline": {
+  "repository": {
+   "required": [
+    "head",
+    "structure_snapshot",
+    "structural_fingerprint",
+    "structural_diff"
+   ],
+   "type": "object"
+  },
+  "routes": {
+   "items": {
+    "required": [
+     "route_id",
+     "canon_ids",
+     "cli",
+     "steps"
+    ],
+    "type": "object"
+   },
    "type": "array"
   },
   "schema_version": {
-   "type": "integer"
+   "const": 2
+  },
+  "symbols": {
+   "items": {
+    "required": [
+     "symbol_id",
+     "kind",
+     "path",
+     "start_line",
+     "end_line",
+     "signature",
+     "component_id",
+     "roles",
+     "canon_ids",
+     "related_tests"
+    ],
+    "type": "object"
+   },
+   "type": "array"
   },
   "tests": {
    "type": "object"
@@ -60,16 +157,18 @@
  },
  "required": [
   "schema_version",
-  "commit",
-  "fingerprint",
+  "repository",
   "components",
   "modules",
-  "cli",
+  "symbols",
+  "routes",
+  "artifacts",
+  "contracts",
+  "invariants",
   "validators",
   "tests",
-  "pipeline",
-  "health",
-  "documents"
+  "document_routes",
+  "health"
  ],
  "title": "RIM Architecture Atlas",
  "type": "object"
