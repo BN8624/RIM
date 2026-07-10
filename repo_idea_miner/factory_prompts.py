@@ -21,7 +21,7 @@ _MICRO_NOTE = """이 작업은 micro-workspace 라인이다 (STEAL_ONLY).
 그 핵심 루프의 Difficulty Anchor는 반드시 살아 있어야 한다."""
 
 
-def _clip(text: str, limit: int = 14000) -> str:
+def clip(text: str, limit: int = 14000) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "\n[길이 제한으로 잘렸습니다]"
@@ -133,7 +133,7 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CHALLENGE ===
-{_clip(challenge_context)}
+{clip(challenge_context)}
 """
 
 
@@ -152,10 +152,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CHALLENGE ===
-{_clip(challenge_context, 8000)}
+{clip(challenge_context, 8000)}
 
 === PRODUCT BRIEF ===
-{_clip(product_brief_md, 4000)}
+{clip(product_brief_md, 4000)}
 """
 
 
@@ -183,13 +183,13 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CHALLENGE ===
-{_clip(challenge_context, 8000)}
+{clip(challenge_context, 8000)}
 
 === PRODUCT BRIEF ===
-{_clip(product_brief_md, 3000)}
+{clip(product_brief_md, 3000)}
 
 === UX FLOW ===
-{_clip(ux_flow_md, 4000)}
+{clip(ux_flow_md, 4000)}
 """
 
 
@@ -222,16 +222,16 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CHALLENGE ===
-{_clip(challenge_context, 6000)}
+{clip(challenge_context, 6000)}
 
 === MANIFEST ===
-{_clip(manifest_json, 3000)}
+{clip(manifest_json, 3000)}
 
 === CONTRACT ===
-{_clip(contract_json, 4000)}
+{clip(contract_json, 4000)}
 
 === BUILD TASK PACKET ===
-{_clip(build_task_packet, 3000)}
+{clip(build_task_packet, 3000)}
 
 === CURRENT FILE TREE ===
 {json.dumps(file_tree, ensure_ascii=False)}
@@ -246,7 +246,7 @@ def build_debug_prompt(
     attempt: int,
     max_attempts: int,
 ) -> str:
-    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 4000)}" for path, content in key_files.items())
+    files_md = "\n\n".join(f"--- {path} ---\n{clip(content, 4000)}" for path, content in key_files.items())
     return f"""You are the Debug Desk of RIM Product Factory.
 
 {FACTORY_PRINCIPLES}
@@ -265,10 +265,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === FAILURE LOG ===
-{_clip(error_log, 5000)}
+{clip(error_log, 5000)}
 
 === CONTRACT ===
-{_clip(contract_json, 3000)}
+{clip(contract_json, 3000)}
 
 === FILE TREE ===
 {json.dumps(file_tree, ensure_ascii=False)}
@@ -285,7 +285,7 @@ def build_qa_prompt(
     key_files: dict[str, str],
     gate_summary_md: str,
 ) -> str:
-    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 3500)}" for path, content in key_files.items())
+    files_md = "\n\n".join(f"--- {path} ---\n{clip(content, 3500)}" for path, content in key_files.items())
     return f"""You are the QA Desk of RIM Product Factory.
 
 {FACTORY_PRINCIPLES}
@@ -312,7 +312,7 @@ Schema (use exactly these keys):
 {json.dumps(forbidden, ensure_ascii=False, indent=1)}
 
 === GATE RESULTS ===
-{_clip(gate_summary_md, 3000)}
+{clip(gate_summary_md, 3000)}
 
 === FILE TREE ===
 {json.dumps(file_tree, ensure_ascii=False)}
@@ -355,13 +355,13 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CHALLENGE ===
-{_clip(challenge_context, 5000)}
+{clip(challenge_context, 5000)}
 
 === GATE RESULTS ===
-{_clip(gate_summary_md, 3000)}
+{clip(gate_summary_md, 3000)}
 
 === QA REPORT ===
-{_clip(qa_report_md, 4000)}
+{clip(qa_report_md, 4000)}
 
 === DEBUG LOOP COUNT ===
 {debug_count}

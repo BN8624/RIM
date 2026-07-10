@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from repo_idea_miner.factory_prompts import JSON_RULES, _clip
+from repo_idea_miner.factory_prompts import JSON_RULES, clip
 
 CORE_PRINCIPLES = """너는 RIM Product Factory Phase 1.6의 Core-first Harness 작업자다.
 목표는 파일을 채우는 것이 아니라 검증 가능한 core system을 만드는 것이다.
@@ -168,7 +168,7 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CHALLENGE ===
-{_clip(challenge_context)}
+{clip(challenge_context)}
 """
 
 
@@ -189,7 +189,7 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === NORMALIZED CHALLENGE ===
-{_clip(normalized_json, 8000)}
+{clip(normalized_json, 8000)}
 """
 
 
@@ -218,10 +218,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === NORMALIZED CHALLENGE ===
-{_clip(normalized_json, 6000)}
+{clip(normalized_json, 6000)}
 
 === ARTIFACT CLASSIFICATION ===
-{_clip(classification_json, 2000)}
+{clip(classification_json, 2000)}
 """
 
 
@@ -247,10 +247,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === NORMALIZED CHALLENGE ===
-{_clip(normalized_json, 5000)}
+{clip(normalized_json, 5000)}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 8000)}
+{clip(contract_json, 8000)}
 """
 
 
@@ -268,10 +268,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CURRENT CONTRACT ===
-{_clip(contract_json, 8000)}
+{clip(contract_json, 8000)}
 
 === REVIEW ===
-{_clip(review_json, 4000)}
+{clip(review_json, 4000)}
 """
 
 
@@ -303,10 +303,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === NORMALIZED CHALLENGE ===
-{_clip(normalized_json, 4000)}
+{clip(normalized_json, 4000)}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 8000)}
+{clip(contract_json, 8000)}
 """
 
 
@@ -332,10 +332,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 5000)}
+{clip(contract_json, 5000)}
 
 === SCENARIOS / GOLDENS ===
-{_clip(scenario_golden_json, 16000)}
+{clip(scenario_golden_json, 16000)}
 """
 
 
@@ -353,10 +353,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CURRENT SCENARIOS / GOLDENS ===
-{_clip(scenario_golden_json, 16000)}
+{clip(scenario_golden_json, 16000)}
 
 === REVIEW ===
-{_clip(review_json, 4000)}
+{clip(review_json, 4000)}
 """
 
 
@@ -441,13 +441,13 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === BUILD TASK PACKET ===
-{_clip(build_task_packet_md, 6000)}
+{clip(build_task_packet_md, 6000)}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 5000)}
+{clip(contract_json, 5000)}
 
 === SCENARIOS ===
-{_clip(scenarios_json, 6000)}
+{clip(scenarios_json, 6000)}
 
 === CURRENT FILE TREE ===
 {json.dumps(file_tree, ensure_ascii=False)}
@@ -477,10 +477,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === GATE RESULTS ===
-{_clip(gate_report_md, 8000)}
+{clip(gate_report_md, 8000)}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 4000)}
+{clip(contract_json, 4000)}
 
 === FILE TREE ===
 {json.dumps(file_tree, ensure_ascii=False)}
@@ -494,7 +494,7 @@ def build_patch_prompt(
     attempt: int,
     max_attempts: int,
 ) -> str:
-    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 4000)}" for path, content in key_files.items())
+    files_md = "\n\n".join(f"--- {path} ---\n{clip(content, 4000)}" for path, content in key_files.items())
     return f"""You are the Patch Repair desk of RIM Product Factory Phase 1.6.
 
 {CORE_PRINCIPLES}
@@ -513,7 +513,7 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === GATE FAILURES ===
-{_clip(gate_report_md, 6000)}
+{clip(gate_report_md, 6000)}
 
 === PATCH INSTRUCTIONS ===
 {json.dumps(patch_instructions, ensure_ascii=False, indent=1)}
@@ -546,7 +546,7 @@ def build_continuation_patch_prompt(
     attempt: int,
     max_attempts: int,
 ) -> str:
-    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 4000)}" for path, content in key_files.items())
+    files_md = "\n\n".join(f"--- {path} ---\n{clip(content, 4000)}" for path, content in key_files.items())
     return f"""You are the Continuation Patch desk of RIM Product Factory Phase 1.7.
 
 {CORE_PRINCIPLES}
@@ -564,10 +564,10 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === REPAIR PLAN ===
-{_clip(repair_plan_md, 4000)}
+{clip(repair_plan_md, 4000)}
 
 === FAILURE EVIDENCE ===
-{_clip(failure_md, 4000)}
+{clip(failure_md, 4000)}
 
 === KEY FILES ===
 {files_md}
@@ -622,13 +622,13 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 4000)}
+{clip(contract_json, 4000)}
 
 === REPLAY INDEX ===
-{_clip(replay_index_json, 3000)}
+{clip(replay_index_json, 3000)}
 
 === RUN INSTRUCTIONS ===
-{_clip(run_instructions, 2000)}
+{clip(run_instructions, 2000)}
 
 === FILE TREE ===
 {json.dumps(file_tree, ensure_ascii=False)}
@@ -636,7 +636,7 @@ Schema (use exactly these keys):
 
 
 def build_product_layer_review_prompt(product_files: dict[str, str], contract_json: str) -> str:
-    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 3000)}" for path, content in product_files.items())
+    files_md = "\n\n".join(f"--- {path} ---\n{clip(content, 3000)}" for path, content in product_files.items())
     return f"""You are the Product Layer Review desk of RIM Product Factory Phase 1.6.
 
 {CORE_PRINCIPLES}
@@ -654,7 +654,7 @@ Schema (use exactly these keys):
 {JSON_RULES}
 
 === CORE CONTRACT ===
-{_clip(contract_json, 3000)}
+{clip(contract_json, 3000)}
 
 === PRODUCT LAYER FILES ===
 {files_md}
@@ -662,7 +662,7 @@ Schema (use exactly these keys):
 
 
 def build_product_layer_repair_prompt(product_files: dict[str, str], review_json: str) -> str:
-    files_md = "\n\n".join(f"--- {path} ---\n{_clip(content, 3000)}" for path, content in product_files.items())
+    files_md = "\n\n".join(f"--- {path} ---\n{clip(content, 3000)}" for path, content in product_files.items())
     return f"""You are the Product Layer Repair desk of RIM Product Factory Phase 1.6.
 
 {CORE_PRINCIPLES}
@@ -681,7 +681,7 @@ Schema (use exactly these keys):
 {files_md}
 
 === REVIEW ===
-{_clip(review_json, 3000)}
+{clip(review_json, 3000)}
 """
 
 

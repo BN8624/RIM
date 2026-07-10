@@ -8,13 +8,13 @@ from pathlib import Path
 from repo_idea_miner.factory_run_layout import resolve_run_target
 
 from repo_idea_miner.config import Settings, load_settings
-from repo_idea_miner.factory_continue import _compute_build_review
+from repo_idea_miner.factory_continue import compute_build_review
 from repo_idea_miner.factory_core_gates import (
     PRODUCT_READ_LIMIT,
-    _src_code_files,
     classify_summary_source,
     product_layer_consumes_core,
     run_core_gates,
+    src_code_files,
 )
 from repo_idea_miner.factory_core_prompts import mock_build_review_pass
 from repo_idea_miner.factory_core_schemas import CORE_GATE_ORDER
@@ -22,7 +22,7 @@ from repo_idea_miner.factory_db import get_product_run, update_product_run
 from repo_idea_miner.factory_desks import DeskExecutor
 from repo_idea_miner.factory_frozen import compare_frozen_hashes, compute_frozen_hashes
 from repo_idea_miner.factory_pipeline import FactorySettings, load_factory_settings
-from repo_idea_miner.factory_spec_repair import _dump, _load_json, _write_json
+from repo_idea_miner.factory_product_evidence import load_json, write_json
 from repo_idea_miner.factory_workspace import save_green_base
 from repo_idea_miner.llm_client import LLMCallLogger, MockLLMClient
 
@@ -74,7 +74,7 @@ _ERRORS_RE = re.compile(r"""^["']errors["']\s*:\s*(.+?),?\s*$""")
 
 
 def _load_goldens(workspace: Path) -> list[dict]:
-    return [g for g in (_load_json(p) for p in sorted((workspace / "golden").glob("expected_*.json")))
+    return [g for g in (load_json(p) for p in sorted((workspace / "golden").glob("expected_*.json")))
             if g is not None]
 
 
@@ -88,9 +88,9 @@ def resolve_patch_target(run_dir=None, run_id=None, db_conn=None) -> tuple[Path 
 def check_patch_preconditions(run_dir: Path, secrets: list[str]) -> tuple[list[str], dict]:
     """§3: Phase 2B-1 apply 이후 anti_hardcode 실패가 남아 있고, 아직 green 미승격인지 확인한다."""
     problems: list[str] = []
-    apply_report = _load_json(run_dir / "spec_repair_apply_report.json")
-    gate_rerun = _load_json(run_dir / "gate_rerun_after_spec_repair.json")
-    promo = _load_json(run_dir / "green_base_promotion_after_spec_repair.json") or {}
+    apply_report = load_json(run_dir / "spec_repair_apply_report.json")
+    gate_rerun = load_json(run_dir / "gate_rerun_after_spec_repair.json")
+    promo = load_json(run_dir / "green_base_promotion_after_spec_repair.json") or {}
 
     if apply_report is None or not apply_report.get("applied"):
         problems.append("Phase 2B-1 spec repair apply 산출물이 없음 (apply_report.applied != true)")
@@ -106,7 +106,7 @@ def check_patch_preconditions(run_dir: Path, secrets: list[str]) -> tuple[list[s
     if verdict not in ("NEEDS_MORE_GEMMA_LOOP", "SPEC_REPAIR_REQUIRED"):
         problems.append(f"current verdict가 patch 대상이 아님: {verdict}")
     if (run_dir / PATCH_REPORT_JSON).is_file():
-        prev = _load_json(run_dir / PATCH_REPORT_JSON) or {}
+        prev = load_json(run_dir / PATCH_REPORT_JSON) or {}
         if prev.get("applied"):
             problems.append("이미 anti_hardcode patch가 수행된 run")
 
@@ -119,7 +119,7 @@ def check_patch_preconditions(run_dir: Path, secrets: list[str]) -> tuple[list[s
 def detect_hardcoded_summary(workspace: Path) -> dict:
     """runner src에서 하드코딩된 summary 리터럴과 대입식을 찾는다. patch 가능성을 함께 판단한다."""
     goldens = _load_goldens(workspace)
-    code = _src_code_files(workspace)
+    code = src_code_files(workspace)
     cls = classify_summary_source(code, goldens)
     literals = sorted({(g.get("expected_summary") or "").strip() for g in goldens
                        if len((g.get("expected_summary") or "").strip()) >= 8})
@@ -335,7 +335,7 @@ def run_anti_hardcode_patch(
     result["summary_source"] = detect["summary_source"]
     hash_pre = compute_frozen_hashes(workspace, run_dir)
     plan = build_patch_plan(run_dir, detect, target_info, inputs)
-    _write_json(run_dir / PATCH_PLAN_JSON, plan)
+    write_json(run_dir / PATCH_PLAN_JSON, plan)
     (run_dir / PATCH_PLAN_MD).write_text(_plan_md(plan), encoding="utf-8")
 
     # dry-run이 frozen 파일을 바꾸면 실패 (§10)
@@ -357,7 +357,7 @@ def run_anti_hardcode_patch(
         return result
 
     # ---- Patch 적용 (§11)
-    _write_json(run_dir / HASH_BEFORE, hash_pre)
+    write_json(run_dir / HASH_BEFORE, hash_pre)
     try:
         applied_files, originals = _apply_patch_files(run_dir, workspace, detect)
         hash_after = compute_frozen_hashes(workspace, run_dir)
@@ -369,8 +369,8 @@ def run_anti_hardcode_patch(
             "out_of_scope": out_of_scope,
             "note": "anti_hardcode patch는 src만 수정한다 — golden/fixtures/contract는 불변이어야 함",
         }
-        _write_json(run_dir / HASH_AFTER, hash_after)
-        _write_json(run_dir / HASH_CHECK, apply_check)
+        write_json(run_dir / HASH_AFTER, hash_after)
+        write_json(run_dir / HASH_CHECK, apply_check)
         result["frozen_hash_status"] = apply_check["status"]
         if out_of_scope:
             _restore(originals)
@@ -390,7 +390,7 @@ def run_anti_hardcode_patch(
     result["applied_files"] = applied_files
 
     # ---- diff summary (§12)
-    _write_json(run_dir / DIFF_SUMMARY_JSON, {
+    write_json(run_dir / DIFF_SUMMARY_JSON, {
         "base_run_id": target_info["base_run_id"], "challenge_id": target_info["challenge_id"],
         "applied_files": applied_files,
         "summary_hardcode_removed": True,
@@ -402,17 +402,17 @@ def run_anti_hardcode_patch(
     })
 
     # ---- Gate rerun (§13)
-    core_contract = _load_json(workspace / "core_contract.json") or {}
-    runner_contract = _load_json(workspace / "runner_contract.json") or {}
+    core_contract = load_json(workspace / "core_contract.json") or {}
+    runner_contract = load_json(workspace / "runner_contract.json") or {}
     goldens = _load_goldens(workspace)
     gates = run_core_gates(workspace, core_contract, runner_contract, goldens,
                            timeout_seconds=fset.sandbox_timeout_seconds,
                            use_docker=fset.docker_flag(), secrets=secrets)
     for name, data in gates["artifacts"].items():
-        _write_json(workspace / f"{name}.json", data)
+        write_json(workspace / f"{name}.json", data)
         final_copy = run_dir / "final_artifact" / f"{name}.json"
         if final_copy.parent.is_dir() and final_copy.is_file():
-            _write_json(final_copy, data)
+            write_json(final_copy, data)
     final_replay = run_dir / "final_artifact" / "replay"
     if final_replay.is_dir():
         import shutil
@@ -431,9 +431,9 @@ def run_anti_hardcode_patch(
                             call_logger=LLMCallLogger(None))
     executor = DeskExecutor(mode, settings, scheduler=scheduler, llm=llm,
                             call_logger=LLMCallLogger(run_dir / "debug" / "llm_calls.jsonl", secrets))
-    build_review = _compute_build_review(
+    build_review = compute_build_review(
         executor, gates, core_contract, workspace,
-        lambda name, data: _write_json(run_dir / name, data))
+        lambda name, data: write_json(run_dir / name, data))
 
     gate_summary = gates["summary"]
     anti = gates["artifacts"]["anti_hardcode_summary"]
@@ -454,13 +454,13 @@ def run_anti_hardcode_patch(
         "build_review_status": (build_review or {}).get("status"),
         "after_anti_hardcode_patch": True,
     }
-    _write_json(run_dir / GATE_RERUN_JSON, gate_rerun)
+    write_json(run_dir / GATE_RERUN_JSON, gate_rerun)
     result["summary_source"] = anti.get("summary_source")
 
     # ---- 초기 report (validate가 §16 항목을 볼 수 있도록 먼저 기록)
     hardcode_risk = anti.get("hardcode_risk") or "low"
     summary_risk = anti.get("summary_hardcode_risk") or "low"
-    oracle = _load_json(run_dir / "oracle_risk_report.json") or {}
+    oracle = load_json(run_dir / "oracle_risk_report.json") or {}
     oracle_risk = oracle.get("risk_level") or "low"
     report = {
         "applied": True, "target_count": 1,
@@ -475,10 +475,10 @@ def run_anti_hardcode_patch(
         "promoted_to_green_base": False, "new_verdict": None,
         "golden_fixtures_contract_changed": False,
     }
-    _write_json(run_dir / PATCH_REPORT_JSON, report)
+    write_json(run_dir / PATCH_REPORT_JSON, report)
 
     # validate가 "green promotion 결과 존재"(§16)를 확인할 수 있도록 예비 promotion을 먼저 기록
-    _write_json(run_dir / PROMOTION_JSON, {
+    write_json(run_dir / PROMOTION_JSON, {
         "base_run_id": target_info["base_run_id"], "challenge_id": target_info["challenge_id"],
         "promoted_to_green_base": False, "new_verdict": None,
         "remaining_failures": remaining, "hardcode_risk": hardcode_risk,
@@ -499,7 +499,7 @@ def run_anti_hardcode_patch(
     if promoted:
         new_verdict = "REVIEW_READY"
         green_path = str(save_green_base(run_dir, workspace, "green_anti_hardcode_00"))
-        _write_json(run_dir / "green_base.json", {
+        write_json(run_dir / "green_base.json", {
             "base_type": "green_base", "green_base_path": green_path,
             "verdict": new_verdict, "source": "anti_hardcode_patch",
             "next_goal": "사용자 검수 후 제품화 판단",
@@ -510,7 +510,7 @@ def run_anti_hardcode_patch(
     result["promoted_to_green_base"] = promoted
     result["new_verdict"] = new_verdict
 
-    _write_json(run_dir / PROMOTION_JSON, {
+    write_json(run_dir / PROMOTION_JSON, {
         "base_run_id": target_info["base_run_id"], "challenge_id": target_info["challenge_id"],
         "promoted_to_green_base": promoted, "new_verdict": new_verdict,
         "remaining_failures": remaining,
@@ -521,7 +521,7 @@ def run_anti_hardcode_patch(
     })
 
     # ---- summary repair 규칙 강화 기록 (§7, §12)
-    _write_json(run_dir / RULE_UPDATE_JSON, {
+    write_json(run_dir / RULE_UPDATE_JSON, {
         "target": "factory_spec_repair.plan_scenario_repair",
         "old_behavior": "expected_summary를 runner 출력값으로 무조건 덮음 (빈 값일 때만 차단)",
         "new_behavior": ("runner summary가 state/events 파생일 때만 expected_summary 보정 허용; "
@@ -544,13 +544,13 @@ def run_anti_hardcode_patch(
         "promoted_to_green_base": promoted, "new_verdict": new_verdict,
         "remaining_failures": remaining,
     })
-    _write_json(run_dir / PATCH_REPORT_JSON, report)
+    write_json(run_dir / PATCH_REPORT_JSON, report)
     (run_dir / PATCH_REPORT_MD).write_text(_report_md(report), encoding="utf-8")
 
     status_label = ("Green 승격" if promoted
                     else "적용됨, 재검증 실패" if not (validate_ok and all_gates_pass)
                     else "추가 수정 필요")
-    _write_json(run_dir / DASHBOARD_JSON, {
+    write_json(run_dir / DASHBOARD_JSON, {
         "recommended_path": "Anti-Hardcode Patch",
         "lane": "PATCH_CONTINUATION", "recommended_lane": "PATCH_CONTINUATION",
         "lane_reason": "summary hardcode 제거",

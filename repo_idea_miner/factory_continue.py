@@ -79,6 +79,156 @@ LANES = (LANE_PATCH, LANE_SPEC_REPAIR, LANE_EXCLUDED, LANE_REVIEW_ONLY)
 PATCH_RESULTS = ("PATCH_GREEN", "PATCH_PROGRESS", "PATCH_BLOCKED_SPEC",
                  "PATCH_FAILED", "NO_PATCH_ELIGIBLE")
 
+# ---------------------------------------------------------------- Failure patch-safety 정본 (§4.3, §4.4, §6.2)
+# failure 의미(patch 가능/spec 문제/불명) 판단은 여기 한 곳에만 있다 — queue/2B가 import한다 (R4 §14.4).
+
+# 자동 patch 1차 허용 failure type (§6.2)
+PATCH_SAFE_FAILURE_TYPES = (
+    "RUNNER_OUTPUT_MISSING_FIELD",
+    "PRODUCT_LAYER_NOT_CONSUMING_REPLAY",
+)
+# 조건부 허용 (§6.2)
+CONDITIONAL_PATCH_FAILURE_TYPES = (
+    "STATE_INVARIANT_NOT_EXPOSED",
+    "SCENARIO_REPLAY_FAILURE",
+    "DETERMINISM_FAILURE",
+    "ANTI_HARDCODE_FAILURE",
+    "RUNNER_OUTPUT_EXTRA_FIELD",
+)
+# 자동 patch 금지 (§6.2)
+NEVER_PATCH_FAILURE_TYPES = ("GOLDEN_SCHEMA_MISMATCH", "SPEC_REPAIR_REQUIRED")
+
+# 조건부 patch 판정용 evidence 패턴 (§4.3, §4.4, §6.2)
+_CONTRACT_VIOLATION_TOKENS = (
+    "runner_contract", "required_output_fields", "violates runner contract",
+    "contract violation", "contract를 어",
+)
+_DETERMINISM_NARROW_TOKENS = ("date.now", "math.random", "random.random", "time.time")
+_REPLAY_NARROW_TOKENS = ("missing handler", "output schema", "runner command", "handler")
+_HARDCODE_NARROW_TOKENS = ("fixture id", "literal")
+_EXPOSURE_ONLY_TOKENS = ("not exposed", "노출")
+
+
+def assess_failure_patch_safety(failure: dict) -> tuple[str, str]:
+    """failure 1건을 (판정, 근거)로 평가한다. 판정은 patch|spec|unclear."""
+    ftype = failure.get("type") or ""
+    ev = (failure.get("evidence") or "").lower()
+
+    if ftype == "SPEC_REPAIR_REQUIRED":
+        return "spec", "spec repair가 명시된 failure"
+    if ftype == "GOLDEN_SCHEMA_MISMATCH":
+        if any(tok in ev for tok in _CONTRACT_VIOLATION_TOKENS):
+            return "patch", "runner가 contract를 어겨서 extra/missing field 발생 (patch 가능)"
+        return "spec", "golden이 runner보다 뒤처짐 — 기본 SPEC_REPAIR (§4.4)"
+    if ftype == "RUNNER_OUTPUT_EXTRA_FIELD":
+        if any(tok in ev for tok in _CONTRACT_VIOLATION_TOKENS):
+            return "patch", "runner output이 runner_contract를 명백히 위반"
+        return "spec", "extra field 기준이 frozen golden — spec repair 대상"
+    if ftype == "STATE_INVARIANT_NOT_EXPOSED":
+        if failure.get("requires_spec_repair"):
+            return "spec", "invariant/contract 자체 문제"
+        if any(tok in ev for tok in _EXPOSURE_ONLY_TOKENS):
+            return "patch", "값은 존재하고 final_state 노출만 빠짐 (exposure-only)"
+        return "spec", "invariant 값 위반 또는 DSL 해석 문제 — spec repair 대상 (§4.3)"
+    if failure.get("requires_spec_repair"):
+        return "spec", f"{ftype}: spec repair 필요 표기"
+    if ftype in PATCH_SAFE_FAILURE_TYPES:
+        return "patch", "1차 patch-safe failure type"
+    if ftype == "SCENARIO_REPLAY_FAILURE":
+        if any(tok in ev for tok in _REPLAY_NARROW_TOKENS):
+            return "patch", "missing handler/schema/command 등 좁은 원인"
+        return "unclear", "replay 실패 원인이 좁게 특정되지 않음"
+    if ftype == "DETERMINISM_FAILURE":
+        if any(tok in ev for tok in _DETERMINISM_NARROW_TOKENS):
+            return "patch", "명확한 비결정 패턴 (Date.now/Math.random 계열)"
+        return "unclear", "비결정 원인이 명확한 패턴이 아님"
+    if ftype == "ANTI_HARDCODE_FAILURE":
+        if any(tok in ev for tok in _HARDCODE_NARROW_TOKENS):
+            return "patch", "fixture id 분기/expected literal 제거 수준의 좁은 원인"
+        return "unclear", "hardcode 원인이 좁게 특정되지 않음"
+    if ftype == "PATCH_TRANSIENT_FAILURE":
+        return "patch", "일시 오류 — 재시도 가능"
+    return "unclear", f"알 수 없는 failure type: {ftype}"
+
+
+def build_spec_repair_proposal(base_run_id, challenge_id, failures: list[dict],
+                               risk_level: str) -> dict:
+    """failure 분류에서 read-only spec repair proposal을 만든다. apply는 Phase 2B."""
+    types = [f.get("type") for f in failures]
+    spec_failures = [f for f in failures
+                     if assess_failure_patch_safety(f)[0] == "spec" or f.get("requires_spec_repair")]
+    ev = " ".join((f.get("evidence") or "").lower() for f in failures)
+    if "comparison_mode" in ev:
+        repair_type = "comparison_mode"
+    elif "GOLDEN_SCHEMA_MISMATCH" in types or "RUNNER_OUTPUT_EXTRA_FIELD" in types:
+        repair_type = "golden_schema"
+    elif "STATE_INVARIANT_NOT_EXPOSED" in types:
+        repair_type = "invariant_dsl"
+    else:
+        repair_type = "scenario_expected"
+    secondary = []
+    if repair_type != "invariant_dsl" and "STATE_INVARIANT_NOT_EXPOSED" in types:
+        secondary.append("invariant_dsl")
+
+    problem = "; ".join(
+        f"{f.get('type')}: {f.get('evidence')}" for f in (spec_failures or failures)
+    ) or "spec/golden 정합성 문제"
+    proposed = {
+        "golden_schema": "runner 출력 스키마 기준으로 golden expected 파일 갱신안을 작성한다 (Phase 2B에서 사람 검토 후 적용).",
+        "invariant_dsl": "invariant DSL이 final_state 구조를 해석하도록 표현식 보강안을 작성한다 (적용은 Phase 2B).",
+        "comparison_mode": "comparison_mode 지정 오류를 바로잡는 변경안을 작성한다 (적용은 Phase 2B).",
+        "scenario_expected": "scenario/golden 기대값을 contract와 정합하게 맞추는 변경안을 작성한다 (적용은 Phase 2B).",
+    }[repair_type]
+    return {
+        "base_run_id": base_run_id,
+        "challenge_id": challenge_id,
+        "repair_type": repair_type,
+        "secondary_repair_types": secondary,
+        "problem": problem,
+        "proposed_change": proposed,
+        "why_this_is_spec_problem": "runner가 contract에 더 일관적이고 golden/invariant 기준이 뒤처져 있어, 코드가 아니라 기준(spec) 갱신이 필요하다.",
+        "why_this_is_not_code_patch": "frozen golden/fixtures/contract를 바꿔야 해결되는 문제라 자동 code patch로 고치면 기준 조작이 된다.",
+        "risk_level": risk_level,
+        "requires_human_review": risk_level == "high",
+        "apply_allowed_in_phase2a": False,
+    }
+
+
+def build_spec_repair_review(proposal: dict) -> dict:
+    """proposal을 규칙 기반으로 검토한다. LLM/외부 호출 없이 결정적으로 판정한다."""
+    risk_high = proposal.get("risk_level") == "high"
+    checks = [
+        {"item": "수정이 challenge 핵심을 보존하는가", "ok": True,
+         "note": "core/runner 로직은 변경하지 않고 기준 파일만 갱신 제안"},
+        {"item": "forbidden simplification을 약화하지 않는가", "ok": True,
+         "note": "gate/invariant 제거가 아니라 표현·스키마 정합화 제안"},
+        {"item": "golden을 너무 느슨하게 만들지 않는가",
+         "ok": proposal.get("repair_type") != "comparison_mode",
+         "note": "comparison_mode 완화 계열은 사람 검토 필요"},
+        {"item": "runner/core 결함을 spec 수정으로 덮지 않는가", "ok": True,
+         "note": "runner가 contract에 일관적임을 전제로 함 — 위반 시 patch lane 대상"},
+        {"item": "자동 gate 근거로 사용 가능한가", "ok": True,
+         "note": "제안이 파일/필드 단위로 특정됨"},
+        {"item": "oracle risk가 높아지는가", "ok": not risk_high,
+         "note": f"현재 risk_level={proposal.get('risk_level')}"},
+    ]
+    all_ok = all(c["ok"] for c in checks)
+    if risk_high:
+        result = "REQUIRES_HUMAN_REVIEW"
+    elif not all_ok:
+        result = "NEEDS_REVISION"
+    else:
+        result = "APPROVE_FOR_PHASE2B"
+    return {
+        "base_run_id": proposal.get("base_run_id"),
+        "challenge_id": proposal.get("challenge_id"),
+        "result": result,
+        "checks": checks,
+        "apply_performed": False,
+        "apply_allowed_in_phase2a": False,
+        "note": "APPROVE_FOR_PHASE2B는 Phase 2B에서 적용 가능하다는 뜻이며 지금 적용한다는 뜻이 아니다 (§4.9).",
+    }
+
 
 def lane_for_verdict(verdict: str | None, requires_spec_repair: bool = False) -> str:
     """verdict(+spec repair 필요 여부)에서 recommended lane을 계산한다 (§3, §4.10)."""
@@ -509,7 +659,7 @@ def run_continuation(
                                               "attempt": patch_attempts, "written": written,
                                               "rejected": rejected, "report": patch["patch_report"][:200]})
         gates = _rerun_gates()
-        build_review = _compute_build_review(executor, gates, core_contract, workspace, _write_json)
+        build_review = compute_build_review(executor, gates, core_contract, workspace, _write_json)
         failures = _classify(gates, patch_transient=False)
         plan = build_repair_plan(failures, allowed, frozen)
 
@@ -531,7 +681,7 @@ def run_continuation(
 
     # 7. Build Review 최종 기록
     if build_review is None:
-        build_review = _compute_build_review(executor, gates, core_contract, workspace, _write_json)
+        build_review = compute_build_review(executor, gates, core_contract, workspace, _write_json)
 
     # gate rerun 요약
     gate_summary = gates["summary"]
@@ -592,8 +742,6 @@ def run_continuation(
 
     # §4.8: patch 중 spec 문제로 판명되면 PATCH_BLOCKED_SPEC — proposal 생성 가능, apply 금지
     if patch_result == "PATCH_BLOCKED_SPEC":
-        from repo_idea_miner.factory_queue import build_spec_repair_proposal, build_spec_repair_review
-
         proposal = build_spec_repair_proposal(base_run_id, result["challenge_id"],
                                               final_failures, hardcode_risk)
         review = build_spec_repair_review(proposal)
@@ -776,7 +924,7 @@ def _patch_with_retry(executor, packet_md, failure_md, key_files, allowed, froze
             return None, transient, exc
 
 
-def _compute_build_review(executor, gates, core_contract, workspace, write_json) -> dict:
+def compute_build_review(executor, gates, core_contract, workspace, write_json) -> dict:
     gate_md = "\n\n".join(gates["results"][g].report_md() for g in CORE_GATE_ORDER)
     try:
         model, _ = executor.call("build_review",

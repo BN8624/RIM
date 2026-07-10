@@ -8,7 +8,7 @@ from pathlib import Path
 from repo_idea_miner.factory_run_layout import resolve_run_target
 
 from repo_idea_miner.config import Settings, load_settings
-from repo_idea_miner.factory_continue import _compute_build_review
+from repo_idea_miner.factory_continue import compute_build_review
 from repo_idea_miner.factory_core_gates import (
     PRODUCT_READ_LIMIT,
     compare_golden,
@@ -21,6 +21,7 @@ from repo_idea_miner.factory_db import get_product_run, list_product_runs, updat
 from repo_idea_miner.factory_desks import DeskExecutor
 from repo_idea_miner.factory_frozen import compare_frozen_hashes, compute_frozen_hashes
 from repo_idea_miner.factory_pipeline import FactorySettings, load_factory_settings
+from repo_idea_miner.factory_product_evidence import load_json, sha256_file, write_json
 from repo_idea_miner.factory_workspace import save_green_base
 from repo_idea_miner.llm_client import LLMCallLogger, MockLLMClient
 
@@ -48,22 +49,6 @@ DASHBOARD_JSON = "phase2b1_dashboard_summary.json"
 _MODE_STRICTNESS = {"exact": 3, "partial": 2, "invariant": 1, "review": 0}
 
 
-def _load_json(path: Path) -> dict | None:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def _dump(data) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=2)
-
-
-def _write_json(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_dump(data), encoding="utf-8")
-
-
 # ---------------------------------------------------------------- 대상 식별 (§3)
 
 def resolve_apply_target(run_dir=None, run_id=None, db_conn=None) -> tuple[Path | None, str | None, dict]:
@@ -74,14 +59,14 @@ def resolve_apply_target(run_dir=None, run_id=None, db_conn=None) -> tuple[Path 
         return None, err, info
     # base run과 continuation/history run id 구분 기록 (§3)
     if db_conn is not None and info["base_run_id"] is None:
-        p2a = _load_json(run_dir / "phase2a_dashboard_summary.json") or {}
+        p2a = load_json(run_dir / "phase2a_dashboard_summary.json") or {}
         info["base_run_id"] = p2a.get("base_run_id")
     if db_conn is not None and info["base_run_id"] is not None:
         for row in list_product_runs(db_conn, limit=500):
             ws = row.get("workspace_dir")
             if not ws:
                 continue
-            summary = _load_json(Path(ws).parent / "continuation_run_summary.json")
+            summary = load_json(Path(ws).parent / "continuation_run_summary.json")
             if summary and summary.get("base_run_id") == info["base_run_id"]:
                 info["history_run_ids"].append(row["id"])
     return run_dir, None, info
@@ -92,9 +77,9 @@ def resolve_apply_target(run_dir=None, run_id=None, db_conn=None) -> tuple[Path 
 def check_apply_preconditions(run_dir: Path) -> tuple[list[str], dict]:
     """§4 필수 입력/조건을 검사한다. 미충족이면 problems에 사유를 담는다."""
     problems: list[str] = []
-    proposal = _load_json(run_dir / "spec_repair_proposal.json")
-    review = _load_json(run_dir / "spec_repair_review.json")
-    p2a = _load_json(run_dir / "phase2a_dashboard_summary.json") or {}
+    proposal = load_json(run_dir / "spec_repair_proposal.json")
+    review = load_json(run_dir / "spec_repair_review.json")
+    p2a = load_json(run_dir / "phase2a_dashboard_summary.json") or {}
     if proposal is None:
         problems.append("spec_repair_proposal.json 없음 (Phase 2A 산출물 필요)")
     if review is None:
@@ -113,7 +98,7 @@ def check_apply_preconditions(run_dir: Path) -> tuple[list[str], dict]:
     if verdict != "SPEC_REPAIR_REQUIRED":
         problems.append(f"current verdict가 SPEC_REPAIR_REQUIRED가 아님: {verdict}")
     if (run_dir / APPLY_REPORT_JSON).is_file():
-        prev = _load_json(run_dir / APPLY_REPORT_JSON) or {}
+        prev = load_json(run_dir / APPLY_REPORT_JSON) or {}
         if prev.get("applied"):
             problems.append("이미 spec repair apply가 수행된 run")
     return problems, {"proposal": proposal or {}, "review": review or {}, "p2a": p2a}
@@ -264,26 +249,26 @@ def plan_scenario_repair(golden: dict, replay: dict | None, contract_fields: set
 def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
     """§11 apply plan을 만든다. 실행/파일 수정 없이 기존 replay/ 산출물만 근거로 쓴다."""
     workspace = run_dir / "workspace"
-    contract = _load_json(workspace / "core_contract.json") or {}
-    runner_contract = _load_json(workspace / "runner_contract.json") or {}
+    contract = load_json(workspace / "core_contract.json") or {}
+    runner_contract = load_json(workspace / "runner_contract.json") or {}
     contract_fields: set = set()
     for entity in contract.get("state_entities") or []:
         contract_fields |= set(entity.get("fields") or [])
 
     golden_files = sorted((workspace / "golden").glob("expected_*.json"))
-    goldens_all = [_load_json(g) or {} for g in golden_files]
+    goldens_all = [load_json(g) or {} for g in golden_files]
     # runner summary가 하드코딩이면 expected_summary 보정을 차단한다 (Phase 2B-1b §7)
-    from repo_idea_miner.factory_core_gates import _src_code_files, classify_summary_source
-    summary_class = classify_summary_source(_src_code_files(workspace), goldens_all)
+    from repo_idea_miner.factory_core_gates import src_code_files, classify_summary_source
+    summary_class = classify_summary_source(src_code_files(workspace), goldens_all)
     summary_hardcoded = summary_class["summary_hardcode_risk"] == "high"
 
     scenarios: list[dict] = []
     planned_files: list[str] = []
     blocked: list[str] = []
     for gpath in golden_files:
-        golden = _load_json(gpath) or {}
+        golden = load_json(gpath) or {}
         sid = golden.get("scenario_id") or gpath.stem.replace("expected_", "scenario_")
-        replay = _load_json(workspace / "replay" / f"replay_{sid}.json")
+        replay = load_json(workspace / "replay" / f"replay_{sid}.json")
         entry = plan_scenario_repair(golden, replay, contract_fields, summary_hardcoded)
         entry["golden_file"] = f"golden/{gpath.name}"
         scenarios.append(entry)
@@ -376,8 +361,6 @@ def _snapshot_targets(run_dir: Path) -> list[Path]:
 
 def create_pre_apply_snapshot(run_dir: Path) -> tuple[dict, dict]:
     """§6: apply 전 snapshot manifest + rollback plan을 만든다."""
-    from repo_idea_miner.factory_frozen import _sha256
-
     snap_root = run_dir / SNAPSHOT_SUBDIR
     if snap_root.exists():
         shutil.rmtree(snap_root)
@@ -387,7 +370,7 @@ def create_pre_apply_snapshot(run_dir: Path) -> tuple[dict, dict]:
         dst = snap_root / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
-        entries.append({"path": rel, "sha256": _sha256(src),
+        entries.append({"path": rel, "sha256": sha256_file(src),
                         "snapshot": str(dst.relative_to(run_dir).as_posix())})
     evaluator = Path(__file__).resolve().parent.parent / INVARIANT_EVALUATOR_FILE
     manifest = {
@@ -395,7 +378,7 @@ def create_pre_apply_snapshot(run_dir: Path) -> tuple[dict, dict]:
         "files": entries,
         "invariant_evaluator": {
             "path": INVARIANT_EVALUATOR_FILE,
-            "sha256": _sha256(evaluator) if evaluator.is_file() else None,
+            "sha256": sha256_file(evaluator) if evaluator.is_file() else None,
             "note": "git 추적 코드 파일 — rollback은 git으로 수행",
         },
     }
@@ -406,14 +389,14 @@ def create_pre_apply_snapshot(run_dir: Path) -> tuple[dict, dict]:
         "auto_rollback_on": ["apply 중 예외", "proposal/review 범위 밖 파일 변경(out_of_scope)"],
         "note": "gate fail 자체는 rollback 대상이 아님 — 정직한 verdict로 남긴다 (§6.3)",
     }
-    _write_json(run_dir / SNAPSHOT_MANIFEST_JSON, manifest)
-    _write_json(run_dir / ROLLBACK_PLAN_JSON, rollback)
+    write_json(run_dir / SNAPSHOT_MANIFEST_JSON, manifest)
+    write_json(run_dir / ROLLBACK_PLAN_JSON, rollback)
     return manifest, rollback
 
 
 def execute_rollback(run_dir: Path, reason: str) -> dict:
     """snapshot에서 원본 파일을 복원하고 rollback_report.json을 남긴다 (§6.3)."""
-    manifest = _load_json(run_dir / SNAPSHOT_MANIFEST_JSON) or {"files": []}
+    manifest = load_json(run_dir / SNAPSHOT_MANIFEST_JSON) or {"files": []}
     restored = []
     errors = []
     for e in manifest.get("files") or []:
@@ -426,7 +409,7 @@ def execute_rollback(run_dir: Path, reason: str) -> dict:
         except OSError as exc:
             errors.append(f"{e['path']}: {exc}")
     report = {"executed": True, "reason": reason, "restored": restored, "errors": errors}
-    _write_json(run_dir / ROLLBACK_REPORT_JSON, report)
+    write_json(run_dir / ROLLBACK_REPORT_JSON, report)
     return report
 
 
@@ -495,7 +478,7 @@ def run_spec_repair_apply(
     workspace = run_dir / "workspace"
     hash_pre = compute_frozen_hashes(workspace, run_dir)
     plan = build_apply_plan(run_dir, inputs, target_info)
-    _write_json(run_dir / APPLY_PLAN_JSON, plan)
+    write_json(run_dir / APPLY_PLAN_JSON, plan)
     (run_dir / APPLY_PLAN_MD).write_text(_plan_md(plan), encoding="utf-8")
 
     # §11: dry-run 중 frozen hash가 바뀌면 실패
@@ -523,7 +506,7 @@ def run_spec_repair_apply(
 
     # ---- Apply (§12 적용 전 절차)
     create_pre_apply_snapshot(run_dir)
-    _write_json(run_dir / HASH_BEFORE_APPLY, hash_pre)
+    write_json(run_dir / HASH_BEFORE_APPLY, hash_pre)
 
     applied_files: list[str] = []
     try:
@@ -531,15 +514,15 @@ def run_spec_repair_apply(
             if entry["new_golden"] is None:
                 continue
             rel = entry["golden_file"]
-            _write_json(workspace / rel, entry["new_golden"])
+            write_json(workspace / rel, entry["new_golden"])
             applied_files.append(rel)
             final_target = run_dir / "final_artifact" / rel
             if final_target.parent.is_dir():
-                _write_json(final_target, entry["new_golden"])
+                write_json(final_target, entry["new_golden"])
                 applied_files.append(f"final_artifact/{rel}")
 
         hash_after = compute_frozen_hashes(workspace, run_dir)
-        _write_json(run_dir / HASH_AFTER_APPLY, hash_after)
+        write_json(run_dir / HASH_AFTER_APPLY, hash_after)
         cmp = compare_frozen_hashes(hash_pre, hash_after)
         out_of_scope = sorted(
             k for k in (cmp["changed"] + cmp["added"] + cmp["removed"])
@@ -549,7 +532,7 @@ def run_spec_repair_apply(
             "changed": cmp["changed"], "added": cmp["added"], "removed": cmp["removed"],
             "planned": plan["planned_files"], "out_of_scope": out_of_scope,
         }
-        _write_json(run_dir / HASH_APPLY_CHECK, apply_check)
+        write_json(run_dir / HASH_APPLY_CHECK, apply_check)
         result["frozen_hash_apply_status"] = apply_check["status"]
         if out_of_scope:
             execute_rollback(run_dir, f"proposal/review 범위 밖 파일 변경: {out_of_scope}")
@@ -583,21 +566,21 @@ def run_spec_repair_apply(
             for s in plan["planned_changes"] if s["new_golden"] is not None
         ],
     }
-    _write_json(run_dir / DIFF_SUMMARY_JSON, diff_summary)
+    write_json(run_dir / DIFF_SUMMARY_JSON, diff_summary)
 
     # ---- Gate rerun (§14)
-    core_contract = _load_json(workspace / "core_contract.json") or {}
-    runner_contract = _load_json(workspace / "runner_contract.json") or {}
-    goldens = [g for g in (_load_json(p) for p in sorted((workspace / "golden").glob("expected_*.json")))
+    core_contract = load_json(workspace / "core_contract.json") or {}
+    runner_contract = load_json(workspace / "runner_contract.json") or {}
+    goldens = [g for g in (load_json(p) for p in sorted((workspace / "golden").glob("expected_*.json")))
                if g is not None]
     gates = run_core_gates(workspace, core_contract, runner_contract, goldens,
                            timeout_seconds=fset.sandbox_timeout_seconds,
                            use_docker=fset.docker_flag(), secrets=secrets)
     for name, data in gates["artifacts"].items():
-        _write_json(workspace / f"{name}.json", data)
+        write_json(workspace / f"{name}.json", data)
         final_copy = run_dir / "final_artifact" / f"{name}.json"
         if final_copy.parent.is_dir() and final_copy.is_file():
-            _write_json(final_copy, data)
+            write_json(final_copy, data)
     # replay 산출물도 final_artifact에 정합하게 반영
     final_replay = run_dir / "final_artifact" / "replay"
     if final_replay.is_dir():
@@ -616,9 +599,9 @@ def run_spec_repair_apply(
                             call_logger=LLMCallLogger(None))
     executor = DeskExecutor(mode, settings, scheduler=scheduler, llm=llm,
                             call_logger=LLMCallLogger(run_dir / "debug" / "llm_calls.jsonl", secrets))
-    build_review = _compute_build_review(
+    build_review = compute_build_review(
         executor, gates, core_contract, workspace,
-        lambda name, data: _write_json(run_dir / name, data))
+        lambda name, data: write_json(run_dir / name, data))
 
     gate_summary = gates["summary"]
     result["gates"] = gate_summary
@@ -632,7 +615,7 @@ def run_spec_repair_apply(
         "build_review_status": (build_review or {}).get("status"),
         "after_spec_repair_apply": True,
     }
-    _write_json(run_dir / GATE_RERUN_JSON, gate_rerun)
+    write_json(run_dir / GATE_RERUN_JSON, gate_rerun)
 
     # ---- 초기 apply report (validate가 §17 항목을 검사할 수 있도록 먼저 기록)
     report = {
@@ -648,7 +631,7 @@ def run_spec_repair_apply(
         "gates": gate_summary, "validate_ok": None,
         "promoted_to_green_base": False, "new_verdict": None,
     }
-    _write_json(run_dir / APPLY_REPORT_JSON, report)
+    write_json(run_dir / APPLY_REPORT_JSON, report)
 
     # ---- factory-validate (§14)
     from repo_idea_miner.factory_validate import validate_product_run_dir
@@ -658,7 +641,7 @@ def run_spec_repair_apply(
 
     # ---- Green promotion (§15)
     anti = gates["artifacts"]["anti_hardcode_summary"]
-    oracle = _load_json(run_dir / "oracle_risk_report.json") or {}
+    oracle = load_json(run_dir / "oracle_risk_report.json") or {}
     hardcode_risk = anti.get("hardcode_risk") or "low"
     oracle_risk = oracle.get("risk_level") or "low"
     all_gates_pass = all(gate_summary.get(g) for g in CORE_GATE_ORDER)
@@ -670,7 +653,7 @@ def run_spec_repair_apply(
     if promoted:
         new_verdict = "REVIEW_READY"
         green_path = str(save_green_base(run_dir, workspace, "green_spec_repair_00"))
-        _write_json(run_dir / "green_base.json", {
+        write_json(run_dir / "green_base.json", {
             "base_type": "green_base", "green_base_path": green_path,
             "verdict": new_verdict, "source": "spec_repair_apply",
             "next_goal": "사용자 검수 후 제품화 판단",
@@ -695,7 +678,7 @@ def run_spec_repair_apply(
         "next_goal": "사용자 검수 후 제품화 판단" if promoted else "남은 gate 실패 원인 해소",
         "after_spec_repair_apply": True,
     }
-    _write_json(run_dir / PROMOTION_JSON, promotion)
+    write_json(run_dir / PROMOTION_JSON, promotion)
 
     # ---- 최종 report / dashboard (§13, §16)
     report.update({
@@ -703,11 +686,11 @@ def run_spec_repair_apply(
         "promoted_to_green_base": promoted, "new_verdict": new_verdict,
         "remaining_failures": remaining,
     })
-    _write_json(run_dir / APPLY_REPORT_JSON, report)
+    write_json(run_dir / APPLY_REPORT_JSON, report)
     (run_dir / APPLY_REPORT_MD).write_text(_report_md(report, plan), encoding="utf-8")
 
     status_label = _apply_status_label(True, promoted, validate_ok, all_gates_pass)
-    _write_json(run_dir / DASHBOARD_JSON, {
+    write_json(run_dir / DASHBOARD_JSON, {
         "lane": "SPEC_REPAIR", "recommended_lane": "SPEC_REPAIR",
         "lane_reason": "golden schema + invariant DSL 수리",
         "lane_status": status_label,

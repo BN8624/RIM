@@ -20,13 +20,15 @@ from repo_idea_miner.factory_core_prompts import mock_core_factory_overrides
 from repo_idea_miner.factory_db import create_product_run, open_factory_db, update_product_run
 from repo_idea_miner.factory_frozen import compute_frozen_hashes, write_frozen_hash_guard
 from repo_idea_miner.factory_pipeline import FactorySettings, sample_challenge
+from repo_idea_miner.factory_continue import (
+    assess_failure_patch_safety,
+    build_spec_repair_proposal,
+    build_spec_repair_review,
+)
 from repo_idea_miner.factory_queue import (
     DRY_RUN_DEFAULT_LIMIT,
     EXECUTE_MAX_LIMIT,
     SPEC_REPAIR_ALLOWED_OUTPUTS,
-    assess_failure_patch_safety,
-    build_spec_repair_proposal,
-    build_spec_repair_review,
     classify_candidate,
     decide_lane_for_run,
     discover_candidates,

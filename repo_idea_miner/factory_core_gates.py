@@ -107,7 +107,7 @@ def _scenario_id(workspace: Path, scenario_rel: str) -> str:
         return Path(scenario_rel).stem
 
 
-def _src_code_files(workspace: Path, roots: tuple[str, ...] = ("src",)) -> dict[str, str]:
+def src_code_files(workspace: Path, roots: tuple[str, ...] = ("src",)) -> dict[str, str]:
     out: dict[str, str] = {}
     for root in roots:
         base = workspace / root
@@ -214,7 +214,7 @@ def run_core_contract_gate(workspace: Path, core_contract: dict, runner_contract
     elif not (workspace / script).is_file():
         r.problems.append(f"runner 스크립트 없음: {script}")
 
-    code = _src_code_files(workspace)
+    code = src_code_files(workspace)
     if not code:
         r.problems.append("src/ 코드 파일 없음")
     full_blob = "\n".join(code.values())
@@ -787,7 +787,7 @@ def run_determinism_gate(
     determinism = core_contract.get("determinism") or {}
     random_allowed = bool(determinism.get("random_allowed"))
 
-    code = _src_code_files(workspace)
+    code = src_code_files(workspace)
     static_problems = []
     blob = "\n".join(code.values())
     for rel, text in code.items():
@@ -967,7 +967,7 @@ def run_anti_hardcode_gate(
     level2: list[str] = []
     medium_only: list[str] = []
 
-    code = _src_code_files(workspace, roots=("src", "product"))
+    code = src_code_files(workspace, roots=("src", "product"))
     for rel, text in code.items():
         if _SCENARIO_ID_RE.search(text):
             level1.append(f"{rel}: fixture id 직접 분기 의심 ({_SCENARIO_ID_RE.search(text).group(0)})")

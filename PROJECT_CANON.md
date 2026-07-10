@@ -24,7 +24,7 @@
 - Challenge Mode: `challenge_*.py` 10개 (dashboard 포함). Challenge 관련 수정은 이 파일들만.
 - Product Factory (`factory_*.py`):
   - `factory_core_schemas/prompts/gates/pipeline.py` — 7-Stage core harness (CANON-04).
-  - `factory_continue.py` — continuation delta loop, `factory_queue.py` — queue routing, `factory_frozen.py` — frozen hash guard (CANON-05).
+  - `factory_continue.py` — continuation delta loop + failure 의미 정본(assess_failure_patch_safety, spec repair proposal/review 빌더 — queue·2B가 import), `factory_queue.py` — queue routing/discovery(판단은 continue의 정본 사용), `factory_frozen.py` — frozen hash guard (CANON-05).
   - `factory_spec_repair.py`(2B-1) / `factory_anti_hardcode.py`(2B-1b) — 단일 run 수리 명령 (CANON-05).
   - `factory_review.py`(2C-0) / `factory_product_polish.py`(2C-1) / `factory_product_editor.py`(2C-2) / `factory_draft_execution.py`(2C-3) — 제품화 체인 (CANON-06).
   - `factory_product_evidence.py` — 제품 evidence 공통 정본: viewer/replay 탐색(find_product_viewer/first_replay_file), viewer field evidence(viewer_reads_replay_evidence/viewer_field_mismatches), protected hash(compute/compare_protected_hashes), gate context(read_gate_context), 공통 IO(load_json/write_json/write_text/sha256_file). 2C 체인·2D loop가 전부 여기서 import — 다른 모듈이 재구현하지 않는다.
@@ -57,6 +57,7 @@
 
 - `factory-continue`: 실패 분류(10 failure type) → repair plan(frozen 보호) → delta patch(allowed_touch_files만) → gate 재실행 → green 승격 판단. golden/contract 수정 필요는 **SPEC_REPAIR_REQUIRED로 분리**(continuation이 직접 수정 금지).
 - `factory-continue-queue` lane 4종: PATCH_CONTINUATION / SPEC_REPAIR / EXCLUDED / REVIEW_ONLY. execute는 patch lane 한정 limit 1. spec repair는 proposal만 생성.
+- **failure patch-safety 정본은 factory_continue**(assess_failure_patch_safety: patch|spec|unclear, PATCH_SAFE/CONDITIONAL/NEVER 상수, build_spec_repair_proposal/review) — queue와 2B 모듈이 import하며 재구현하지 않는다. continue↔queue import cycle 없음.
 - `factory-spec-repair-apply` **§8 보호(우회 자동화 금지)**: 기존 golden 기대값 훼손·field 삭제·contract 밖 field 추가·comparison_mode 완화 전부 차단. snapshot/rollback + frozen hash before/after/check(범위 밖 변경=자동 rollback) + gate 재실행.
 - `factory-anti-hardcode-patch`: runner summary 하드코딩을 state 파생 helper로 교체. `classify_summary_source`가 hardcoded/state_derived 구분.
 - **frozen hash guard**: golden/fixtures/contract sha256 — 사후 조작 탐지. anti_hardcode scratch인 `fixtures/_variants/`는 제외. 사후 정합성 검증은 CANON-10 registry의 frozen_hash_guard validator가 수행.
