@@ -39,6 +39,7 @@ from repo_idea_miner.factory_product_loop import (
     extract_user_facing_quality,
 )
 from repo_idea_miner.factory_review import resolve_review_target
+from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
 LOOP_SUBDIR = "review/phase2d1"
 
@@ -69,18 +70,6 @@ def _load_json(path: Path) -> dict | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-
-
-def _resolve_ws(run_dir: Path) -> Path:
-    ws = run_dir / "final_artifact"
-    return ws if ws.is_dir() else run_dir / "workspace"
-
-
-def _ensure_final_artifact(run_dir: Path) -> None:
-    """continuation child(workspace 레이아웃)에 final_artifact를 정합화한다 — child는 loop 소유물."""
-    fa, ws = run_dir / "final_artifact", run_dir / "workspace"
-    if not fa.is_dir() and ws.is_dir():
-        shutil.copytree(ws, fa)
 
 
 def _run_id_of(db_conn, run_dir: Path) -> int | None:
@@ -193,7 +182,7 @@ def verify_candidate(run_dir: Path, out_dir: Path,
                      secrets: list[str], protected_hash_status: str = "PASS",
                      gemma_mode: str = "sequential") -> dict:
     """child(또는 parent)를 §14 순서로 실제 검증한다. 어떤 값도 기존 report에서 재사용하지 않는다."""
-    ws = _resolve_ws(run_dir)
+    ws = resolve_artifact_root(run_dir)
     core_contract = _load_json(ws / "core_contract.json") or {}
     runner_contract = _load_json(ws / "runner_contract.json") or {}
     goldens = [g for g in (_load_json(p) for p in sorted((ws / "golden").glob("expected_*.json")))
@@ -515,8 +504,8 @@ def run_closed_product_loop(
                 hold_reason = "lane 실행이 연속으로 개선을 만들지 못함"
             continue
 
-        # ---- Child 검증 체인 (§14) + Progress (§9)
-        _ensure_final_artifact(child)
+        # ---- Child 검증 체인 (§14) + Progress (§9) — artifact root는 resolve_artifact_root가
+        # 해석하므로 workspace-only child를 final_artifact로 복제하지 않는다 (Reset §8.3)
         child_verify = verify_candidate(child, it_dir / "after",
                                         executor=executor, use_llm=use_llm,
                                         timeout=timeout, use_docker=use_docker, secrets=secrets,

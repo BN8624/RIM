@@ -54,6 +54,7 @@ from repo_idea_miner.factory_review import (
     read_gate_context,
     resolve_review_target,
 )
+from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
 REVIEW_SUBDIR = "review/phase2d0"
 
@@ -144,7 +145,7 @@ def _latest_fitness(run_dir: Path) -> dict:
 
 def _static_viewer_facts(run_dir: Path) -> dict:
     """review 산출물이 없어도 artifact에서 직접 확인 가능한 viewer 사실 (fixture/mock loop용)."""
-    final_dir = run_dir / "final_artifact"
+    final_dir = resolve_artifact_root(run_dir)
     viewer = _find_product_viewer(final_dir) if final_dir.is_dir() else None
     _f, replay = _first_replay_file(final_dir) if final_dir.is_dir() else (None, None)
     idx = _load_json(final_dir / "replay" / "index.json") or {}

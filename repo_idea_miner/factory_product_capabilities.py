@@ -13,6 +13,7 @@ from repo_idea_miner.factory_core_gates import (
     list_scenario_files,
     run_scenario_once,
 )
+from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
 # ---------------------------------------------------------------- 공통 loop evidence 이름 (§6)
 
@@ -107,7 +108,7 @@ def build_capability_profile(run_dir: str | Path) -> dict:
     challenge ID/title로 분기하지 않는다 — 모든 필드는 contract/파일 구조에서만 파생된다.
     """
     run_dir = Path(run_dir)
-    ws = run_dir / "final_artifact"
+    ws = resolve_artifact_root(run_dir)
     core_contract = _load_json(ws / "core_contract.json") or {}
     runner_contract = _load_json(ws / "runner_contract.json") or {}
     normalized = _load_json(run_dir / "normalized_challenge.json") or {}
@@ -127,8 +128,8 @@ def build_capability_profile(run_dir: str | Path) -> dict:
                                  (core_contract.get("actions") or []) if a.get("name")],
         "critical_user_flows": [str(c) for c in (normalized.get("success_conditions") or [])],
         "profile_sources": {
-            "core_contract": "final_artifact/core_contract.json",
-            "runner_contract": "final_artifact/runner_contract.json",
+            "core_contract": f"{ws.name}/core_contract.json",
+            "runner_contract": f"{ws.name}/runner_contract.json",
             "critical_user_flows": "normalized_challenge.json:success_conditions",
         },
     }
@@ -229,7 +230,7 @@ def run_fresh_probe(
     run_dir, out_dir = Path(run_dir), Path(out_dir)
     secrets = secrets or []
     out_dir.mkdir(parents=True, exist_ok=True)
-    ws = run_dir / "final_artifact"
+    ws = resolve_artifact_root(run_dir)
     report: dict = {
         "status": "FAIL", "probes": [], "problems": [],
         "success_scenarios_passed": 0, "failure_scenarios_passed": 0,
@@ -239,7 +240,7 @@ def run_fresh_probe(
         "method_note": "runner probes는 temp copy 실행, viewer probes는 static_analysis",
     }
     if not ws.is_dir():
-        report["problems"].append("final_artifact/ 없음")
+        report["problems"].append("artifact root 없음 (final_artifact/도 workspace/도 없음)")
         _write_report(out_dir, report)
         return report
     runner_contract = _load_json(ws / "runner_contract.json") or {}

@@ -30,6 +30,8 @@
   - `factory_autopilot_schemas/desks.py` + `factory_product_loop.py`(2D-0 judge) — Gemma autopilot (CANON-07).
   - `factory_product_capabilities.py`(capability profile+fresh probe) + `factory_lane_executors.py`(lane registry) + `factory_loop_executor.py`(closed loop) + `factory_product_acceptance.py`(acceptance 14검사) — 2D-1 (CANON-07).
   - `factory_validate.py` — run type 감지+phase별 marker 검증 (CANON-10), `factory_labels.py` — 대시보드 한국어 라벨, `factory_summary.py` — summary 3종.
+  - `factory_run_layout.py` — run directory 레이아웃 해석의 정본(resolve_artifact_root/RunLayout). artifact root 선택을 다른 모듈이 반복 구현하지 않는다.
+  - `architecture_scanner.py` — AST 기반 구조 추출(baseline/Atlas 코어): module/LOC/import cycle/private cross-import/CLI/validator.
 - `redaction.py` — secret 마스킹 (AQ. prefix 포함).
 
 ## CANON-03 CLI 명령 지도
@@ -87,6 +89,7 @@
 - `challenge.db`(SQLite, gitignore): repos/repo_queue/challenges/owner_reviews/api_keys/events/settings + product_runs/product_tasks/product_events/product_artifacts/product_reviews. product_reviews는 append-only. 스키마 확장은 ALTER TABLE 마이그레이션(구 DB 호환 유지).
 - key scheduler: DB-backed 11-key, 429/500은 해당 key만 cooldown(30→60→120→300s).
 - run 디렉터리: `runs/factory_YYYYMMDD_HHMMSS/` — workspace/ + final_artifact/(납품물) + golden/ + fixtures/ + *_contract.json + review/phase{2c0,2c1,2c2,2c3,2d0,2d1}/ + 각종 summary json. continuation/loop child도 같은 layout의 독립 run.
+- **artifact root 해석은 `factory_run_layout.resolve_artifact_root`가 정본** — final_artifact/가 있으면 그것, 없으면 workspace/. workspace-only child(continuation 등)는 복제 없이 그대로 검증·probe·judge 대상이 된다. `final_artifact if exists else workspace` 패턴을 개별 모듈에 새로 쓰지 않는다.
 
 ## CANON-09 대시보드
 
