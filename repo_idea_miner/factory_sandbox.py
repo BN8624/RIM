@@ -83,6 +83,7 @@ def build_docker_command(
     cmd += [
         "--cpus", cpus,
         "--memory", memory,
+        "-e", "PYTHONDONTWRITEBYTECODE=1",  # mount된 workspace에 stale .pyc를 남기지 않는다
         "-v", f"{ws}:/workspace",
         "-w", "/workspace",
         image,
@@ -92,7 +93,11 @@ def build_docker_command(
 
 
 def _local_env() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items() if k.upper() in _LOCAL_ENV_ALLOWLIST}
+    env = {k: v for k, v in os.environ.items() if k.upper() in _LOCAL_ENV_ALLOWLIST}
+    # workspace 코드는 patch로 즉시 바뀐다 — .pyc의 초 단위 mtime+size 검증이
+    # 같은 크기 patch를 stale bytecode로 실행하는 flaky의 근본 원인이라 캐시를 금지한다.
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return env
 
 
 def run_in_sandbox(
