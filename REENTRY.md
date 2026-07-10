@@ -11,8 +11,9 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS (1054) at issue #4 Phase B repair (1b588f0);
-  architecture-build 연속 2회 byte-identical; dashboard smoke(/, /products 200) PASS at A6
+- tests: full suite PASS (1057) at issue #4 Phase C repair (e0cf88c);
+  architecture-build 연속 2회 byte-identical; dashboard smoke(/, /products,
+  /product/5·13·19·21·22 전부 200 + 정직 상태 표시) PASS at issue #4 마감
 - architecture_check: PASS + WARN 채널 (literal-only artifacts 집계, route 미선언 CLI,
   AI_INDEX component query primary 초과 — 모두 §17.2 비차단)
 - known_flaky: []
@@ -78,6 +79,16 @@ RECENT_SEMANTIC_CHANGES:
   불변(보호 37파일 hash PASS). #54 상태 = VALID_HOLD. 절차 기록:
   runs/_factory_reality_validation/state.json
 
+- Issue #4 Phase C done (fresh 3종 blind, commit e0cf88c): Fresh-A 27 SRS(run 190458) =
+  PARTIAL_PRODUCT(gates 7/7, acceptance 11/14, 남은 gap 조작 UI/loop closure 정직 표면화),
+  Fresh-B 17 테이블 스튜디오(run 193103) = PARTIAL_PRODUCT(patch 0회 green_base, critical
+  coverage 미충족 정직 표면화), Fresh-C 77 커맨드 팔레트(run 194814) = VALID_HOLD(golden↔runner
+  의미 괴리, spec repair 사람 결정 필요). INVALID_SUCCESS 0. Round1 공통 blocker(A+C: ladder
+  CORE_PATCH rung 오진/stale 반복 → 예산 소진)만 §5.5 요건 충족 → generic repair 1회(rung은
+  gate_fail만 + lane 결과 SPEC_REPAIR 분류의 iteration 간 escalation, CANON-07 갱신) → Round2
+  실측으로 효과 확인(A: 유령 CORE_PATCH 소멸, C: hold packet이 SPEC_REPAIR_REQUIRED 정확 표시).
+  모든 loop base hash PASS, Round1 artifact 보존
+
 OPEN_BLOCKERS:
 - id: hold_54
   state: waiting_human (VALID_HOLD — viewer mock 제거·golden 의미 판정·FD-1~4 수리 완료 후 남은 blocker)
@@ -92,18 +103,20 @@ OPEN_BLOCKERS:
   next_action: human final review/release decision
 
 NEXT_ACTIONS:
-1. Issue #4 Phase C (fresh challenge 3종 blind closed-loop) — 선정 완료(27/17/77),
-   실행 절차는 runs/_factory_reality_validation/state.json
+1. 다음 추천 작업(단일, 이슈 #4 §7 실측 근거): INTERACTION_UI(2C-2) executor 도메인 중립화 —
+   #47식 산출물 체인(2C-1 polish/user_review_decision)+graph 도메인(supported_node_types) 전제
+   제거. fresh 2/3(A·B)의 동일 lane 반복 blocker
 2. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
 3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
-   escalation 설계, literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
+   literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
 - do not put a static current-HEAD hash back into this file (HEAD_SOURCE rule)
 - do not re-add human documentation, checklist, or Atlas HTML/serve/summary
-- do not touch #47/#54 base runs on disk (tmp copies only)
-- escalation (lane failure → next iteration judge) is a known deferred design, not a bug
+- do not touch #47/#54/fresh(190458·193103·194814) base runs on disk (tmp copies only)
+- lane-result escalation (SPEC_REPAIR 분류 → 다음 iteration 승급)은 구현됨(CANON-07) —
+  high-risk 예산 1로 같은 loop 내 실행까지는 안 되는 것이 설계 한도이지 버그가 아님
 - LITERAL_REFERENCE artifacts stay non-promoted (§13) — do not upgrade them without AST/manifest proof
 
 VERIFY:

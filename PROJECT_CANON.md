@@ -240,9 +240,13 @@ NOTES:
 - evidence sources: latest phase first (2c3 → 2c2 → 2c1 → 2c0)
 - hard rungs (EVIDENCE_INSUFFICIENT/ARCHIVE/SPEC_REPAIR/CORE_PATCH/RUNNER_PATCH): deterministic
   ladder overrides live judgment (`gap_override` recorded), live lane desk skipped
+- CORE_PATCH rung fires on gate_fail only — green_base absence alone is not a core-defect
+  signal (a gates-green unpromoted run must fall through to soft rungs)
+- lane-result escalation: if a lane result classifies SPEC_REPAIR_REQUIRED, the next iteration
+  escalates gap/lane to SPEC_REPAIR instead of repeating the same lane (`gap_escalation`
+  recorded on the iteration; budgets unchanged — the hold packet then names the true gap)
 - budgets: iterations 4 / per-lane 2 / high-risk total 1 / no-progress 2 / infra retries 2
 - promotion requires meaningful progress + zero regression + protected hash PASS
-- known gap (deferred design): lane failure info does not escalate to the next iteration judge
 
 QUERY:
 - architecture-context --canon CANON-07
