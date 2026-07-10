@@ -338,3 +338,96 @@ def test_loop_lineage_records_required_fields(tmp_path):
         for key in ("loop_id", "iteration", "base_run_dir", "parent_run_dir",
                     "selected_lane", "primary_gap_before", "stage_before"):
             assert key in entry
+
+
+# ---------------------------------------------------------------- lane 결과 escalation (§10)
+
+def test_loop_escalates_to_spec_repair_after_lane_classification(tmp_path, monkeypatch):
+    """직전 lane 결과가 SPEC_REPAIR_REQUIRED를 분류하면 다음 iteration은 같은 patch lane을
+    반복하지 않고 SPEC_REPAIR로 승급한다 — 관측(lane 결과)이 stale 판정보다 우선."""
+    import repo_idea_miner.factory_loop_executor as fle
+
+    run = tmp_path / "base_run"
+    (run / "workspace").mkdir(parents=True)
+
+    fake_verify = {
+        "gate_summary": {}, "anti_summary": {}, "validate_ok": True, "probe": {},
+        "profile": {}, "coverage": {},
+        "judge": {"desks": {"status": "PASS",
+                            "gap": {"primary_gap": "CORE_PATCH_REQUIRED"},
+                            "lane": {"recommended_next_lane": "CORE_PATCH"}}},
+        "acceptance": {"product_candidate_allowed": False, "failed_checks": [],
+                       "max_stage": "REVIEWABLE_ARTIFACT"},
+        "vector": {}, "stage": "REVIEWABLE_ARTIFACT",
+        "effective_stage": "REVIEWABLE_ARTIFACT", "overrating_blocked": False,
+    }
+    monkeypatch.setattr(fle, "verify_candidate",
+                        lambda *a, **k: json.loads(json.dumps(fake_verify)))
+
+    lanes_called: list[str] = []
+
+    def fake_execute_lane(lane, ctx):
+        lanes_called.append(lane)
+        return {"lane": lane, "status": "FAILED", "child_run_dir": None, "changed_files": [],
+                "allowed_scope_check": "PASS", "protected_hash_check": "PASS",
+                "targeted_tests": [], "targeted_test_status": "FAIL",
+                "failure_signature": f"sig_{lane}", "problems": ["SPEC_REPAIR_REQUIRED"],
+                "error": None, "underlying_status": "DONE", "route": ""}
+
+    monkeypatch.setattr(fle, "execute_lane", fake_execute_lane)
+    monkeypatch.setattr(fle, "compute_loop_protected_hashes", lambda p: {})
+    monkeypatch.setattr(fle, "compare_protected_hashes",
+                        lambda a, b: {"status": "PASS", "files_checked": 0,
+                                      "changed": [], "added": [], "removed": []})
+
+    res = fle.run_closed_product_loop(
+        run_dir=run, mode="mock", execute=True,
+        budgets={"max_high_risk_lane_attempts": 2, "max_iterations": 3})
+
+    assert lanes_called[0] == "CORE_PATCH"
+    assert "SPEC_REPAIR" in lanes_called
+    it2 = res["iterations"][1]
+    assert it2["primary_gap_before"] == "SPEC_REPAIR_REQUIRED"
+    assert it2["selected_lane"] == "SPEC_REPAIR"
+    assert it2["gap_escalation"]["to_gap"] == "SPEC_REPAIR_REQUIRED"
+
+
+def test_loop_escalation_recorded_even_when_budget_stops(tmp_path, monkeypatch):
+    """기본 예산(high-risk 1)에서도 escalation은 gap/lane 기록을 교정한다 —
+    hold packet이 반복된 patch lane이 아니라 실제 필요한 spec repair를 가리켜야 한다."""
+    import repo_idea_miner.factory_loop_executor as fle
+
+    run = tmp_path / "base_run"
+    (run / "workspace").mkdir(parents=True)
+
+    fake_verify = {
+        "gate_summary": {}, "anti_summary": {}, "validate_ok": True, "probe": {},
+        "profile": {}, "coverage": {},
+        "judge": {"desks": {"status": "PASS",
+                            "gap": {"primary_gap": "CORE_PATCH_REQUIRED"},
+                            "lane": {"recommended_next_lane": "CORE_PATCH"}}},
+        "acceptance": {"product_candidate_allowed": False, "failed_checks": [],
+                       "max_stage": "REVIEWABLE_ARTIFACT"},
+        "vector": {}, "stage": "REVIEWABLE_ARTIFACT",
+        "effective_stage": "REVIEWABLE_ARTIFACT", "overrating_blocked": False,
+    }
+    monkeypatch.setattr(fle, "verify_candidate",
+                        lambda *a, **k: json.loads(json.dumps(fake_verify)))
+    monkeypatch.setattr(fle, "execute_lane", lambda lane, ctx: {
+        "lane": lane, "status": "FAILED", "child_run_dir": None, "changed_files": [],
+        "allowed_scope_check": "PASS", "protected_hash_check": "PASS",
+        "targeted_tests": [], "targeted_test_status": "FAIL",
+        "failure_signature": f"sig_{lane}", "problems": ["SPEC_REPAIR_REQUIRED"],
+        "error": None, "underlying_status": "DONE", "route": ""})
+    monkeypatch.setattr(fle, "compute_loop_protected_hashes", lambda p: {})
+    monkeypatch.setattr(fle, "compare_protected_hashes",
+                        lambda a, b: {"status": "PASS", "files_checked": 0,
+                                      "changed": [], "added": [], "removed": []})
+
+    res = fle.run_closed_product_loop(run_dir=run, mode="mock", execute=True)
+
+    it2 = res["iterations"][1]
+    assert it2["primary_gap_before"] == "SPEC_REPAIR_REQUIRED"
+    assert it2["selected_lane"] == "SPEC_REPAIR"
+    assert res["hold_packet"] is not None
+    assert "SPEC_REPAIR_REQUIRED" in res["hold_packet"]["blocking_gaps"]

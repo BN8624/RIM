@@ -10,6 +10,7 @@ from repo_idea_miner.factory_autopilot_desks import execute_desk
 from repo_idea_miner.factory_autopilot_schemas import (
     AUTOPILOT_HOLD_FOR_HUMAN,
     AUTOPILOT_INFRA_FAIL,
+    GAP_TO_LANE,
     LANE_POLICY,
     RequirementCoverageJudgment,
 )
@@ -363,6 +364,7 @@ def run_closed_product_loop(
     stop: list[str] = []
     hold_reason = None
     children_root = Path(output_dir)
+    gap_escalation: dict | None = None  # lane 결과 evidence로 다음 iteration gap을 승급 (§10)
 
     state_for_hold = lambda cur_stage, gaps: {  # noqa: E731 — packet 입력 요약
         "parent_run_dir": str(parent_run_dir.as_posix()), "current_stage": cur_stage,
@@ -405,6 +407,12 @@ def run_closed_product_loop(
         stage = v["effective_stage"]
         gap = (desks.get("gap") or {}).get("primary_gap")
         lane = (desks.get("lane") or {}).get("recommended_next_lane")
+        # 직전 lane 결과가 spec repair 필요를 분류했으면 같은 patch lane을 반복하지 않고
+        # SPEC_REPAIR로 승급한다 — 관측(lane 결과)이 stale 판정보다 우선한다 (§7·§10).
+        if gap_escalation and gap == gap_escalation["from_gap"]:
+            gap = gap_escalation["to_gap"]
+            lane = GAP_TO_LANE.get(gap, lane)
+            it["gap_escalation"] = dict(gap_escalation)
         it.update(stage_before=stage, primary_gap_before=gap, selected_lane=lane,
                   overrating_blocked=v["overrating_blocked"])
         result["final_stage"] = stage
@@ -479,6 +487,12 @@ def run_closed_product_loop(
             "primary_gap_before": gap,
             "stage_before": stage,
         })
+
+        if "SPEC_REPAIR_REQUIRED" in (lane_result.get("problems") or []):
+            gap_escalation = {
+                "from_gap": gap, "to_gap": "SPEC_REPAIR_REQUIRED",
+                "reason": "lane 결과가 requires_spec_repair를 분류 — 같은 lane 반복 대신 승급",
+            }
 
         sig = lane_result.get("failure_signature")
         if sig:

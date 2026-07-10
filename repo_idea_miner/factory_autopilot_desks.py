@@ -381,7 +381,9 @@ def derive_primary_gap(evidence: dict, quality: dict, stage_label: dict) -> str 
         return "ARCHIVE_RECOMMENDED"
     if facts.get("verdict") == "SPEC_REPAIR_REQUIRED":
         return "SPEC_REPAIR_REQUIRED"
-    if facts.get("green_base") is False or facts.get("gate_fail"):
+    # green_base 부재만으로는 core 결함 근거가 아니다 — gate가 전부 PASS인 미승격 run
+    # (KEEP_CANDIDATE류)을 CORE_PATCH로 오진해 고칠 것 없는 patch lane을 반복하게 된다.
+    if facts.get("gate_fail"):
         return "CORE_PATCH_REQUIRED"
     if facts.get("runner_executable") is False:
         return "RUNNER_PATCH_REQUIRED"

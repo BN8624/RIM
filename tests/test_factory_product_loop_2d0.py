@@ -526,6 +526,21 @@ def test_evidence_ladder_overrides_soft_gap_on_gate_fail(tmp_path):
     assert "CORE_PATCH_REQUIRED" in HARD_EVIDENCE_GAPS
 
 
+def test_ladder_green_base_absent_alone_is_not_core_patch(tmp_path):
+    """fresh gate가 전부 PASS인 미승격 run(green_base 없음)을 CORE_PATCH로 오진하지 않는다.
+
+    core에 고칠 것이 없는데 hard rung이 patch lane을 반복 강제하면 예산만 소진하고
+    HOLD로 빠진다 — green_base 부재는 core 결함의 단독 근거가 아니다."""
+    run = _47_like_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    ev["facts"]["green_base"] = False
+    ev["facts"]["gate_fail"] = False
+    label = {"stage": "POLISHABLE_PROTOTYPE"}
+    assert derive_primary_gap(ev, q, label) != "CORE_PATCH_REQUIRED"
+    ev["facts"]["gate_fail"] = True
+    assert derive_primary_gap(ev, q, label) == "CORE_PATCH_REQUIRED"
+
+
 def test_evidence_ladder_no_override_when_agreeing(tmp_path):
     run = _47_like_run(tmp_path)
     ev, q, hard = _evidence(run)
