@@ -11,6 +11,7 @@ from repo_idea_miner.factory_core_gates import (
     PRODUCT_READ_LIMIT,
     lint_golden_representation,
     product_layer_consumes_core,
+    run_anti_hardcode_gate,
     run_core_gates,
 )
 from repo_idea_miner.factory_core_prompts import (
@@ -34,6 +35,7 @@ from repo_idea_miner.factory_core_prompts import (
 from repo_idea_miner.factory_core_schemas import (
     CORE_GATE_ORDER,
     CORE_VERDICT_TO_RECOMMENDED_ACTION,
+    HARNESS_SCHEMA_VERSION,
     MAX_CORE_CONTRACT_REPAIR_ATTEMPTS,
     MAX_PATCH_ATTEMPTS,
     MAX_PRODUCT_LAYER_REPAIR_ATTEMPTS,
@@ -339,6 +341,8 @@ def run_core_factory(
         draft = draft_model.model_dump()
 
         def _write_contracts(d: dict) -> None:
+            # §2.3: 새로 생성되는 run에 harness schema version 주입 → representation strict lint 강제
+            d["core_contract"]["harness_schema_version"] = HARNESS_SCHEMA_VERSION
             write_workspace_file(workspace, "core_contract.json", _dump(d["core_contract"]), secrets)
             write_workspace_file(workspace, "state_contract.json",
                                  _dump({"state_entities": d["core_contract"]["state_entities"]}), secrets)
@@ -692,7 +696,34 @@ def run_core_factory(
             "## 차단 문제",
             *[f"- {b}" for b in (pl_problems + (pl_review["blocking_issues"] or [])) or ["(없음)"]],
         ]) + "\n")
-        harness["stages"]["product_layer"] = {"status": pl_status, "repair_attempts": pl_attempts}
+        # ---- Phase 2D-1 §2.1: product layer 생성 후 anti-hardcode 재실행 (build/continuation 스캔 시점 통일)
+        # pre-product gate는 src/만 실질 스캔했으므로 product/ 포함 정적 스캔을 다시 돈다.
+        # Level 2(변형 재실행)는 runner가 바뀌지 않았으므로 생략한다.
+        post_anti_result, post_anti_summary = run_anti_hardcode_gate(
+            workspace, goldens, runner_contract, gates["replay_outputs"],
+            timeout_seconds=fset.sandbox_timeout_seconds,
+            use_docker=fset.docker_flag(), secrets=secrets, run_level2=False,
+        )
+        post_anti_summary["scan_point"] = "post_product_layer"
+        write_workspace_file(workspace, "post_product_anti_hardcode.json",
+                             _dump(post_anti_summary), secrets)
+        if not post_anti_result.ok:
+            gates["summary"]["anti_hardcode"] = False
+            gates["problems"]["anti_hardcode"] = (gates["problems"].get("anti_hardcode") or []) + [
+                f"post-product: {p}" for p in post_anti_result.problems
+            ]
+            write_workspace_file(workspace, "gate_results.json",
+                                 _dump({g: {"ok": ok, "problems": gates["problems"][g]}
+                                        for g, ok in gates["summary"].items()}), secrets)
+        log_loop_event(run_dir, secrets, stage="post_product_anti_hardcode_gate",
+                       desk="Core Verification Stage", worker_key_id="HARNESS",
+                       validation="PASS" if post_anti_result.ok else "FAIL",
+                       error=None if post_anti_result.ok else "; ".join(post_anti_result.problems)[:300])
+        harness["stages"]["product_layer"] = {
+            "status": pl_status, "repair_attempts": pl_attempts,
+            "post_anti_hardcode": post_anti_summary["status"],
+            "mock_fallback_count": post_anti_summary.get("mock_fallback_count", 0),
+        }
         log_loop_event(run_dir, secrets, stage="product_layer", desk="Product Layer Stage",
                        validation=pl_status, next_state="verdict")
 
@@ -700,6 +731,7 @@ def run_core_factory(
         _stage("verdict")
         anti_summary = gates["artifacts"]["anti_hardcode_summary"]
         hardcode_risk = _max_risk(anti_summary.get("hardcode_risk", "low"),
+                                  post_anti_summary.get("hardcode_risk", "low"),
                                   build_review.get("hardcode_risk", "low"))
         stats = golden_mode_stats(goldens)
         has_transitions = any(

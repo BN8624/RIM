@@ -549,16 +549,41 @@ def lint_golden_representation(core_contract: dict, goldens: list[dict]) -> dict
     구현이 없는 시점에 정답지↔구현 표현 드리프트를 막는 결정적 lint다.
     선언이 없으면 NOT_DECLARED (기존 run 호환 — 강제하지 않고 기록만).
     비어 있는 expected_events/expected_summary는 "기대 없음"으로 통과다.
+
+    strict mode (Phase 2D-1 §2.3): core_contract.harness_schema_version >= 2인 run은
+    output_representation 필수, event_item_type/event_required_keys/summary_format 필수,
+    아무 기대값도 없는 golden(빈 정답지)은 FAIL로 강제한다.
     """
+    try:
+        strict = int((core_contract or {}).get("harness_schema_version") or 1) >= 2
+    except (TypeError, ValueError):
+        strict = False
     rep = (core_contract or {}).get("output_representation")
     if not isinstance(rep, dict) or not rep:
-        return {"status": "NOT_DECLARED", "declared": None, "problems": [],
+        if strict:
+            return {"status": "FAIL", "declared": None, "strict": True,
+                    "problems": ["output_representation 미선언 (harness_schema_version>=2 강제, §2.3)"],
+                    "checked_goldens": len(goldens or [])}
+        return {"status": "NOT_DECLARED", "declared": None, "strict": False, "problems": [],
                 "checked_goldens": len(goldens or [])}
     problems: list[str] = []
     ev_type = rep.get("event_item_type")
     ev_keys = [k for k in (rep.get("event_required_keys") or []) if isinstance(k, str)]
     kind_key = rep.get("event_kind_key")
     kinds = [k for k in (rep.get("event_kinds") or []) if isinstance(k, str)]
+    if strict:
+        if ev_type not in ("object", "string"):
+            problems.append(f"strict: event_item_type 미선언/무효 ({ev_type!r})")
+        if ev_type == "object" and not ev_keys:
+            problems.append("strict: event_item_type=object인데 event_required_keys 미선언")
+        if not (rep.get("summary_format") or "").strip():
+            problems.append("strict: summary_format 미선언")
+        for g in goldens or []:
+            if not (g.get("expected_events") or g.get("expected_final_state")
+                    or (g.get("expected_summary") or "").strip()):
+                problems.append(
+                    f"{g.get('scenario_id') or '?'}: expected event/state/summary 모두 비어 있음 "
+                    "(strict: 빈 정답지 금지)")
     for g in goldens or []:
         sid = g.get("scenario_id") or "?"
         for i, ev in enumerate(g.get("expected_events") or []):
@@ -588,7 +613,7 @@ def lint_golden_representation(core_contract: dict, goldens: list[dict]) -> dict
             problems.append(
                 f"{sid}: expected_summary가 string이 아님 "
                 f"(하네스 표준: summary는 상태에서 파생된 문자열, 실제 {type(summary).__name__})")
-    return {"status": "PASS" if not problems else "FAIL", "declared": rep,
+    return {"status": "PASS" if not problems else "FAIL", "declared": rep, "strict": strict,
             "problems": problems, "checked_goldens": len(goldens or [])}
 
 
@@ -881,6 +906,52 @@ def classify_summary_source(code: dict[str, str], goldens: list[dict]) -> dict:
             "summary_hardcode_risk": risk, "summary_evidence": evidence}
 
 
+# ---------------------------------------------------------------- Mock Fallback 검출 (Phase 2D-1 §2.2)
+
+# fallback을 쓰려면 이 상태 중 하나를 화면에 명시해야 한다 — 실제 실행 결과 위장 금지.
+FALLBACK_STATE_TOKENS = ("DEMO_ONLY", "NOT_EXECUTED", "RUNNER_UNAVAILABLE")
+_FAKE_RESULT_RE = re.compile(r"Math\.random\s*\(|Date\.now\s*\(")
+_SUCCESS_PAYLOAD_RE = re.compile(
+    r"""(?:["']?(?:ok|success)["']?\s*:\s*true)"""
+    r"""|(?:["']?status["']?\s*:\s*["'](?:ok|success|pass|passed|completed)["'])""",
+    re.IGNORECASE,
+)
+_DEMO_NAME_RE = re.compile(r"\b(?:demo|mock|fake|sample)(?:Result|Data|Response|Payload|Replay)\b")
+_CATCH_WINDOW = 600
+
+
+def detect_mock_fallback(product_files: dict[str, str]) -> dict:
+    """product/ 파일에서 mock/demo fallback을 실제 실행 결과처럼 표시하는 패턴을 정적 검출한다 (§2.2).
+
+    검출 규칙 (결정적 static scan):
+    - catch 블록 부근에서 성공 payload/demo 데이터를 만들면서 FALLBACK_STATE_TOKENS 미표시
+    - Math.random / Date.now 기반 가짜 실행 결과 (2C-3 viewer smoke 규칙을 gate로 승격)
+    - demo/mock/fake/sample 이름의 결과 데이터를 상태 표시 없이 사용
+    """
+    problems: list[str] = []
+    for rel, text in sorted(product_files.items()):
+        has_state_token = any(tok in text for tok in FALLBACK_STATE_TOKENS)
+        for m in _FAKE_RESULT_RE.finditer(text):
+            lineno = text.count("\n", 0, m.start()) + 1
+            problems.append(f"{rel}:{lineno}: 가짜 실행 결과 의심 ({m.group(0).strip()} — 금지)")
+        for m in re.finditer(r"\bcatch\b", text):
+            window = text[m.start():m.start() + _CATCH_WINDOW]
+            if any(tok in window for tok in FALLBACK_STATE_TOKENS):
+                continue
+            if _SUCCESS_PAYLOAD_RE.search(window) or _DEMO_NAME_RE.search(window):
+                lineno = text.count("\n", 0, m.start()) + 1
+                problems.append(
+                    f"{rel}:{lineno}: 실패 catch에서 성공 mock/demo 결과 표시 의심 "
+                    f"(DEMO_ONLY/NOT_EXECUTED/RUNNER_UNAVAILABLE 상태 미표시)")
+        if not has_state_token:
+            for m in _DEMO_NAME_RE.finditer(text):
+                lineno = text.count("\n", 0, m.start()) + 1
+                problems.append(
+                    f"{rel}:{lineno}: 내장 demo 데이터({m.group(0)})를 상태 표시 없이 사용 의심")
+    return {"problems": problems, "mock_fallback_count": len(problems),
+            "checked_files": sorted(product_files)}
+
+
 def run_anti_hardcode_gate(
     workspace: Path,
     goldens: list[dict],
@@ -910,6 +981,11 @@ def run_anti_hardcode_gate(
     # golden summary 리터럴이 하드코딩인지 state/events 파생인지 분류 (Phase 2B-1b §8)
     summary_class = classify_summary_source(code, goldens)
     level1 += summary_class["problems"]
+
+    # mock/demo fallback을 실제 실행 결과처럼 표시하는 패턴 검출 (Phase 2D-1 §2.2)
+    # product/가 아직 없으면(빌드 pre-product 시점) 검사 대상 0 — post-product 재실행에서 잡는다.
+    mock_fb = detect_mock_fallback({rel: t for rel, t in code.items() if rel.startswith("product/")})
+    level1 += mock_fb["problems"]
 
     # Level 2: scenario id/title 변형 후 재실행 → final_state가 달라지면 fixture 의존 (§8.5)
     variant_ran = False
@@ -960,6 +1036,9 @@ def run_anti_hardcode_gate(
         "summary_source": summary_class["summary_source"],
         "summary_hardcode_risk": summary_class["summary_hardcode_risk"],
         "summary_evidence": summary_class["summary_evidence"],
+        "mock_fallback_count": mock_fb["mock_fallback_count"],
+        "mock_fallback_problems": mock_fb["problems"],
+        "product_files_scanned": mock_fb["checked_files"],
     }
     r.ok = not r.problems
     return r, summary

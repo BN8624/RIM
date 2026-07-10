@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------- 상수 (§5.6, §11.4)
 
+# Phase 2D-1 §2.3: 이 버전 이상으로 생성된 run은 golden representation strict lint 강제.
+# 기존 run(미선언=1)은 NOT_DECLARED 관용을 유지한다.
+HARNESS_SCHEMA_VERSION = 2
+
 ARTIFACT_CLASSES = (
     "RULE_ENGINE",
     "SIMULATION_ENGINE",
@@ -139,6 +143,8 @@ class OutputRepresentation(_Base):
 
 
 class CoreContract(_Base):
+    # 1=strict 미적용(기존 run), 2 이상=representation strict (§2.3). 파이프라인이 주입한다.
+    harness_schema_version: int = 1
     artifact_class: str = Field(min_length=1)
     core_goal: str = Field(min_length=1)
     state_entities: list[StateEntity] = Field(min_length=1)

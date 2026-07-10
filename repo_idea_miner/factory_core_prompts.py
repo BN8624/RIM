@@ -590,6 +590,16 @@ def mock_continuation_patch_output() -> dict:
 
 # ---------------------------------------------------------------- prompt builders (Stage 6)
 
+# Phase 2D-1 §2.2: mock/demo fallback을 실제 실행 결과처럼 표시하는 것을 금지하는 공용 규칙.
+MOCK_FALLBACK_RULES = """Mock fallback 금지 (Phase 2D-1 §2.2 — 위반 시 anti-hardcode gate FAIL):
+- 특정 scenario id 고정 fallback 금지 (예: 로드 실패 시 scenario_1을 대신 표시)
+- runner/fetch 실패 시 성공 mock·내장 demo result를 실제 결과처럼 표시 금지
+- Math.random / Date.now 기반 가짜 실행 결과 금지
+- 사용자 입력과 무관한 고정 success payload 금지
+- fallback이 꼭 필요하면 DEMO_ONLY / NOT_EXECUTED / RUNNER_UNAVAILABLE 중 하나를
+  화면에 그대로 표시하라. 이 상태는 실제 실행 결과가 아니며 제품 후보가 될 수 없다."""
+
+
 def build_product_layer_prompt(
     contract_json: str, replay_index_json: str, run_instructions: str, file_tree: list[str]
 ) -> str:
@@ -603,6 +613,8 @@ def build_product_layer_prompt(
 - core logic을 복제하거나 대체하지 마라.
 - core runner output / state snapshot / replay result(replay/ 디렉터리)를 불러와 보여줘라.
 - product layer에서만 동작하고 runner로 검증 불가한 구조는 실패다.
+
+{MOCK_FALLBACK_RULES}
 
 Schema (use exactly these keys):
 {json.dumps(_PRODUCT_LAYER_SCHEMA, ensure_ascii=False, indent=2)}
@@ -657,6 +669,8 @@ def build_product_layer_repair_prompt(product_files: dict[str, str], review_json
 
 리뷰가 지적한 문제만 고쳐라 (§10.5):
 - core logic 수정 금지. product/ 파일과 실행 안내만 수정하라.
+
+{MOCK_FALLBACK_RULES}
 
 Schema (use exactly these keys):
 {json.dumps(_PRODUCT_LAYER_SCHEMA, ensure_ascii=False, indent=2)}
