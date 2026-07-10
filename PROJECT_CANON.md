@@ -37,6 +37,7 @@
 
 ## CANON-03 CLI 명령 지도
 
+- 구조: `cli.py`는 parser/command 등록/dispatch/exit code만 담당하고, command 실행·출력은 `cli_handlers.py`의 handler(`HANDLERS` registry — parser command 집합과 1:1, 회귀 테스트가 고정)가 담당한다. DB open(존재 시)·live scheduler 생성·`--dry-run/--apply` 충돌·run target 검증은 handler 공통 헬퍼를 쓴다.
 - Miner: `run`, `search`, `view`, `serve`, `validate`.
 - Challenge: `challenge`, `challenge-search`, `daemon`, `dashboard`, `status`, `pause`, `resume`, `validate-db`.
 - Factory 빌드/검증: `factory`(자동 배치, 구 파이프라인), `factory-build`(7-stage core harness), `factory-status`, `factory-validate <run_dir>`.

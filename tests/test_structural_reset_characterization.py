@@ -38,6 +38,13 @@ def test_cli_commands_preserved():
     assert not missing, f"사라진 CLI: {sorted(missing)}"
 
 
+def test_cli_dispatch_registry_matches_parser():
+    """R5: parser에 등록된 모든 command가 handler dispatch에 1:1 존재해야 한다 (§15.1)."""
+    from repo_idea_miner.cli_handlers import HANDLERS
+
+    assert set(HANDLERS) == set(extract_cli_commands(REPO_ROOT))
+
+
 def test_root_markdown_whitelist_tracked():
     try:
         out = subprocess.run(["git", "ls-files", "*.md"], cwd=REPO_ROOT,
