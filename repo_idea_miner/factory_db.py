@@ -176,6 +176,25 @@ def get_product_run(conn: sqlite3.Connection, run_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def find_product_run_id_by_run_dir(conn: sqlite3.Connection, run_dir) -> int | None:
+    """run 디렉터리 이름으로 product_runs를 역조회한다 (--run-dir 모드 식별자 backfill용).
+
+    workspace_dir는 abs/rel·구분자가 섞여 저장될 수 있어 run 디렉터리 이름
+    (factory_YYYYMMDD_HHMMSS, 실질 유니크)으로 비교한다. 여러 row면 최신 id.
+    """
+    from pathlib import Path
+
+    name = Path(str(run_dir)).name
+    if not name:
+        return None
+    found = None
+    for row in conn.execute("SELECT id, workspace_dir FROM product_runs ORDER BY id"):
+        ws = row["workspace_dir"]
+        if ws and Path(str(ws)).parent.name == name:
+            found = row["id"]
+    return found
+
+
 # ---------------------------------------------------------------- product_reviews (§26, append-only)
 
 def add_product_review(

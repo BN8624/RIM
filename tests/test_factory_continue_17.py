@@ -198,6 +198,61 @@ def test_cannot_continue_when_hardcode_high(tmp_path):
     assert not base_info["ok"] and "hardcode risk high" in base_info["problems"]
 
 
+# ---------------------------------------------------------------- --run-dir 모드 식별자 backfill
+
+def test_find_run_id_by_run_dir(tmp_path):
+    """run 디렉터리 이름으로 product_runs 역조회 (--run-dir backfill용)."""
+    from repo_idea_miner.factory_db import find_product_run_id_by_run_dir, open_factory_db, create_product_run
+
+    db = open_factory_db(tmp_path / "t.db")
+    try:
+        create_product_run(db, 54, r"runs\factory_20260710_011833\workspace", "standard")
+        rid2 = create_product_run(db, 54, "runs/factory_20260710_011833/workspace", "standard")
+        assert find_product_run_id_by_run_dir(db, "runs/factory_20260710_011833") == rid2  # 최신 우선
+        assert find_product_run_id_by_run_dir(db, Path("runs") / "factory_20260710_011833") == rid2
+        assert find_product_run_id_by_run_dir(db, "runs/factory_none") is None
+    finally:
+        db.close()
+
+
+def test_run_dir_mode_backfills_identifiers(tmp_path):
+    """--run-dir 모드에서 base_run_id/challenge_id를 DB·산출물에서 역조회해 채운다."""
+    from repo_idea_miner.factory_db import open_factory_db, create_product_run
+
+    base = _make_base(tmp_path, {"product_layer": _BAD_LAYER, "product_layer_repair": _BAD_LAYER})
+    base_dir = Path(base["run_dir"])
+    db = open_factory_db(tmp_path / "t.db")
+    try:
+        base_id = create_product_run(db, 77, str(base_dir / "workspace"), "standard")
+        res = run_continuation(base_run_dir=base_dir, mode="mock",
+                               output_dir=tmp_path / "runs2", settings=SETTINGS,
+                               factory_settings=FSET, db_conn=db)
+        assert res["base_run_id"] == base_id
+        assert res["challenge_id"] == 77
+        summary = json.loads((Path(res["continuation_run_dir"])
+                              / "continuation_run_summary.json").read_text(encoding="utf-8"))
+        assert summary["base_run_id"] == base_id
+        assert summary["challenge_id"] == 77
+        promo = json.loads((Path(res["continuation_run_dir"])
+                            / "green_base_promotion.json").read_text(encoding="utf-8"))
+        assert promo["base_run_id"] == base_id
+        assert promo["base_run_dir"]
+    finally:
+        db.close()
+
+
+def test_run_dir_mode_without_db_keeps_dir_identifier(tmp_path):
+    """DB 없이 --run-dir만 줘도 base_run_dir 식별자로 validate가 통과한다."""
+    from repo_idea_miner.factory_validate import validate_continuation_run_dir
+
+    base = _make_base(tmp_path, {"product_layer": _BAD_LAYER, "product_layer_repair": _BAD_LAYER})
+    res = run_continuation(base_run_dir=base["run_dir"], mode="mock",
+                           output_dir=tmp_path / "runs2", settings=SETTINGS, factory_settings=FSET)
+    _ok, problems, _info = validate_continuation_run_dir(Path(res["continuation_run_dir"]), [])
+    assert not any("base_run_id/base_run_dir" in p for p in problems)
+    assert not any("base run 표시 없음" in p for p in problems)
+
+
 # ---------------------------------------------------------------- E2E: product layer 수정 → green 승격 (§20-1,4,8,16,17,21~24,26,27)
 
 @pytest.fixture(scope="module")

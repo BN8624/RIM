@@ -1188,8 +1188,9 @@ def _check_continuation_summary(s: dict) -> list[str]:
     if not s:
         return ["continuation_run_summary.json 없음/파싱 실패"]
     p: list[str] = []
-    if s.get("base_run_id") is None:
-        p.append("continuation_run_summary: base_run_id 없음")
+    # --run-dir 모드는 base_run_id 대신 base_run_dir가 식별자일 수 있다 (둘 다 없으면 FAIL)
+    if s.get("base_run_id") is None and not s.get("base_run_dir"):
+        p.append("continuation_run_summary: base_run_id/base_run_dir 없음")
     if s.get("challenge_id") is None:
         p.append("continuation_run_summary: challenge_id 없음")
     if not (s.get("base_run_dir") or s.get("continuation_base_path")):
@@ -1298,8 +1299,8 @@ def _check_green_promotion(promo: dict, gate_rerun: dict) -> list[str]:
     if not promo:
         return ["green_base_promotion.json 없음/파싱 실패"]
     p: list[str] = []
-    if promo.get("base_run_id") is None:
-        p.append("green_base_promotion: base_run_id 없음")
+    if promo.get("base_run_id") is None and not promo.get("base_run_dir"):
+        p.append("green_base_promotion: base_run_id/base_run_dir 없음")
     if promo.get("continuation_run_id") is None and not promo.get("continuation_identifier"):
         p.append("green_base_promotion: continuation identifier 없음")
     if "promoted_to_green_base" not in promo:
@@ -1330,8 +1331,8 @@ def _check_dashboard_summary(d: dict) -> list[str]:
     if not d:
         return ["phase17_dashboard_summary.json 없음/파싱 실패"]
     p: list[str] = []
-    if d.get("base_run_id") is None:
-        p.append("phase17_dashboard_summary: base run id 표시 없음")
+    if d.get("base_run_id") is None and not d.get("base_run_dir"):
+        p.append("phase17_dashboard_summary: base run 표시 없음")
     if not (d.get("verdict") or d.get("new_verdict")):
         p.append("phase17_dashboard_summary: new verdict 표시 없음")
     if not any(k in d for k in ("green_base", "continuation_base", "promoted_to_green_base")):

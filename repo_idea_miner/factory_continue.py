@@ -22,6 +22,7 @@ from repo_idea_miner.factory_core_schemas import CORE_GATE_ORDER, BuildReview, P
 from repo_idea_miner.factory_db import (
     add_product_artifact,
     create_product_run,
+    find_product_run_id_by_run_dir,
     get_product_run,
     log_product_event,
     update_product_run,
@@ -371,6 +372,22 @@ def run_continuation(
     base_run_dir = Path(base_run_dir)
     result["base_run_dir"] = str(base_run_dir)
 
+    # --run-dir 모드 backfill: 식별자를 base run 산출물/DB에서 역조회 (validate 정합)
+    if result["challenge_id"] is None:
+        for rel in ("product_summary.json", "dashboard_summary.json",
+                    "final_artifact/product_summary.json",
+                    "final_artifact/dashboard_summary.json"):
+            d = _load_json(base_run_dir / rel) or {}
+            if d.get("challenge_id") is not None:
+                result["challenge_id"] = d["challenge_id"]
+                break
+    if base_run_id is None and db_conn is not None:
+        base_run_id = find_product_run_id_by_run_dir(db_conn, base_run_dir)
+        result["base_run_id"] = base_run_id
+        if base_run_id is not None and result["challenge_id"] is None:
+            row = get_product_run(db_conn, base_run_id) or {}
+            result["challenge_id"] = row.get("challenge_id")
+
     # 1. Load Continuation Base (§7)
     base = load_continuation_base(base_run_dir)
     if not base["ok"]:
@@ -556,7 +573,9 @@ def run_continuation(
 
     green_promotion = {
         "base_run_id": base_run_id,
+        "base_run_dir": str(base_run_dir),
         "continuation_run_id": result.get("continuation_run_id"),
+        "continuation_identifier": result.get("continuation_run_id") or str(cont_dir),
         "promoted_to_green_base": promo["promoted_to_green_base"],
         "new_verdict": promo["new_verdict"],
         "remaining_failures": promo["remaining_failures"],
@@ -806,6 +825,7 @@ def _continuation_dashboard_summary(base, result, gate_summary, product_consumes
     return {
         "is_continuation": True,
         "base_run_id": result["base_run_id"],
+        "base_run_dir": result["base_run_dir"],
         "verdict": promo["new_verdict"],
         "headline": {
             "REVIEW_READY": "검수 가능", "NEEDS_MORE_GEMMA_LOOP": "더 돌려야 함",

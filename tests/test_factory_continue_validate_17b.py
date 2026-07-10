@@ -300,14 +300,26 @@ def test_promoted_false_without_remaining_fails(tmp_path):
 # ---------------------------------------------------------------- 21: dashboard base run 표시
 
 def test_dashboard_missing_base_run_fails(tmp_path):
-    """§8-21: phase17_dashboard_summary.json이 base run id를 표시하지 않으면 FAIL."""
+    """§8-21: phase17_dashboard_summary.json이 base run을 전혀 표시하지 않으면 FAIL."""
     run = _valid_continuation(tmp_path / "cont")
     d = _load(run, "phase17_dashboard_summary.json")
     d.pop("base_run_id")
+    d.pop("base_run_dir", None)
     _dump(run, "phase17_dashboard_summary.json", d)
     ok, problems, _ = validate_continuation_run_dir(run, [])
     assert not ok
-    assert any("base run id 표시 없음" in p for p in problems)
+    assert any("base run 표시 없음" in p for p in problems)
+
+
+def test_dashboard_base_run_dir_only_passes(tmp_path):
+    """--run-dir 모드: base_run_id 대신 base_run_dir만 있어도 base run 표시로 인정."""
+    run = _valid_continuation(tmp_path / "cont")
+    d = _load(run, "phase17_dashboard_summary.json")
+    d.pop("base_run_id")
+    d["base_run_dir"] = "runs/factory_20260710_011833"
+    _dump(run, "phase17_dashboard_summary.json", d)
+    _ok, problems, _ = validate_continuation_run_dir(run, [])
+    assert not any("base run 표시 없음" in p for p in problems)
 
 
 # ---------------------------------------------------------------- 22,23: 기존 run type 유지
