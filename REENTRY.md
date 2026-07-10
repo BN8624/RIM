@@ -7,7 +7,9 @@
 
 ## 1. 현재 상태
 
-- BASE_HEAD `3363bb6`, R0 완료 HEAD `3b85a16`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
+- BASE_HEAD `3363bb6`, **R0+R1 완료** HEAD `176550d`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
+- **R1 완료**: factory_run_layout.py 정본(resolve_artifact_root — §8.3 child 전체 복제 제거 / resolve_run_target —
+  6개 모듈의 중복 run 대상 해석 수렴, resolve_review_target 삭제). 관련 테스트 329 passed. CANON-02·08 갱신됨.
 - **R0 완료**: 결정론적 구조 scanner(`architecture_scanner.py`, Atlas 코어로 확장 예정) + baseline.json
   (module 68, factory LOC 21007, cycle 1=factory_continue↔factory_queue, private cross-import 9+,
   500+ LOC 23개 / 800+ LOC 12개), 루트 문서 검증 PASS(md 5종·CANON-ID 일치·깨진 링크 0),
@@ -18,9 +20,9 @@
 
 ## 2. 다음 작업 (R1부터, 주문서 §11~§18 순서)
 
-1. **R1 Run Resolution 정본화** — RunKind/RunLayout/resolve_run_* 정본 API,
-   `final_artifact if exists else workspace` 반복 제거, child 전체 복사 제거(§8.3), CANON-02·08·10 동커밋 갱신.
-2. R2 Validation registry → R3 Product Judgment/Closed Loop 공개 API(§8.1 private import 제거)
+1. **R2 Validation Kernel 정본화**(주문서 §12) — gate 실행/artifact 검증 분리, validator registry로
+   phase append 체인 제거, run kind 감지 정본화(R1 잔여 포함). 시작 전 전체 pytest 1회 권장.
+2. R2 후 R3 Validation registry → R3 Product Judgment/Closed Loop 공개 API(§8.1 private import 제거)
    → R4 build/continuation 수렴(+stale queue fixture §14.5) → R5 CLI/Dashboard 분리
    → R6 dead code → R7 Architecture Atlas → R8 최종(3회 pytest+문서).
 - baseline의 private_cross_imports/import_cycles 목록이 R3·R4의 작업 대상 목록이다.
