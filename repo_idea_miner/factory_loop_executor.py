@@ -176,7 +176,8 @@ def _judge_requirement_coverage(run_dir: Path, profile: dict, probe: dict,
 
 def verify_candidate(run_dir: Path, out_dir: Path, rerun_gates: bool,
                      executor, use_llm: bool, timeout: float, use_docker: bool | None,
-                     secrets: list[str], protected_hash_status: str = "PASS") -> dict:
+                     secrets: list[str], protected_hash_status: str = "PASS",
+                     gemma_mode: str = "sequential") -> dict:
     """child(또는 parent)를 §14 순서로 실제 검증한다. 어떤 값도 기존 report에서 재사용하지 않는다."""
     ws = _resolve_ws(run_dir)
     core_contract = _load_json(ws / "core_contract.json") or {}
@@ -212,7 +213,7 @@ def verify_candidate(run_dir: Path, out_dir: Path, rerun_gates: bool,
     profile = build_capability_profile(run_dir)
     _write_json(out_dir / "capability_profile.json", profile)
 
-    judge = _judge(run_dir, probe, executor, "sequential", use_llm)
+    judge = _judge(run_dir, probe, executor, gemma_mode, use_llm)
     desks = judge["desks"]
     stage = (desks.get("stage_label") or {}).get("stage")
     _write_json(out_dir / "judge_snapshot.json", {
@@ -319,6 +320,10 @@ def run_closed_product_loop(
         return result
     base_run_dir = Path(target)
     loop_id = time.strftime("loop_%Y%m%d_%H%M%S")
+    n = 1
+    while (base_run_dir / LOOP_SUBDIR / loop_id).exists():
+        n += 1
+        loop_id = time.strftime("loop_%Y%m%d_%H%M%S") + f"_{n:02d}"
     loop_dir = base_run_dir / LOOP_SUBDIR / loop_id
     loop_dir.mkdir(parents=True, exist_ok=True)
     result["loop_id"] = loop_id
@@ -370,7 +375,7 @@ def run_closed_product_loop(
                                              rerun_gates=parent_run_dir != base_run_dir,
                                              executor=executor, use_llm=use_llm,
                                              timeout=timeout, use_docker=use_docker,
-                                             secrets=secrets)
+                                             secrets=secrets, gemma_mode=gemma_mode)
         v = parent_verify
         desks = v["judge"]["desks"]
         if desks["status"] != "PASS":
@@ -495,7 +500,8 @@ def run_closed_product_loop(
         child_verify = verify_candidate(child, it_dir / "after", rerun_gates=True,
                                         executor=executor, use_llm=use_llm,
                                         timeout=timeout, use_docker=use_docker, secrets=secrets,
-                                        protected_hash_status=lane_result["protected_hash_check"])
+                                        protected_hash_status=lane_result["protected_hash_check"],
+                                        gemma_mode=gemma_mode)
         regress = count_regressions(v["vector"], child_verify["vector"],
                                     v["gate_summary"], child_verify["gate_summary"])
         child_verify["vector"]["regression_count"] = regress["count"]

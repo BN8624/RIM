@@ -195,6 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
     fpl_p.add_argument("--execute", action="store_true",
                        help="child run 기반 closed loop 실행 (§13 — 원본 base run은 불변, "
                             "--apply-original 같은 원본 수정 옵션은 없음)")
+    fpl_p.add_argument("--output-dir", default="runs",
+                       help="--execute 시 child run 생성 위치 (기본 runs)")
     fpl_p.add_argument("--db", default="challenge.db")
 
     fq_p = sub.add_parser("factory-continue-queue",
@@ -865,6 +867,7 @@ def main(argv: list[str] | None = None) -> int:
                         run_dir=args.run_dir, run_id=args.run_id, mode=args.mode,
                         gemma_mode=args.gemma_mode, execute=True,
                         max_iterations=args.max_iterations or 4,
+                        output_dir=args.output_dir,
                         db_conn=db_conn, scheduler=scheduler,
                     )
                 else:

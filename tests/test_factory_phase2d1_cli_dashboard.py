@@ -49,7 +49,8 @@ def test_cli_default_is_judge_only_2d0(tmp_path, capsys):
 def test_cli_execute_runs_closed_loop(tmp_path, capsys):
     res = _run_mock(tmp_path)
     rc = main(["factory-product-loop", "--run-dir", res["run_dir"], "--execute",
-               "--max-iterations", "2", "--db", str(tmp_path / "no.db")])
+               "--max-iterations", "2", "--output-dir", str(tmp_path / "children"),
+               "--db", str(tmp_path / "no.db")])
     out = capsys.readouterr().out
     assert rc == 0
     assert "CLOSED PRODUCT LOOP" in out
