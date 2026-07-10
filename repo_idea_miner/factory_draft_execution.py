@@ -12,6 +12,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from repo_idea_miner.factory_run_layout import resolve_run_target
+
 from repo_idea_miner.factory_product_editor import (
     EditorGraphModel,
     check_js_syntax,
@@ -854,24 +856,7 @@ def _fitness_md(fit: dict, base: dict) -> str:
 # ---------------------------------------------------------------- 오케스트레이터
 
 def resolve_execution_target(run_dir=None, run_id=None, db_conn=None):
-    info = {"challenge_id": None, "resolved_run_dir": None}
-    if run_dir is None and run_id is not None:
-        if db_conn is None:
-            return None, "--run-id는 DB가 필요합니다.", info
-        from repo_idea_miner.factory_db import get_product_run
-
-        row = get_product_run(db_conn, run_id)
-        if row is None:
-            return None, f"run_id {run_id} 없음", info
-        run_dir = Path(row["workspace_dir"]).parent
-        info["challenge_id"] = row.get("challenge_id")
-    if run_dir is None:
-        return None, "--run-dir 또는 --run-id가 필요합니다.", info
-    run_dir = Path(run_dir)
-    if not run_dir.is_dir():
-        return None, f"run_dir 없음: {run_dir}", info
-    info["resolved_run_dir"] = str(run_dir)
-    return run_dir, None, info
+    return resolve_run_target(run_dir, run_id, db_conn)
 
 
 def _adapter_bridge_paths(run_dir: Path) -> list[tuple[Path, str]]:

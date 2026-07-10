@@ -52,9 +52,8 @@ from repo_idea_miner.factory_review import (
     compare_protected_hashes,
     compute_protected_hashes,
     read_gate_context,
-    resolve_review_target,
 )
-from repo_idea_miner.factory_run_layout import resolve_artifact_root
+from repo_idea_miner.factory_run_layout import resolve_artifact_root, resolve_run_target
 
 REVIEW_SUBDIR = "review/phase2d0"
 
@@ -1080,7 +1079,7 @@ def run_product_loop(
         "prior_fitness_label": None, "hash_status": None, "stop_conditions": [],
         "live_repair_apply": False, "repair_execute": False,
     }
-    target, err, tinfo = resolve_review_target(run_dir, run_id, db_conn)
+    target, err, tinfo = resolve_run_target(run_dir, run_id, db_conn)
     result["resolved_run_dir"] = tinfo.get("resolved_run_dir")
     if err:
         result["error"] = err

@@ -16,6 +16,32 @@ def resolve_artifact_root(run_dir: str | Path) -> Path:
     return fa if fa.is_dir() else run_dir / "workspace"
 
 
+def resolve_run_target(run_dir=None, run_id=None, db_conn=None) -> tuple[Path | None, str | None, dict]:
+    """--run-dir/--run-id에서 대상 run_dir를 확정한다 — CLI 명령 공통 정본.
+
+    반환: (run_dir|None, 오류 메시지|None, info). run-id 사용 시 resolved run_dir와
+    challenge_id를 info에 기록한다.
+    """
+    info = {"base_run_id": run_id, "challenge_id": None, "resolved_run_dir": None}
+    if run_dir is None and run_id is not None:
+        if db_conn is None:
+            return None, "--run-id는 DB가 필요합니다.", info
+        from repo_idea_miner.factory_db import get_product_run
+
+        row = get_product_run(db_conn, run_id)
+        if row is None:
+            return None, f"run_id {run_id} 없음", info
+        run_dir = Path(row["workspace_dir"]).parent
+        info["challenge_id"] = row.get("challenge_id")
+    if run_dir is None:
+        return None, "--run-dir 또는 --run-id가 필요합니다.", info
+    run_dir = Path(run_dir)
+    if not run_dir.is_dir():
+        return None, f"run_dir 없음: {run_dir}", info
+    info["resolved_run_dir"] = str(run_dir)
+    return run_dir, None, info
+
+
 @dataclass(frozen=True)
 class RunLayout:
     run_dir: Path

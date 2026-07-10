@@ -38,8 +38,7 @@ from repo_idea_miner.factory_product_loop import (
     extract_artifact_evidence,
     extract_user_facing_quality,
 )
-from repo_idea_miner.factory_review import resolve_review_target
-from repo_idea_miner.factory_run_layout import resolve_artifact_root
+from repo_idea_miner.factory_run_layout import resolve_artifact_root, resolve_run_target
 
 LOOP_SUBDIR = "review/phase2d1"
 
@@ -323,7 +322,7 @@ def run_closed_product_loop(
     result: dict = {"ok": False, "status": None, "loop_id": None, "resolved_run_dir": None,
                     "iterations": [], "stop_conditions": [], "final_stage": None,
                     "base_hash_status": None, "hold_packet": None, "problems": []}
-    target, err, tinfo = resolve_review_target(run_dir, run_id, db_conn)
+    target, err, tinfo = resolve_run_target(run_dir, run_id, db_conn)
     result["resolved_run_dir"] = tinfo.get("resolved_run_dir")
     if err:
         result["error"] = err

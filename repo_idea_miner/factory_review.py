@@ -11,6 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from repo_idea_miner.factory_run_layout import resolve_run_target
+
 # ---------------------------------------------------------------- 상수 (§3, §8)
 
 REVIEW_SUBDIR = "review/phase2c0"
@@ -136,28 +138,6 @@ def compare_protected_hashes(before: dict[str, str], after: dict[str, str]) -> d
 
 
 # ---------------------------------------------------------------- 대상 식별 / 사전 조건 (§5)
-
-def resolve_review_target(run_dir=None, run_id=None, db_conn=None) -> tuple[Path | None, str | None, dict]:
-    """review 대상 run_dir를 확정한다. run-id 사용 시 resolved run_dir를 info에 기록한다."""
-    info = {"base_run_id": run_id, "challenge_id": None, "resolved_run_dir": None}
-    if run_dir is None and run_id is not None:
-        if db_conn is None:
-            return None, "--run-id는 DB가 필요합니다.", info
-        from repo_idea_miner.factory_db import get_product_run
-
-        row = get_product_run(db_conn, run_id)
-        if row is None:
-            return None, f"run_id {run_id} 없음", info
-        run_dir = Path(row["workspace_dir"]).parent
-        info["challenge_id"] = row.get("challenge_id")
-    if run_dir is None:
-        return None, "--run-dir 또는 --run-id가 필요합니다.", info
-    run_dir = Path(run_dir)
-    if not run_dir.is_dir():
-        return None, f"run_dir 없음: {run_dir}", info
-    info["resolved_run_dir"] = str(run_dir)
-    return run_dir, None, info
-
 
 def read_gate_context(run_dir: Path) -> dict:
     """green_base / gate 재검증 / phase2b1b 요약에서 하네스 상태를 읽는다 (§5)."""
@@ -881,7 +861,7 @@ def run_review_package(
         "problems": [], "error": None,
     }
 
-    target, err, tinfo = resolve_review_target(run_dir, run_id, db_conn)
+    target, err, tinfo = resolve_run_target(run_dir, run_id, db_conn)
     result["resolved_run_dir"] = tinfo.get("resolved_run_dir")
     if err:
         result["error"] = err
