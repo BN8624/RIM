@@ -218,13 +218,14 @@ AUTO_ORDER_QUALITY_MIN = 0.85
 # ---------------------------------------------------------------- Pydantic strict 스키마 (§10)
 
 class ProductLoopEvidence(BaseModel):
-    """사용자가 실제로 무엇을 할 수 있는가 (§7)."""
-    can_create_input: bool
+    """사용자가 실제로 무엇을 할 수 있는가 (§7 — Phase 2D-1 §6 공통 evidence 이름)."""
+    can_create_or_modify_input: bool
     can_validate_input: bool
-    can_execute_input: bool
-    can_see_result_from_created_input: bool
+    can_execute_primary_action: bool
+    can_observe_state_change: bool
+    can_understand_success: bool
     can_understand_failure: bool
-    can_revise_and_rerun: bool
+    can_revise_and_retry: bool
     product_loop_closed: bool
 
 

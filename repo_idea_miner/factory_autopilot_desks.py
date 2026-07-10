@@ -291,7 +291,7 @@ def derive_stage_from_evidence(evidence: dict, quality: dict, hard: dict) -> str
         stage = "REVIEWABLE_ARTIFACT"
     elif not facts.get("authoring_ui"):
         stage = "POLISHABLE_PROTOTYPE"
-    elif not loop.get("can_execute_input"):
+    elif not loop.get("can_execute_primary_action"):
         stage = "INTERACTION_CANDIDATE"
     elif not loop.get("product_loop_closed"):
         stage = "EXECUTION_CANDIDATE"
@@ -308,10 +308,10 @@ def derive_stage_from_evidence(evidence: dict, quality: dict, hard: dict) -> str
 
 
 _MISSING_PART_BY_FIELD = {
-    "can_execute_input": "runner_backed_execution",
-    "can_see_result_from_created_input": "result_from_edited_input",
+    "can_execute_primary_action": "runner_backed_execution",
+    "can_observe_state_change": "result_from_edited_input",
     "can_understand_failure": "failure_understanding",
-    "can_revise_and_rerun": "revise_and_rerun",
+    "can_revise_and_retry": "revise_and_rerun",
 }
 
 
@@ -321,7 +321,7 @@ def mock_product_judge(evidence: dict, quality: dict, hard: dict) -> dict:
     stage = derive_stage_from_evidence(evidence, quality, hard)
     missing = [part for field, part in _MISSING_PART_BY_FIELD.items() if not loop.get(field)]
 
-    ev_refs = _refs(evidence, "loop.can_execute_input", "loop.product_loop_closed")
+    ev_refs = _refs(evidence, "loop.can_execute_primary_action", "loop.product_loop_closed")
     if facts.get("runner_backed_execution_included") is not None:
         ev_refs += _refs(evidence, "editor.runner_backed_execution_included")
     if not ev_refs:
@@ -329,17 +329,17 @@ def mock_product_judge(evidence: dict, quality: dict, hard: dict) -> dict:
 
     reasons = []
     if stage not in ("PRODUCT_CANDIDATE", "ARCHIVE"):
-        if not loop.get("can_execute_input"):
+        if not loop.get("can_execute_primary_action"):
             reasons.append({
                 "reason": "Edited draft cannot yet be executed by runner/core.",
-                "evidence_refs": _refs(evidence, "loop.can_execute_input",
+                "evidence_refs": _refs(evidence, "loop.can_execute_primary_action",
                                        "editor.runner_backed_execution_included") or ev_refs[:1],
             })
         elif not loop.get("product_loop_closed"):
             reasons.append({
                 "reason": "Product loop (revise and rerun) is not closed yet.",
                 "evidence_refs": _refs(evidence, "loop.product_loop_closed",
-                                       "loop.can_revise_and_rerun") or ev_refs[:1],
+                                       "loop.can_revise_and_retry") or ev_refs[:1],
             })
         elif not facts.get("viewer_exists"):
             reasons.append({"reason": "No product viewer surface.",
@@ -389,7 +389,7 @@ def derive_primary_gap(evidence: dict, quality: dict, stage_label: dict) -> str 
         return "VIEWER_POLISH_REQUIRED"
     if not facts.get("authoring_ui"):
         return "INTERACTION_UI_REQUIRED"
-    if not loop.get("can_execute_input"):
+    if not loop.get("can_execute_primary_action"):
         return "RUNNER_BACKED_EXECUTION_REQUIRED"
     if not loop.get("product_loop_closed") or not q.get("user_can_understand_value_in_60s"):
         return "UX_POLISH_REQUIRED"
@@ -397,10 +397,10 @@ def derive_primary_gap(evidence: dict, quality: dict, stage_label: dict) -> str 
 
 
 _GAP_REFS = {
-    "RUNNER_BACKED_EXECUTION_REQUIRED": ("loop.can_execute_input",
+    "RUNNER_BACKED_EXECUTION_REQUIRED": ("loop.can_execute_primary_action",
                                          "editor.runner_backed_execution_included",
                                          "loop.product_loop_closed"),
-    "INTERACTION_UI_REQUIRED": ("facts.authoring_ui", "loop.can_create_input"),
+    "INTERACTION_UI_REQUIRED": ("facts.authoring_ui", "loop.can_create_or_modify_input"),
     "VIEWER_POLISH_REQUIRED": ("facts.mismatch_count", "facts.viewer_reads_replay",
                                "facts.viewer_exists"),
     "UX_POLISH_REQUIRED": ("quality.user_can_understand_value_in_60s", "loop.product_loop_closed"),

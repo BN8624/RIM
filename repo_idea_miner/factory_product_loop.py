@@ -228,13 +228,16 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     can_see_result = bool(editor_smoke.get("draft_execution_result_visible")) and can_execute
     can_understand_failure = bool(editor_smoke.get("draft_failure_feedback_visible")) and can_execute
     can_revise = bool(editor_smoke.get("draft_revise_and_rerun_supported")) and can_execute
+    # 공통 evidence 이름 (Phase 2D-1 §6) — 도메인 상세는 adapter evidence(2C-2/2C-3 report)에만 둔다.
+    # can_understand_success는 실행 결과가 화면에 보이는 것(성공 피드백)과 같은 근거에서 파생된다.
     loop = {
-        "can_create_input": can_create,
+        "can_create_or_modify_input": can_create,
         "can_validate_input": can_validate,
-        "can_execute_input": can_execute,
-        "can_see_result_from_created_input": can_see_result,
+        "can_execute_primary_action": can_execute,
+        "can_observe_state_change": can_see_result,
+        "can_understand_success": can_see_result,
         "can_understand_failure": can_understand_failure,
-        "can_revise_and_rerun": can_revise,
+        "can_revise_and_retry": can_revise,
     }
     loop["product_loop_closed"] = all(loop.values())
 
@@ -343,15 +346,15 @@ def apply_hard_blockers(evidence: dict, quality: dict) -> dict:
         })
 
     block("runner-backed execution 없음 → PRODUCT_CANDIDATE 금지",
-          not loop["can_execute_input"],
-          ("loop.can_execute_input", "editor.runner_backed_execution_included"))
+          not loop["can_execute_primary_action"],
+          ("loop.can_execute_primary_action", "editor.runner_backed_execution_included"))
     block("사용자가 만든 입력을 실행할 수 없음 → PRODUCT_CANDIDATE 금지",
-          not loop["can_execute_input"], ("loop.can_execute_input",))
+          not loop["can_execute_primary_action"], ("loop.can_execute_primary_action",))
     block("실행 결과를 볼 수 없음 → PRODUCT_CANDIDATE 금지",
-          not loop["can_see_result_from_created_input"],
-          ("loop.can_see_result_from_created_input",))
+          not loop["can_observe_state_change"],
+          ("loop.can_observe_state_change",))
     block("수정 후 재실행할 수 없음 → PRODUCT_CANDIDATE 금지",
-          not loop["can_revise_and_rerun"], ("loop.can_revise_and_rerun",))
+          not loop["can_revise_and_retry"], ("loop.can_revise_and_retry",))
     block("JS syntax FAIL → PRODUCT_CANDIDATE 금지",
           facts.get("js_syntax_status") == "FAIL", ("check.js_syntax",))
     block("critical red flag 존재 → PRODUCT_CANDIDATE 금지",
@@ -361,8 +364,8 @@ def apply_hard_blockers(evidence: dict, quality: dict) -> dict:
     block("조작 UI 없음 → INTERACTION_CANDIDATE 이상 금지",
           not facts.get("authoring_ui"), ("facts.authoring_ui",), cap="POLISHABLE_PROTOTYPE")
     block("조작 UI는 있으나 실행 없음 → EXECUTION_CANDIDATE 이상 금지",
-          facts.get("authoring_ui") and not loop["can_execute_input"],
-          ("facts.authoring_ui", "loop.can_execute_input"), cap="INTERACTION_CANDIDATE")
+          facts.get("authoring_ui") and not loop["can_execute_primary_action"],
+          ("facts.authoring_ui", "loop.can_execute_primary_action"), cap="INTERACTION_CANDIDATE")
     block("success_feedback_visible=false → EXECUTION_CANDIDATE 이상 제한",
           not q["success_feedback_visible"], ("quality.success_feedback_visible",),
           cap="INTERACTION_CANDIDATE")

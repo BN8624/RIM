@@ -126,13 +126,13 @@ def test_artifact_evidence_extraction_47_like(tmp_path):
     run = _47_like_run(tmp_path)
     ev, q, hard = _evidence(run)
     loop = ev["product_loop"]
-    assert loop["can_create_input"] is True
+    assert loop["can_create_or_modify_input"] is True
     assert loop["can_validate_input"] is True
-    assert loop["can_execute_input"] is False
-    assert loop["can_see_result_from_created_input"] is False
+    assert loop["can_execute_primary_action"] is False
+    assert loop["can_observe_state_change"] is False
     assert loop["product_loop_closed"] is False
     # evidence_refs 카탈로그에 §9 스타일 refs 존재
-    assert "artifact_evidence.product_loop.can_execute_input=false" in ev["known_refs"]
+    assert "artifact_evidence.product_loop.can_execute_primary_action=false" in ev["known_refs"]
     assert "phase2c2_editor_report.runner_backed_execution_included=false" in ev["known_refs"]
 
 
@@ -203,7 +203,7 @@ def test_stage_execution_candidate(tmp_path):
     es.update(runner_backed_execution_included=True, draft_execution_result_visible=True)
     _dump(run / "review" / "phase2c2" / "editor_smoke_review.json", es)
     ev, q, hard = _evidence(run)
-    assert ev["product_loop"]["can_execute_input"] is True
+    assert ev["product_loop"]["can_execute_primary_action"] is True
     assert ev["product_loop"]["product_loop_closed"] is False
     assert derive_stage_from_evidence(ev, q, hard) == "EXECUTION_CANDIDATE"
 

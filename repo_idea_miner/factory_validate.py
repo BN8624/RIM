@@ -1004,6 +1004,11 @@ def _check_phase2d0(run_dir: Path) -> list[str]:
         p.append(f"Phase 2D-0: 보호 대상 artifact/기존 review 변경됨: {detail}")
 
     label = _load_json(rd / "product_stage_label.json") or {}
+    # 구(2D-0) live artifact는 can_execute_input 등 옛 evidence 이름 — 읽을 때만 공통 이름으로 정규화 (§6)
+    if label.get("product_loop_evidence"):
+        from repo_idea_miner.factory_product_capabilities import normalize_loop_evidence
+        label = {**label,
+                 "product_loop_evidence": normalize_loop_evidence(label["product_loop_evidence"])}
     gap = _load_json(rd / "product_gap_classification.json") or {}
     lane = _load_json(rd / "recommended_next_lane.json") or {}
     order = _load_json(rd / "auto_order.json") or {}
@@ -1112,7 +1117,10 @@ def _check_phase2d0(run_dir: Path) -> list[str]:
             p.append("Phase 2D-0: JS syntax FAIL인데 PRODUCT_CANDIDATE")
         if facts.get("critical_red_flags"):
             p.append("Phase 2D-0: critical red flag 존재인데 PRODUCT_CANDIDATE")
-        if (artifact_ev.get("product_loop") or {}).get("can_execute_input") is not True:
+        # 구(2D-0) artifact는 can_execute_input, 신(2D-1) artifact는 can_execute_primary_action
+        from repo_idea_miner.factory_product_capabilities import normalize_loop_evidence
+        loop_norm = normalize_loop_evidence(artifact_ev.get("product_loop") or {})
+        if loop_norm.get("can_execute_primary_action") is not True:
             p.append("Phase 2D-0: runner-backed execution 없음인데 PRODUCT_CANDIDATE")
     # §30.2: user_can_understand_value_in_60s=false + PRODUCT_CANDIDATE → FAIL (위 검사에 포함되나 명시)
     if stage == "PRODUCT_CANDIDATE" and user_q.get("user_can_understand_value_in_60s") is False:
