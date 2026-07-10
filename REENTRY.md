@@ -7,23 +7,24 @@
 
 ## 1. 현재 상태
 
-- BASE_HEAD `3363bb6`, **R0+R1 완료** HEAD `176550d`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
-- **R1 완료**: factory_run_layout.py 정본(resolve_artifact_root — §8.3 child 전체 복제 제거 / resolve_run_target —
-  6개 모듈의 중복 run 대상 해석 수렴, resolve_review_target 삭제). 관련 테스트 329 passed. CANON-02·08 갱신됨.
-- **R0 완료**: 결정론적 구조 scanner(`architecture_scanner.py`, Atlas 코어로 확장 예정) + baseline.json
-  (module 68, factory LOC 21007, cycle 1=factory_continue↔factory_queue, private cross-import 9+,
-  500+ LOC 23개 / 800+ LOC 12개), 루트 문서 검증 PASS(md 5종·CANON-ID 일치·깨진 링크 0),
-  **flaky 근본 수정**(.pyc stale bytecode — 같은 크기 patch가 같은 초에 쓰이면 int-mtime+size 검증 통과;
-  PYTHONDONTWRITEBYTECODE=1을 sandbox 로컬 env+docker에 주입, repro 40회 0실패, 각 10회 PASS),
-  characterization 6종(#47/#54 의미·CLI 26종·root md·dashboard route), **pytest 968 전부 PASS**.
+- BASE_HEAD `3363bb6`, **R0+R1+R2 완료** HEAD `cb4c09f`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
+- **R2 완료**: run kind 감지 정본화(`factory_run_layout.detect_run_kind`/`RUN_KIND_*` — e8582e7) +
+  validator registry(`factory_validate.MARKER_VALIDATORS` 10종 선언, 선언 순서=검사 순서,
+  core/continuation 공유 — cb4c09f). CheckResult 내부 공통 결과 + render_problems 호환 렌더러,
+  secret scan 통합. phase append 체인 중복 제거. **전체 pytest 979 PASS**(R2 게이트).
+  CANON-02·04·05·10 동커밋 갱신(CANON-10의 stale flaky 기재 정정 포함).
+- **R1 완료**: factory_run_layout.py 정본(resolve_artifact_root — §8.3 child 전체 복제 제거 / resolve_run_target).
+- **R0 완료**: architecture_scanner.py + baseline.json, flaky 근본 수정(.pyc stale bytecode —
+  PYTHONDONTWRITEBYTECODE=1), characterization 6종.
 - #47/#54 closed loop 상태는 characterization 테스트가 고정(둘 다 HOLD_FOR_HUMAN, base hash PASS).
 
-## 2. 다음 작업 (R1부터, 주문서 §11~§18 순서)
+## 2. 다음 작업 (R3부터, 주문서 §13~§18 순서)
 
-1. **R2 Validation Kernel 정본화**(주문서 §12) — gate 실행/artifact 검증 분리, validator registry로
-   phase append 체인 제거, run kind 감지 정본화(R1 잔여 포함). 시작 전 전체 pytest 1회 권장.
-2. R2 후 R3 Validation registry → R3 Product Judgment/Closed Loop 공개 API(§8.1 private import 제거)
-   → R4 build/continuation 수렴(+stale queue fixture §14.5) → R5 CLI/Dashboard 분리
+1. **R3 Product Judgment/Closed Loop 정본화**(주문서 §13) — factory_loop_executor의
+   factory_product_loop private import 6종(§8.1) 제거 → 공개 Product Judgment API,
+   factory_review private helper 의존(§8.2) 정리, protected hash 정본 1개,
+   production private cross-import 0. 완료 시 전체 pytest+adversarial review+CANON-06·07·11 갱신.
+2. R3 후 R4 build/continuation 수렴(+stale queue fixture §14.5) → R5 CLI/Dashboard 분리
    → R6 dead code → R7 Architecture Atlas → R8 최종(3회 pytest+문서).
 - baseline의 private_cross_imports/import_cycles 목록이 R3·R4의 작업 대상 목록이다.
 
