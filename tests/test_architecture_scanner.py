@@ -1,13 +1,16 @@
 # R0 baseline scanner 테스트 — 결정론/사이클/private import/CLI 추출 검증.
 import json
+import subprocess
 from pathlib import Path
 
 from repo_idea_miner.architecture_scanner import (
     build_baseline,
+    collect_workspace_changes,
     extract_cli_commands,
     find_import_cycles,
     find_private_imports,
     scan_module,
+    workspace_markdown_problems,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +75,63 @@ def test_product_chain_private_imports_removed():
     offenders = [d for d in base["private_cross_imports"]
                  if d["module"].split(".")[-1] in chain or d["from"].split(".")[-1] in chain]
     assert offenders == []
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                   cwd=root, check=True, capture_output=True)
+
+
+def test_collect_workspace_changes_on_temp_git_repo(tmp_path):
+    """A7 §7 — porcelain 파싱: MODIFIED/DELETED/UNTRACKED/RENAMED(old_path 소비), 공백 path."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    (root / "keep.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "gone.py").write_text("y = 1\n", encoding="utf-8")
+    (root / "old_name.py").write_text("z = 1\n", encoding="utf-8")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "init")
+    (root / "keep.py").write_text("x = 2\n", encoding="utf-8")
+    (root / "gone.py").unlink()
+    (root / "new file.md").write_text("hi\n", encoding="utf-8")
+    _git(root, "mv", "old_name.py", "new_name.py")
+
+    changes = collect_workspace_changes(root)
+    assert changes == collect_workspace_changes(root)  # 결정론
+    by_path = {c["path"]: c for c in changes}
+    assert by_path["keep.py"]["status"] == "MODIFIED"
+    assert by_path["gone.py"]["status"] == "DELETED"
+    md = by_path["new file.md"]
+    assert md["status"] == "UNTRACKED" and not md["tracked"] and md["is_markdown"]
+    ren = by_path["new_name.py"]
+    assert ren["status"] == "RENAMED" and ren["old_path"] == "old_name.py"
+    assert ren["is_python"]
+
+
+def test_collect_workspace_changes_outside_git_repo(tmp_path):
+    assert collect_workspace_changes(tmp_path) == []
+
+
+def _cf(path: str, status: str = "UNTRACKED", old: str | None = None) -> dict:
+    return {"path": path, "old_path": old, "status": status,
+            "tracked": status != "UNTRACKED",
+            "is_python": path.endswith(".py"),
+            "is_test": path.startswith("tests/") and path.endswith(".py"),
+            "is_markdown": path.endswith(".md")}
+
+
+def test_workspace_markdown_problems():
+    """A7 §5.2 — untracked md가 루트/소스 경로에 있으면 문맥 오염, 그 외는 침묵."""
+    probs = workspace_markdown_problems([
+        _cf("NOTES.md"),                        # 루트 untracked → 문제
+        _cf("repo_idea_miner/plan.md"),         # 소스 경로 untracked → 문제
+        _cf("README.md", status="MODIFIED"),    # tracked 수정 → 문제 아님
+        _cf("samples/foo.md"),                  # 비관리 경로 → 문제 아님
+    ])
+    assert len(probs) == 2
+    assert any("NOTES.md" in p for p in probs)
+    assert any("repo_idea_miner/plan.md" in p for p in probs)
 
 
 def test_baseline_counts_sane():

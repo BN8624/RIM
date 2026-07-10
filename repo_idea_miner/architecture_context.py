@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 from repo_idea_miner.architecture_scanner import (
     ATLAS_DIR,
     ATLAS_JSON,
+    collect_workspace_changes,
     load_manifest,
+    workspace_markdown_problems,
 )
 
 DEFAULT_DEPTH = 1
@@ -25,22 +26,38 @@ def load_atlas(root: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _changed_py_stems(root: Path) -> tuple[list[str], list[str]]:
-    """git diff --name-only HEAD 기반 변경 파일 → (패키지 모듈 stem, 비-파이썬 변경)."""
-    try:
-        r = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=root,
-                           capture_output=True, text=True, timeout=30)
-        files = sorted(x.replace("\\", "/") for x in r.stdout.splitlines() if x.strip())
-    except OSError:
-        return [], []
-    stems, other = [], []
-    for f in files:
-        p = Path(f)
-        if f.endswith(".py") and p.parts and p.parts[0] == "repo_idea_miner":
-            stems.append(p.stem)
-        else:
-            other.append(f)
-    return stems, other
+def classify_changes(changes: list[dict], module_stems: set[str]) -> dict:
+    """ChangedFile 목록(A7 §7.3)을 context 관점으로 분류한다 (git 비의존 — 순수 함수).
+    untracked production py는 Atlas에 없으므로 UNKNOWN_PENDING_BUILD로 표면화한다."""
+    known_stems: list[str] = []
+    pending_build: list[str] = []
+    deleted_module_stems: list[str] = []
+    test_changes: list[str] = []
+    for c in changes:
+        p = c["path"]
+        if c["is_test"]:
+            test_changes.append(p)
+            continue
+        if c["is_python"] and p.startswith("repo_idea_miner/"):
+            stem = Path(p).stem
+            if c["status"] == "DELETED":
+                deleted_module_stems.append(stem)
+                if stem in module_stems:
+                    known_stems.append(stem)
+            elif stem in module_stems:
+                known_stems.append(stem)
+            else:
+                pending_build.append(p)  # 아직 Atlas에 없는 새 production 파일
+        if c["old_path"] and c["old_path"].startswith("repo_idea_miner/") \
+                and c["old_path"].endswith(".py"):
+            deleted_module_stems.append(Path(c["old_path"]).stem)  # rename의 이전 이름
+    return {
+        "known_stems": sorted(set(known_stems)),
+        "pending_build": sorted(set(pending_build)),
+        "deleted_module_stems": sorted(set(deleted_module_stems)),
+        "test_changes": sorted(set(test_changes)),
+        "governance_problems": workspace_markdown_problems(changes),
+    }
 
 
 def _symbol_module_stem(symbol_id: str, module_stems: set[str]) -> str:
@@ -144,16 +161,19 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
         for a in matches:
             sel_artifacts.append(a)
             add_stem(_symbol_module_stem(a["symbol_id"], module_stems))
-    changed_other: list[str] = []
+    changes: list[dict] = []
+    change_info: dict = {}
     if selectors.get("changed"):
-        stems, changed_other = _changed_py_stems(root)
-        if not stems and not changed_other:
-            warnings.append("--changed: HEAD 대비 변경 파일 없음")
-        for s in stems:
-            if s in module_stems:
-                add_stem(s)
-            else:
-                warnings.append(f"--changed: manifest 밖 파이썬 파일 {s}")
+        changes = collect_workspace_changes(root)
+        change_info = classify_changes(changes, module_stems)
+        if not changes:
+            warnings.append("--changed: workspace clean (변경 파일 없음)")
+        for s in change_info.get("known_stems", []):
+            add_stem(s)
+        for p in change_info.get("pending_build", []):
+            warnings.append(f"--changed: UNKNOWN_PENDING_BUILD {p} — Atlas에 없는 새 production 파일, architecture-build 필요")
+        for prob in change_info.get("governance_problems", []):
+            warnings.append(f"--changed: {prob}")
 
     # ---- 확장: component canon, 모듈 내 canonical symbol
     for stem in sel_stems:
@@ -277,8 +297,8 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
     if impact:
         out["direct_static_impact"] = _direct_static_impact(
             atlas, sel_stems, mod_by_stem, module_stems, contracts, invariants,
-            changed=bool(selectors.get("changed")), changed_other=changed_other,
-            live_fingerprint=live_fingerprint)
+            changed=bool(selectors.get("changed")), changes=changes,
+            change_info=change_info, live_fingerprint=live_fingerprint)
     return out
 
 
@@ -294,8 +314,8 @@ def _all_canon_ids(atlas: dict) -> set[str]:
 def _direct_static_impact(atlas: dict, sel_stems: list[str],
                           mod_by_stem: dict, module_stems: set[str],
                           contracts: list[dict], invariants: list[dict],
-                          changed: bool, changed_other: list[str],
-                          live_fingerprint: str | None) -> dict:
+                          changed: bool, changes: list[dict],
+                          change_info: dict, live_fingerprint: str | None) -> dict:
     """§16 direct static impact — 완전한 runtime 영향이 아니라 정적 1-hop 사실만."""
     sel_full = {mod_by_stem[s]["module"] for s in sel_stems}
     consumers = sorted({
@@ -345,17 +365,45 @@ def _direct_static_impact(atlas: dict, sel_stems: list[str],
     if changed:
         committed_fp = atlas["repository"]["structural_fingerprint"]
         fp_changed = (live_fingerprint != committed_fp) if live_fingerprint else None
+        pending = change_info.get("pending_build", [])
+        deleted_stems = change_info.get("deleted_module_stems", [])
+        governance = change_info.get("governance_problems", [])
+        deleted_modules = []
+        for stem in deleted_stems:
+            m = mod_by_stem.get(stem)
+            broken_routes = sorted({r["route_id"] for r in atlas["routes"]
+                                    if any(s.rsplit(".", 2)[-2] == stem for s in r["steps"])})
+            broken_contracts = sorted({
+                c["contract_id"] for c in atlas["contracts"]
+                if _symbol_module_stem(c["owner_symbol"], module_stems) == stem
+                or any(_symbol_module_stem(s, module_stems) == stem
+                       for s in c["consumer_symbols"] + c["validator_symbols"])})
+            deleted_modules.append({
+                "module_stem": stem,
+                "previous_component": m["component"] if m else "unknown",
+                "importers": m["imported_by"] if m else [],
+                "possible_broken_routes": broken_routes,
+                "possible_broken_contracts": broken_contracts,
+            })
+        components = sorted({mod_by_stem[s]["component"] for s in sel_stems})
+        if pending:
+            components.append("UNKNOWN_PENDING_BUILD")
+        rebuild = bool(pending or deleted_stems) or fp_changed
         impact["changed"] = {
-            "changed_components": sorted({mod_by_stem[s]["component"] for s in sel_stems}),
+            "changed_files": changes,
+            "changed_components": components,
             "affected_routes": affected_routes,
-            "canon_sections_to_review": sorted(
+            "related_canon_ids": sorted(
                 {c for s in sel_stems
                  for c in atlas["components"][mod_by_stem[s]["component"]]["canon_ids"]}),
-            "targeted_tests": sorted(related_tests),
-            "changed_non_python": changed_other,
+            "tests_to_run": sorted(related_tests),
+            "changed_tests": change_info.get("test_changes", []),
+            "pending_build_files": pending,
+            "deleted_modules": deleted_modules,
             "structure_fingerprint_changed": fp_changed,
-            "atlas_rebuild_required": fp_changed,
-            "project_markdown_update_required": fp_changed,
+            "atlas_rebuild_required": rebuild,
+            "document_update_required": bool(governance) or bool(fp_changed),
+            "workspace_governance_problems": governance,
         }
     return impact
 

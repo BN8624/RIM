@@ -2,7 +2,12 @@
 import json
 from pathlib import Path
 
-from repo_idea_miner.architecture_context import build_context, render_compact
+import repo_idea_miner.architecture_context as ac
+from repo_idea_miner.architecture_context import (
+    build_context,
+    classify_changes,
+    render_compact,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,6 +108,68 @@ def test_component_selector_and_ai_index_queries():
         cc = _ctx({parts[0].lstrip("-"): [parts[1]]})
         assert not any("selector 불일치" in w for w in cc["warnings"]), row
         assert cc["read_first"], row
+
+
+def _cf(path: str, status: str = "MODIFIED", old: str | None = None) -> dict:
+    return {"path": path, "old_path": old, "status": status,
+            "tracked": status != "UNTRACKED",
+            "is_python": path.endswith(".py"),
+            "is_test": path.startswith("tests/") and path.endswith(".py"),
+            "is_markdown": path.endswith(".md")}
+
+
+def test_classify_changes_pure():
+    """A7 §7.3 — ChangedFile 분류: known/pending_build/deleted/rename/test/governance."""
+    stems = {"architecture_context", "factory_review"}
+    info = classify_changes([
+        _cf("repo_idea_miner/architecture_context.py"),
+        _cf("repo_idea_miner/brand_new.py", status="UNTRACKED"),
+        _cf("repo_idea_miner/factory_review.py", status="DELETED"),
+        _cf("repo_idea_miner/new_name.py", status="RENAMED",
+            old="repo_idea_miner/old_name.py"),
+        _cf("tests/test_x.py", status="UNTRACKED"),
+        _cf("PLAN.md", status="UNTRACKED"),
+    ], stems)
+    assert info["known_stems"] == ["architecture_context", "factory_review"]
+    assert info["pending_build"] == [
+        "repo_idea_miner/brand_new.py", "repo_idea_miner/new_name.py"]
+    assert info["deleted_module_stems"] == ["factory_review", "old_name"]
+    assert info["test_changes"] == ["tests/test_x.py"]
+    assert any("PLAN.md" in p for p in info["governance_problems"])
+
+
+def test_changed_selector_impact_block(monkeypatch):
+    """A7 — --changed --impact: UNKNOWN_PENDING_BUILD, deleted_modules,
+    governance → document_update_required, pending/deleted → atlas_rebuild_required."""
+    fake = [
+        _cf("repo_idea_miner/factory_product_evidence.py"),
+        _cf("repo_idea_miner/brand_new.py", status="UNTRACKED"),
+        _cf("repo_idea_miner/factory_review.py", status="DELETED"),
+        _cf("NOTES.md", status="UNTRACKED"),
+        _cf("tests/test_factory_review.py"),
+    ]
+    monkeypatch.setattr(ac, "collect_workspace_changes", lambda root: fake)
+    c = ac.build_context(REPO_ROOT, {"changed": True}, impact=True,
+                         live_fingerprint="not-the-committed-fp")
+    assert any("UNKNOWN_PENDING_BUILD" in w for w in c["warnings"])
+    ch = c["direct_static_impact"]["changed"]
+    assert ch["changed_files"] == fake
+    assert "UNKNOWN_PENDING_BUILD" in ch["changed_components"]
+    assert ch["pending_build_files"] == ["repo_idea_miner/brand_new.py"]
+    dm = next(d for d in ch["deleted_modules"] if d["module_stem"] == "factory_review")
+    assert dm["previous_component"] != "unknown"  # 아직 atlas에 있으므로 실제 component
+    assert dm["importers"] or dm["possible_broken_routes"]
+    assert ch["changed_tests"] == ["tests/test_factory_review.py"]
+    assert ch["structure_fingerprint_changed"] is True
+    assert ch["atlas_rebuild_required"] is True
+    assert ch["document_update_required"] is True
+    assert any("NOTES.md" in p for p in ch["workspace_governance_problems"])
+
+
+def test_changed_selector_clean_workspace_warns(monkeypatch):
+    monkeypatch.setattr(ac, "collect_workspace_changes", lambda root: [])
+    c = ac.build_context(REPO_ROOT, {"changed": True})
+    assert any("workspace clean" in w for w in c["warnings"])
 
 
 def test_cli_end_to_end(capsys):

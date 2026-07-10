@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -17,6 +18,86 @@ ATLAS_JSON = "atlas.json"
 def load_manifest(root: Path) -> dict:
     """architecture/manifest.toml — 사람 정의 의미의 정본."""
     return tomllib.loads((root / ATLAS_DIR / MANIFEST_NAME).read_text(encoding="utf-8"))
+
+
+# ------------------------------------------------- workspace change detection (A7 §7)
+# 변경 탐지 정본은 `git status --porcelain=v1 -z`다. git diff HEAD만 쓰면 untracked를 놓친다.
+
+_XY_STATUS = (
+    # (검사 함수, status) — 구체적인 상태 우선
+    (lambda x, y: "U" in (x + y) or (x, y) in (("A", "A"), ("D", "D")), "CONFLICTED"),
+    (lambda x, y: x == "R" or y == "R", "RENAMED"),
+    (lambda x, y: x == "C" or y == "C", "COPIED"),
+    (lambda x, y: "D" in (x + y), "DELETED"),
+    (lambda x, y: x == "A", "ADDED"),
+    (lambda x, y: "T" in (x + y), "TYPE_CHANGED"),
+    (lambda x, y: "M" in (x + y), "MODIFIED"),
+)
+
+
+def _classify_xy(x: str, y: str) -> str:
+    for pred, status in _XY_STATUS:
+        if pred(x, y):
+            return status
+    return "MODIFIED"
+
+
+def collect_workspace_changes(root: Path) -> list[dict]:
+    """`git status --porcelain=v1 -z`를 파싱해 ChangedFile 목록을 돌려준다.
+    NUL 구분이라 공백·한글·특수문자 path에 안전하고, ignored 파일은 아예 나오지 않는다.
+    rename/copy 항목은 `XY new\\0old` 두 토큰을 소비한다."""
+    try:
+        r = subprocess.run(["git", "status", "--porcelain=v1", "-z"], cwd=root,
+                           capture_output=True, timeout=30)
+    except OSError:
+        return []
+    if r.returncode != 0:
+        return []
+    tokens = r.stdout.decode("utf-8", errors="replace").split("\0")
+    out: list[dict] = []
+    i = 0
+    while i < len(tokens):
+        entry = tokens[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        x, y, path = entry[0], entry[1], entry[3:]
+        old_path = None
+        if entry[:2] == "??":
+            status = "UNTRACKED"
+        else:
+            status = _classify_xy(x, y)
+            if status in ("RENAMED", "COPIED") and i < len(tokens):
+                old_path = tokens[i]
+                i += 1
+        p = path.replace("\\", "/")
+        out.append({
+            "path": p,
+            "old_path": old_path.replace("\\", "/") if old_path else None,
+            "status": status,
+            "tracked": status != "UNTRACKED",
+            "is_python": p.endswith(".py"),
+            "is_test": p.startswith("tests/") and p.endswith(".py"),
+            "is_markdown": p.endswith(".md"),
+        })
+    return sorted(out, key=lambda d: (d["path"], d["status"]))
+
+
+_MD_GOVERNED_DIRS = ("repo_idea_miner/", "tests/", "docs/", ATLAS_DIR + "/")
+
+
+def workspace_markdown_problems(changes: list[dict]) -> list[str]:
+    """AI 문맥 오염 검사 (A7 §5.2) — untracked Markdown이 루트/소스 경로에 있으면 문제.
+    gitignored 경로(runs/ 등)는 porcelain에 아예 나오지 않으므로 자동 제외된다."""
+    problems = []
+    for c in changes:
+        if not (c["is_markdown"] and c["status"] == "UNTRACKED"):
+            continue
+        if "/" not in c["path"]:
+            problems.append(f"untracked root markdown: {c['path']} (AI 문맥 오염 — 삭제 필요)")
+        elif c["path"].startswith(_MD_GOVERNED_DIRS):
+            problems.append(f"untracked source markdown: {c['path']} (AI 문맥 오염 — 삭제 필요)")
+    return problems
 
 _ARTIFACT_RE = re.compile(r"^[\w./-]+\.(json|md|html|toml|jsonl)$")
 _RUN_KIND_RE = re.compile(r"^[A-Z][A-Z0-9_]*_RUN$")
