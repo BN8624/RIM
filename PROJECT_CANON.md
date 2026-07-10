@@ -29,8 +29,8 @@
   - `factory_review.py`(2C-0) / `factory_product_polish.py`(2C-1) / `factory_product_editor.py`(2C-2) / `factory_draft_execution.py`(2C-3) — 제품화 체인 (CANON-06).
   - `factory_autopilot_schemas/desks.py` + `factory_product_loop.py`(2D-0 judge) — Gemma autopilot (CANON-07).
   - `factory_product_capabilities.py`(capability profile+fresh probe) + `factory_lane_executors.py`(lane registry) + `factory_loop_executor.py`(closed loop) + `factory_product_acceptance.py`(acceptance 14검사) — 2D-1 (CANON-07).
-  - `factory_validate.py` — run type 감지+phase별 marker 검증 (CANON-10), `factory_labels.py` — 대시보드 한국어 라벨, `factory_summary.py` — summary 3종.
-  - `factory_run_layout.py` — run directory 해석의 정본: resolve_artifact_root/RunLayout + resolve_run_target(--run-dir/--run-id → run_dir, CLI 명령 공통). artifact root 선택과 run 대상 해석을 다른 모듈이 반복 구현하지 않는다.
+  - `factory_validate.py` — run kind별 artifact 검증+phase별 marker 검증 (CANON-10), `factory_labels.py` — 대시보드 한국어 라벨, `factory_summary.py` — summary 3종.
+  - `factory_run_layout.py` — run directory 해석의 정본: resolve_artifact_root/RunLayout + resolve_run_target(--run-dir/--run-id → run_dir, CLI 명령 공통) + run kind 감지(detect_run_kind, RUN_KIND_CONTINUATION/CORE/LEGACY/UNKNOWN — continuation→core→legacy 순). artifact root 선택·run 대상 해석·run kind 감지를 다른 모듈이 반복 구현하지 않는다.
   - `architecture_scanner.py` — AST 기반 구조 추출(baseline/Atlas 코어): module/LOC/import cycle/private cross-import/CLI/validator.
 - `redaction.py` — secret 마스킹 (AQ. prefix 포함).
 

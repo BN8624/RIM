@@ -4,12 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from repo_idea_miner.factory_run_layout import (
+    RUN_KIND_CONTINUATION,
+    RUN_KIND_CORE,
+    RUN_KIND_LEGACY,
+    RUN_KIND_UNKNOWN,
+    detect_run_kind,
+)
 from repo_idea_miner.factory_validate import (
-    RUN_TYPE_CONTINUATION,
-    RUN_TYPE_CORE,
-    RUN_TYPE_LEGACY,
-    RUN_TYPE_UNKNOWN,
-    detect_run_type,
     validate_continuation_run_dir,
     validate_product_run_dir,
 )
@@ -84,7 +86,7 @@ def _dump(run_dir, name, data):
 def test_detect_continuation_run(tmp_path):
     """§8-1: continuation_run_summary.json을 보고 CONTINUATION_RUN으로 감지."""
     run = _valid_continuation(tmp_path / "cont")
-    assert detect_run_type(run) == RUN_TYPE_CONTINUATION
+    assert detect_run_kind(run) == RUN_KIND_CONTINUATION
 
 
 def test_continuation_not_routed_to_legacy(tmp_path):
@@ -329,7 +331,7 @@ def test_core_run_still_detected(tmp_path):
     run = tmp_path / "core"
     run.mkdir()
     (run / "harness_summary.json").write_text("{}", encoding="utf-8")
-    assert detect_run_type(run) == RUN_TYPE_CORE
+    assert detect_run_kind(run) == RUN_KIND_CORE
 
 
 def test_legacy_run_still_detected(tmp_path):
@@ -338,11 +340,11 @@ def test_legacy_run_still_detected(tmp_path):
     final = run / "final_artifact"
     final.mkdir(parents=True)
     (final / "manifest.json").write_text("{}", encoding="utf-8")
-    assert detect_run_type(run) == RUN_TYPE_LEGACY
+    assert detect_run_kind(run) == RUN_KIND_LEGACY
 
 
 def test_unknown_run_detected(tmp_path):
     """빈 디렉터리는 UNKNOWN_RUN."""
     run = tmp_path / "empty"
     run.mkdir()
-    assert detect_run_type(run) == RUN_TYPE_UNKNOWN
+    assert detect_run_kind(run) == RUN_KIND_UNKNOWN

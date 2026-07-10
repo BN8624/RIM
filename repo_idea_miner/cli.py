@@ -991,18 +991,17 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "factory-validate":
+            from repo_idea_miner.factory_run_layout import RUN_KIND_CONTINUATION, detect_run_kind
             from repo_idea_miner.factory_validate import (
-                RUN_TYPE_CONTINUATION,
-                detect_run_type,
                 validate_continuation_run_dir,
                 validate_product_run_dir,
             )
 
             settings = load_settings()
             secrets = settings.secret_values()
-            run_type = detect_run_type(args.product_run_dir)
+            run_type = detect_run_kind(args.product_run_dir)
             # Phase 1.7 continuation run은 별도 run type으로 검증하고 상세를 표시한다 (§4.2)
-            if run_type == RUN_TYPE_CONTINUATION:
+            if run_type == RUN_KIND_CONTINUATION:
                 ok, problems, info = validate_continuation_run_dir(args.product_run_dir, secrets)
                 print("FACTORY VALIDATION")
                 print(f"- run type: {info['run_type']}")

@@ -6,6 +6,11 @@ import re
 from pathlib import Path
 
 from repo_idea_miner.factory_pipeline import FINAL_ARTIFACT_REQUIRED_FILES
+from repo_idea_miner.factory_run_layout import (
+    RUN_KIND_CONTINUATION,
+    detect_continuation_run,
+    detect_core_run,
+)
 from repo_idea_miner.factory_schemas import PRODUCT_VERDICT_LABELS
 from repo_idea_miner.redaction import scan_files_for_secrets
 
@@ -97,11 +102,6 @@ def validate_codex_export(export_dir: Path) -> list[str]:
 
 
 # ---------------------------------------------------------------- Phase 1.6 Core Harness run 검증 (§15)
-
-def detect_core_run(run_dir: Path) -> bool:
-    """Phase 1.6 Core-first Harness run 디렉터리인지 감지한다 (harness_summary.json 존재)."""
-    return (run_dir / "harness_summary.json").is_file()
-
 
 def _load_json(path: Path) -> dict | None:
     try:
@@ -253,11 +253,6 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
 
 
 # ---------------------------------------------------------------- Phase 1.7b Continuation run 검증 (§3~6)
-
-RUN_TYPE_CONTINUATION = "CONTINUATION_RUN"
-RUN_TYPE_CORE = "CORE_FACTORY_RUN"
-RUN_TYPE_LEGACY = "LEGACY_FACTORY_RUN"
-RUN_TYPE_UNKNOWN = "UNKNOWN_RUN"
 
 # continuation run이 실제로 생성하는 핵심 산출물(§2.1, §5.1). 실제 파이프라인이 만들지 않는
 # patch_diff_summary.json 등은 "있으면 검사"로 두어 정상 run을 FAIL시키지 않는다.
@@ -1197,31 +1192,6 @@ def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     return p
 
 
-def detect_continuation_run(run_dir: Path) -> bool:
-    """Phase 1.7 continuation run 디렉터리인지 감지한다 (§3 감지 기준)."""
-    if (run_dir / "continuation_run_summary.json").is_file():
-        return True
-    if (run_dir / "green_base_promotion.json").is_file():
-        return True
-    return (run_dir / "failure_classification.json").is_file() and (run_dir / "repair_plan.json").is_file()
-
-
-def detect_run_type(run_dir: str | Path) -> str:
-    """run directory를 보고 run type을 감지한다 (§3). continuation → core → legacy 순."""
-    run_dir = Path(run_dir)
-    if detect_continuation_run(run_dir):
-        return RUN_TYPE_CONTINUATION
-    if (detect_core_run(run_dir)
-            or (run_dir / "core_system_summary.json").is_file()
-            or (run_dir / "core_contract_summary.json").is_file()):
-        return RUN_TYPE_CORE
-    if (_final_artifact_dir(run_dir) is not None
-            or (run_dir / "manifest.json").is_file()
-            or (run_dir / "contract.json").is_file()):
-        return RUN_TYPE_LEGACY
-    return RUN_TYPE_UNKNOWN
-
-
 def _all_gates_pass(gates: dict) -> bool:
     return bool(gates) and all(gates.values())
 
@@ -1431,7 +1401,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     """
     run_dir = Path(run_dir)
     info = {
-        "run_type": RUN_TYPE_CONTINUATION, "base_run_id": None, "challenge_id": None,
+        "run_type": RUN_KIND_CONTINUATION, "base_run_id": None, "challenge_id": None,
         "verdict": None, "promoted_to_green_base": None, "failure_types": [],
         "patch_attempts": None, "gate_rerun": False,
         "lane": None, "inferred_lane": None, "patch_result": None,

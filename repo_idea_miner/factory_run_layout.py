@@ -1,8 +1,44 @@
-# run directory 레이아웃 해석의 정본 — artifact root 선택을 한 곳에서만 결정한다 (Structural Reset R1).
+# run directory 레이아웃 해석의 정본 — artifact root 선택과 run kind 감지를 한 곳에서만 결정한다 (Structural Reset R1·R2).
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+
+RUN_KIND_CONTINUATION = "CONTINUATION_RUN"
+RUN_KIND_CORE = "CORE_FACTORY_RUN"
+RUN_KIND_LEGACY = "LEGACY_FACTORY_RUN"
+RUN_KIND_UNKNOWN = "UNKNOWN_RUN"
+
+
+def detect_continuation_run(run_dir: str | Path) -> bool:
+    """Phase 1.7 continuation run 디렉터리인지 감지한다 (§3 감지 기준)."""
+    run_dir = Path(run_dir)
+    if (run_dir / "continuation_run_summary.json").is_file():
+        return True
+    if (run_dir / "green_base_promotion.json").is_file():
+        return True
+    return (run_dir / "failure_classification.json").is_file() and (run_dir / "repair_plan.json").is_file()
+
+
+def detect_core_run(run_dir: str | Path) -> bool:
+    """Phase 1.6 Core-first Harness run 디렉터리인지 감지한다 (harness_summary.json 존재)."""
+    return (Path(run_dir) / "harness_summary.json").is_file()
+
+
+def detect_run_kind(run_dir: str | Path) -> str:
+    """run directory를 보고 run kind를 감지한다. continuation → core → legacy 순."""
+    run_dir = Path(run_dir)
+    if detect_continuation_run(run_dir):
+        return RUN_KIND_CONTINUATION
+    if (detect_core_run(run_dir)
+            or (run_dir / "core_system_summary.json").is_file()
+            or (run_dir / "core_contract_summary.json").is_file()):
+        return RUN_KIND_CORE
+    if ((run_dir / "final_artifact").is_dir()
+            or (run_dir / "manifest.json").is_file()
+            or (run_dir / "contract.json").is_file()):
+        return RUN_KIND_LEGACY
+    return RUN_KIND_UNKNOWN
 
 
 def resolve_artifact_root(run_dir: str | Path) -> Path:
