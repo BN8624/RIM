@@ -217,6 +217,7 @@ INVARIANTS:
 - INV-BASE-RUN-IMMUTABLE
 - INV-FRESH-VERIFICATION
 - INV-HARD-RUNG-DETERMINISTIC
+- INV-PROTECTED-HASH
 
 CONTRACTS:
 - product_evidence
@@ -406,6 +407,14 @@ NOTES:
   update CANON on semantic change, update REENTRY on state change
 - document canon: current facts=atlas.json / meaning=PROJECT_CANON / routing=AI_INDEX /
   state=REENTRY / bootstrap=README / history=git log
+- workspace change canon: `git status --porcelain -uall` output is the single source —
+  untracked files participate in `--changed` (untracked production py = UNKNOWN_PENDING_BUILD)
+- module/symbol canonical ID is the full import path; short names resolve only on a
+  unique match, ambiguity is a deterministic error (AMBIGUOUS_*_SELECTOR, CLI exit 1)
+- `tests_to_run`/verification commands carry real repo-relative test paths (atlas
+  `test_paths`), never guessed `tests/<stem>.py`
+- blind fixtures (`tests/fixtures/ai_tasks/blind_*`) come from independent-AI validation
+  ground truth — they regression-pin context recall, not implementation details
 
 QUERY:
 - architecture-context --canon CANON-12

@@ -8052,13 +8052,16 @@
   },
   {
    "applies_to": [
-    "repo_idea_miner.factory_product_evidence.compute_protected_hashes"
+    "repo_idea_miner.factory_product_evidence.compute_protected_hashes",
+    "repo_idea_miner.factory_product_loop.compute_loop_protected_hashes",
+    "repo_idea_miner.factory_lane_executors.execute_lane"
    ],
    "canon_id": "CANON-05",
    "invariant_id": "INV-PROTECTED-HASH",
    "tests": [
     "test_factory_product_polish_2c1",
-    "test_factory_spec_repair_2b1"
+    "test_factory_spec_repair_2b1",
+    "test_factory_phase2d1_loop"
    ]
   },
   {
@@ -8248,7 +8251,7 @@
      ]
     }
    ],
-   "loc": 470,
+   "loc": 479,
    "module": "repo_idea_miner.architecture_context",
    "path": "repo_idea_miner/architecture_context.py",
    "private_symbols": [
@@ -14410,9 +14413,9 @@
   }
  ],
  "repository": {
-  "head": "0b5cc83eb45d774f9df9c088d58f43feaa634117",
+  "head": "f6cc384141f3c6d123dec121be62677c0491fcd0",
   "structural_diff": true,
-  "structural_fingerprint": "915eaae7f560ed018874601561b647c3faa80736e1b4d9d4cfe0b6cf49d0225d",
+  "structural_fingerprint": "f1c997a01022ce84a623fecaaa704f19500dcf6bb9249f9981b505451976fea1",
   "structure_snapshot": "845ec77d9279f203662b1daa9486bea74aa7e982344d2f924f18da229ee9906d"
  },
  "routes": [
@@ -14556,7 +14559,9 @@
    "route_id": "factory_closed_loop",
    "steps": [
     "repo_idea_miner.cli_handlers._cmd_factory_product_loop",
-    "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
+    "repo_idea_miner.factory_loop_executor.run_closed_product_loop",
+    "repo_idea_miner.factory_lane_executors.execute_lane",
+    "repo_idea_miner.factory_product_loop.compute_loop_protected_hashes"
    ]
   },
   {
@@ -14567,6 +14572,7 @@
    "route_id": "factory_validate",
    "steps": [
     "repo_idea_miner.cli_handlers._cmd_factory_validate",
+    "repo_idea_miner.factory_run_layout.detect_run_kind",
     "repo_idea_miner.factory_validate.validate_product_run_dir",
     "repo_idea_miner.factory_validate.validate_continuation_run_dir"
    ]
@@ -14660,7 +14666,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 323,
+   "end_line": 332,
    "kind": "function",
    "path": "repo_idea_miner/architecture_context.py",
    "related_tests": [
@@ -15635,6 +15641,28 @@
   },
   {
    "canon_ids": [
+    "CANON-05",
+    "CANON-07",
+    "CANON-10",
+    "CANON-11"
+   ],
+   "component_id": "autopilot",
+   "end_line": 255,
+   "kind": "function",
+   "path": "repo_idea_miner/factory_lane_executors.py",
+   "related_tests": [
+    "test_factory_phase2d1_loop"
+   ],
+   "roles": [
+    "invariant_target",
+    "orchestrator"
+   ],
+   "signature": "def execute_lane(lane: str, ctx: dict) -> dict",
+   "start_line": 235,
+   "symbol_id": "repo_idea_miner.factory_lane_executors.execute_lane"
+  },
+  {
+   "canon_ids": [
     "CANON-07",
     "CANON-10",
     "CANON-11"
@@ -15772,6 +15800,28 @@
   },
   {
    "canon_ids": [
+    "CANON-05",
+    "CANON-07",
+    "CANON-10",
+    "CANON-11"
+   ],
+   "component_id": "autopilot",
+   "end_line": 919,
+   "kind": "function",
+   "path": "repo_idea_miner/factory_product_loop.py",
+   "related_tests": [
+    "test_factory_product_loop_2d0"
+   ],
+   "roles": [
+    "invariant_target",
+    "orchestrator"
+   ],
+   "signature": "def compute_loop_protected_hashes(run_dir: Path) -> dict[str, str]",
+   "start_line": 900,
+   "symbol_id": "repo_idea_miner.factory_product_loop.compute_loop_protected_hashes"
+  },
+  {
+   "canon_ids": [
     "CANON-06",
     "CANON-07"
    ],
@@ -15869,6 +15919,26 @@
    "signature": "def run_review_package(run_dir: str | Path | None=None, run_id: int | None=None, db_conn=None, timeout: float=60.0) -> dict",
    "start_line": 670,
    "symbol_id": "repo_idea_miner.factory_review.run_review_package"
+  },
+  {
+   "canon_ids": [
+    "CANON-10"
+   ],
+   "component_id": "storage",
+   "end_line": 41,
+   "kind": "function",
+   "path": "repo_idea_miner/factory_run_layout.py",
+   "related_tests": [
+    "test_factory_continue_validate_17b",
+    "test_factory_run_layout",
+    "test_factory_validate"
+   ],
+   "roles": [
+    "orchestrator"
+   ],
+   "signature": "def detect_run_kind(run_dir: str | Path) -> str",
+   "start_line": 28,
+   "symbol_id": "repo_idea_miner.factory_run_layout.detect_run_kind"
   },
   {
    "canon_ids": [

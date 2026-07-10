@@ -247,6 +247,8 @@ cli = "factory-product-loop"
 steps = [
   "repo_idea_miner.cli_handlers._cmd_factory_product_loop",
   "repo_idea_miner.factory_loop_executor.run_closed_product_loop",
+  "repo_idea_miner.factory_lane_executors.execute_lane",
+  "repo_idea_miner.factory_product_loop.compute_loop_protected_hashes",
 ]
 
 [[routes]]
@@ -255,6 +257,7 @@ canon_ids = ["CANON-10"]
 cli = "factory-validate"
 steps = [
   "repo_idea_miner.cli_handlers._cmd_factory_validate",
+  "repo_idea_miner.factory_run_layout.detect_run_kind",
   "repo_idea_miner.factory_validate.validate_product_run_dir",
   "repo_idea_miner.factory_validate.validate_continuation_run_dir",
 ]
@@ -443,8 +446,15 @@ tests = ["test_factory_core_schemas"]
 [[invariants]]
 id = "INV-PROTECTED-HASH"
 canon_id = "CANON-05"
-applies_to = ["repo_idea_miner.factory_product_evidence.compute_protected_hashes"]
-tests = ["test_factory_product_polish_2c1", "test_factory_spec_repair_2b1"]
+applies_to = [
+  "repo_idea_miner.factory_product_evidence.compute_protected_hashes",
+  "repo_idea_miner.factory_product_loop.compute_loop_protected_hashes",
+  "repo_idea_miner.factory_lane_executors.execute_lane",
+]
+tests = [
+  "test_factory_product_polish_2c1", "test_factory_spec_repair_2b1",
+  "test_factory_phase2d1_loop",
+]
 
 [[invariants]]
 id = "INV-MOCK-FALLBACK-NOT-PRODUCT"

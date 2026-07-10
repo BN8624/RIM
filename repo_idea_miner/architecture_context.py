@@ -261,15 +261,24 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
     secondary: list[str] = list(overflow)
     if depth >= 1:
         primary_stems = {Path(p).stem for p in ordered_paths[:max_primary]}
-        neighbor_mods: set[str] = set()
+        # 절단 우선순위: (1) primary가 직접 import하는 모듈 (2) primary를 import하는 모듈
+        # (3) dispatch 허브 — 알파벳 절단으로 직접 의존이 탈락하지 않게 한다. tier 내부는 정렬 유지.
+        tier_imports: set[str] = set()
+        tier_importers: set[str] = set()
+        tier_hubs: set[str] = set()
         for stem in sorted(primary_stems):
             m = mod_by_stem.get(stem)
             if not m or _is_hub(stem):  # dispatch 허브의 이웃(=전 모듈)은 확장하지 않는다
                 continue
-            neighbor_mods.update(i["from"] for i in m["imports"])
-            neighbor_mods.update(nb for nb in m["imported_by"]
-                                 if not _is_hub(nb.split(".")[-1]))
-        for nm in sorted(neighbor_mods):
+            tier_imports.update(i["from"] for i in m["imports"])
+            for nb in m["imported_by"]:
+                if _is_hub(nb.split(".")[-1]):
+                    tier_hubs.add(nb)
+                else:
+                    tier_importers.add(nb)
+        tier_importers -= tier_imports
+        tier_hubs -= tier_imports | tier_importers
+        for nm in sorted(tier_imports) + sorted(tier_importers) + sorted(tier_hubs):
             p = mod_by_stem.get(nm.split(".")[-1], {}).get("path")
             if p and p not in ordered_paths[:max_primary] and p not in secondary:
                 secondary.append(p)
