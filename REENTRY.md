@@ -1,13 +1,14 @@
 # REENTRY
 
 HEAD:
-- commit: 6b7599f (+A2 doc reset commit)
+- commit: b41c485
 - branch: main
 - clean: true (untracked order docs only — never commit them)
 
 SYSTEM_STATUS:
-- tests: full suite PASS at d84c052 (1000+); A1 targeted 23 PASS
-- architecture_check: PASS
+- tests: full suite PASS at d84c052 (1001); after A1/A2 targeted 23 PASS,
+  full suite NOT yet verified — run `python -m pytest -q` first in the next session
+- architecture_check: PASS at b41c485
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
@@ -18,9 +19,10 @@ RECENT_SEMANTIC_CHANGES:
 
 OPEN_BLOCKERS:
 - id: ai_only_atlas_A3_A6
-  state: pending
-  evidence: runs/_ai_only_atlas/state.json (plan + baseline)
-  next_action: A3 Atlas schema v2 → A4 architecture-context CLI → A5 check 22항목+8 fixtures → A6 regression
+  state: pending (A0~A2 done: 6b7599f, b41c485)
+  evidence: runs/_ai_only_atlas/state.json (detailed per-stage plan) + order doc at repo root
+  next_action: verify full pytest → A3 Atlas schema v2 → A4 architecture-context CLI
+  → A5 check 22 items + 8 task fixtures → A6 regression + final report
 - id: hold_54
   state: waiting_human
   evidence: runs/factory_20260710_021635/review/phase2d1/loop_20260710_141947/hold_for_human_packet.json
