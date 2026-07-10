@@ -13,3 +13,4 @@
 - **CANON-09 대시보드** — 검수함, 한국어 라벨, 포트/Tailscale, 브리지 서버. 키워드: dashboard, 검수, 8787, 8799.
 - **CANON-10 검증 & 테스트** — factory-validate 라우팅, pytest, 알려진 flaky, tmp 복사 재검증 규칙. 키워드: validate, pytest, flaky, E2E.
 - **CANON-11 Secret / 불변 규칙** — key 취급, 무변경 보존 대상, §7/§8/§13 원칙. 키워드: secret, .env, 금지사항.
+- **CANON-12 Architecture Atlas & Structural Rules** — atlas 산출물/CLI/지문/검사 20항목. 키워드: atlas, architecture-build, architecture-check, fingerprint, manifest.

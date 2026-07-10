@@ -804,6 +804,59 @@ def _cmd_factory_validate(args) -> int:
     return 1
 
 
+# ---------------------------------------------------------------- Architecture Atlas
+
+
+def _cmd_architecture_build(args) -> int:
+    from repo_idea_miner.architecture_atlas import write_atlas
+
+    atlas = write_atlas(Path.cwd())
+    h = atlas["health"]
+    print("ARCHITECTURE BUILD")
+    print(f"- commit: {atlas['commit']}")
+    print(f"- fingerprint: {atlas['fingerprint']}")
+    print(f"- modules: {h['module_count']} / components: {len(atlas['components'])} "
+          f"/ cli: {len(atlas['cli'])}")
+    print("- 생성: architecture/atlas.json, atlas.schema.json, index.html")
+    return 0
+
+
+def _cmd_architecture_check(args) -> int:
+    from repo_idea_miner.architecture_atlas import run_architecture_check
+
+    settings = load_settings()
+    problems = run_architecture_check(Path.cwd(), settings.secret_values())
+    if not problems:
+        print("ARCHITECTURE CHECK PASS")
+        return 0
+    for p in problems:
+        print(f"FAIL: {p}")
+    return 1
+
+
+def _cmd_architecture_summary(args) -> int:
+    from repo_idea_miner.architecture_atlas import atlas_summary
+
+    s = atlas_summary(Path.cwd())
+    print("ARCHITECTURE SUMMARY")
+    for k, v in s.items():
+        print(f"- {k}: {v}")
+    return 0
+
+
+def _cmd_architecture_serve(args) -> int:
+    from repo_idea_miner.architecture_atlas import ATLAS_DIR, ATLAS_HTML
+    from repo_idea_miner.serve import serve
+
+    target = Path.cwd() / ATLAS_DIR
+    if not (target / ATLAS_HTML).is_file():
+        print("오류: architecture/index.html이 없습니다. architecture-build를 먼저 실행하세요.",
+              file=sys.stderr)
+        return 1
+    serve(target, host=args.host, port=args.port)
+    return 0
+
+
 # command → handler 대응. cli.py의 parser command 집합과 1:1이어야 한다 (회귀 테스트가 고정).
 HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
     "run": _cmd_run,
@@ -832,6 +885,10 @@ HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
     "factory-continue-queue": _cmd_factory_continue_queue,
     "factory-status": _cmd_factory_status,
     "factory-validate": _cmd_factory_validate,
+    "architecture-build": _cmd_architecture_build,
+    "architecture-check": _cmd_architecture_check,
+    "architecture-summary": _cmd_architecture_summary,
+    "architecture-serve": _cmd_architecture_serve,
 }
 
 

@@ -168,18 +168,46 @@ def extract_cli_commands(root: Path) -> list[str]:
     return sorted(out)
 
 
-def extract_validator_ids(root: Path) -> dict:
-    """factory_validate의 check/detect/validate 함수명과 run kind 리터럴을 추출한다."""
-    path = root / PACKAGE / "factory_validate.py"
+def extract_cli_details(root: Path) -> list[dict]:
+    """cli.py AST에서 command별 option 목록을 추출한다 (Atlas §17.5 CLI)."""
+    path = root / PACKAGE / "cli.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    checks, kinds = set(), set()
+    var_to_cmd: dict[str, str] = {}
+    options: dict[str, set[str]] = {}
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and \
-                node.name.startswith(("_check_", "detect_", "validate_")):
-            checks.add(node.name)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str) \
-                and _RUN_KIND_RE.match(node.value):
-            kinds.add(node.value)
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name) \
+                and isinstance(node.value, ast.Call) \
+                and isinstance(node.value.func, ast.Attribute) \
+                and node.value.func.attr == "add_parser" \
+                and node.value.args and isinstance(node.value.args[0], ast.Constant):
+            cmd = str(node.value.args[0].value)
+            var_to_cmd[node.targets[0].id] = cmd
+            options.setdefault(cmd, set())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == "add_argument" \
+                and isinstance(node.func.value, ast.Name) \
+                and node.func.value.id in var_to_cmd \
+                and node.args and isinstance(node.args[0], ast.Constant):
+            options[var_to_cmd[node.func.value.id]].add(str(node.args[0].value))
+    return [{"command": c, "options": sorted(opts)} for c, opts in sorted(options.items())]
+
+
+def extract_validator_ids(root: Path) -> dict:
+    """factory_validate의 check/detect/validate 함수명과 run kind 리터럴을 추출한다.
+    run kind 정본 리터럴은 R2 이후 factory_run_layout에 있으므로 둘 다 스캔한다."""
+    checks, kinds = set(), set()
+    for name in ("factory_validate.py", "factory_run_layout.py"):
+        tree = ast.parse((root / PACKAGE / name).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if name == "factory_validate.py" \
+                    and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                    and node.name.startswith(("_check_", "detect_", "validate_")):
+                checks.add(node.name)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                    and _RUN_KIND_RE.match(node.value):
+                kinds.add(node.value)
     return {"checks": sorted(checks), "run_kinds": sorted(kinds)}
 
 

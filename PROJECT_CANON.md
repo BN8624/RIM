@@ -117,3 +117,11 @@ viewer/replay 탐색·field evidence·protected hash·gate context는 전 단계
 - `.env`의 `GOOGLE_API_KEY_1~11`(AQ. prefix)과 `GITHUB_TOKEN`은 **절대 출력/커밋/로그 금지** — redaction.py가 마스킹, 산출물에는 key index만 기록.
 - Miner core(pipeline/search_pipeline/schemas)는 무변경 보존. 이 보존 때문에 miner 계열 private cross-import 3건(challenge_search_pipeline·viewer←search_pipeline `_safe_name`, search_pipeline←pipeline `_key_pool_report`)은 의도적 예외로 유지한다 — 공개화(보존 파일 수정)·복제(중복 구현)·wrapper(은닉) 전부 금지 규칙과 충돌하므로 그대로 두고 Atlas health에서 allowlist 처리한다.
 - spec repair §8 보호를 우회하는 자동화 금지. 원본 base run 직접 수정 금지(§13). 기록된 report보다 fresh 관측 우선(§7).
+
+## CANON-12 Architecture Atlas & Structural Rules
+
+- 산출물: `architecture/manifest.toml`(사람 정의 — component/canon_id/금지 의존/private allowlist/artifact producer/pipeline 노드) + 자동 생성 `atlas.json`/`atlas.schema.json`/`index.html`(직접 수정 금지).
+- CLI: `architecture-build`(결정론 — 같은 HEAD·manifest면 byte-identical, 생성시각/랜덤 없음), `architecture-check`(§17.11 구조·문서 거버넌스 검사, 실패 시 exit 1), `architecture-summary`, `architecture-serve --host 127.0.0.1 --port 8788`(serve.py 재사용, 읽기 전용).
+- 구조 지문(fingerprint): module 목록/공개 심볼/import edge/CLI/validator/artifact/test mapping/manifest의 sha256 — 함수 내부만 바뀌면 stale 아님. committed atlas.json 지문과 현재 지문이 다르면 check가 stale로 FAIL.
+- 코어: `architecture_scanner.py`(AST 사실 추출) + `architecture_atlas.py`(빌더/검사) + `architecture_render.py`(단일 self-contained HTML — 모바일 우선 360px, 다크모드, 외부 CDN/URL 0).
+- 검사 요지: root md 5개(git tracked 기준), AI_INDEX↔CANON ID 정합, manifest 정합(canon_id/모듈 실재), 금지 의존, cycle 0, private import allowlist(miner 3건 — CANON-11) 밖 0, dashboard summary producer 선언 정합, presentation의 SQL/JSON 파싱 금지, stale Atlas, secret/외부 URL 0, README CLI 실재, §17.12 구조 변경 커밋에 PROJECT_CANON 동반.

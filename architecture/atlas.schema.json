@@ -1,0 +1,76 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "properties": {
+  "artifacts": {
+   "type": "object"
+  },
+  "cli": {
+   "items": {
+    "required": [
+     "command",
+     "handler",
+     "options"
+    ],
+    "type": "object"
+   },
+   "type": "array"
+  },
+  "commit": {
+   "type": "string"
+  },
+  "components": {
+   "type": "object"
+  },
+  "documents": {
+   "type": "object"
+  },
+  "fingerprint": {
+   "type": "string"
+  },
+  "health": {
+   "type": "object"
+  },
+  "modules": {
+   "items": {
+    "required": [
+     "module",
+     "path",
+     "loc",
+     "component",
+     "public_symbols",
+     "imports",
+     "imported_by"
+    ],
+    "type": "object"
+   },
+   "type": "array"
+  },
+  "pipeline": {
+   "type": "array"
+  },
+  "schema_version": {
+   "type": "integer"
+  },
+  "tests": {
+   "type": "object"
+  },
+  "validators": {
+   "type": "object"
+  }
+ },
+ "required": [
+  "schema_version",
+  "commit",
+  "fingerprint",
+  "components",
+  "modules",
+  "cli",
+  "validators",
+  "tests",
+  "pipeline",
+  "health",
+  "documents"
+ ],
+ "title": "RIM Architecture Atlas",
+ "type": "object"
+}

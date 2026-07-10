@@ -266,6 +266,19 @@ pytest
 
 URL 파싱, preflight, collector 필터, issue sampler/signal tag, bike-shedding, dependency origin, JSON validation/repair, length truncation, score ceiling, renderer, secret redaction, key pool round-robin/failover, retry-after/backoff, timeout 설정을 모두 커버합니다.
 
+## Architecture Atlas
+
+현재 저장소 구조를 자동 추출해 정적 HTML로 보여줍니다.
+
+```bash
+python -m repo_idea_miner architecture-build     # architecture/atlas.json + index.html 생성
+python -m repo_idea_miner architecture-check     # 구조·문서 거버넌스 검사 (실패 시 exit 1)
+python -m repo_idea_miner architecture-summary   # 핵심 지표 요약
+python -m repo_idea_miner architecture-serve --port 8788   # 읽기 전용 열람 (기본 127.0.0.1)
+```
+
+`architecture/index.html`은 브라우저로 바로 열어도 됩니다(외부 네트워크 불필요, 모바일 지원).
+
 ## 아키텍처 요약
 
 ```text

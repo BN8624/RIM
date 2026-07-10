@@ -219,6 +219,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     fv_p = sub.add_parser("factory-validate", help="product run 디렉터리의 Final Artifact 검증")
     fv_p.add_argument("product_run_dir")
+
+    # ---------------------------------------------------------- Architecture Atlas
+    sub.add_parser("architecture-build", help="architecture/atlas.json + index.html 생성 (결정론)")
+
+    sub.add_parser("architecture-check", help="구조·문서 거버넌스 검사 (§17.11)")
+
+    sub.add_parser("architecture-summary", help="구조 핵심 지표 요약")
+
+    asv_p = sub.add_parser("architecture-serve", help="architecture/를 읽기 전용으로 serve")
+    asv_p.add_argument("--host", default="127.0.0.1", help="기본 127.0.0.1")
+    asv_p.add_argument("--port", type=int, default=8788)
     return parser
 
 

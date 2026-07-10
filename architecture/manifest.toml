@@ -1,0 +1,176 @@
+# RIM Architecture Atlas manifest — scanner가 알 수 없는 사람 정의 의미만 기록한다 (§17.4).
+schema_version = 1
+
+[components.miner]
+label = "Idea Miner"
+status = "canonical"
+canon_id = "CANON-01"
+modules = [
+  "pipeline", "search_pipeline", "schemas", "github_api", "workers", "evidence",
+  "sampler", "signals", "truncation", "url_parser", "renderer", "viewer", "serve",
+  "validate_run", "preflight", "ceiling",
+]
+
+[components.challenge]
+label = "Challenge Mode"
+status = "canonical"
+canon_id = "CANON-02"
+modules = [
+  "challenge_pipeline", "challenge_search_pipeline", "challenge_daemon",
+  "challenge_prompts", "challenge_schemas", "challenge_validate",
+  "challenge_key_scheduler", "challenge_renderer",
+]
+
+[components.storage]
+label = "Storage (DB & Run Layout)"
+status = "canonical"
+canon_id = "CANON-08"
+modules = ["challenge_db", "factory_db", "factory_run_layout"]
+
+[components.product_build]
+label = "Product Build (Core Harness)"
+status = "canonical"
+canon_id = "CANON-04"
+modules = [
+  "factory_pipeline", "factory_core_pipeline", "factory_core_gates",
+  "factory_core_prompts", "factory_core_schemas", "factory_runner", "factory_desks",
+  "factory_prompts", "factory_schemas", "factory_workspace", "factory_sandbox",
+  "factory_gates", "factory_summary", "factory_labels",
+]
+
+[components.repair]
+label = "Continuation & Repair"
+status = "canonical"
+canon_id = "CANON-05"
+modules = [
+  "factory_continue", "factory_queue", "factory_spec_repair",
+  "factory_anti_hardcode", "factory_frozen",
+]
+
+[components.productization]
+label = "Productization Chain (2C)"
+status = "canonical"
+canon_id = "CANON-06"
+modules = [
+  "factory_review", "factory_product_polish", "factory_product_editor",
+  "factory_draft_execution", "factory_product_evidence",
+]
+
+[components.autopilot]
+label = "Autopilot & Closed Loop (2D)"
+status = "canonical"
+canon_id = "CANON-07"
+modules = [
+  "factory_product_loop", "factory_loop_executor", "factory_lane_executors",
+  "factory_product_capabilities", "factory_product_acceptance",
+  "factory_autopilot_schemas", "factory_autopilot_desks",
+]
+
+[components.validation]
+label = "Validation"
+status = "canonical"
+canon_id = "CANON-10"
+modules = ["factory_validate"]
+
+[components.cli]
+label = "CLI"
+status = "canonical"
+canon_id = "CANON-03"
+modules = ["cli", "cli_handlers", "__main__"]
+
+[components.dashboard]
+label = "Dashboard"
+status = "canonical"
+canon_id = "CANON-09"
+modules = ["challenge_dashboard", "challenge_dashboard_data"]
+
+[components.support]
+label = "Support & Security"
+status = "canonical"
+canon_id = "CANON-11"
+modules = ["config", "errors", "redaction", "llm_client", "key_pool", "jsonutil", "__init__"]
+
+[components.atlas]
+label = "Architecture Atlas"
+status = "canonical"
+canon_id = "CANON-12"
+modules = ["architecture_scanner", "architecture_atlas", "architecture_render"]
+
+[rules.dependencies]
+# component 수준 금지 의존 (모듈 import edge를 component로 접어 검사)
+forbid = [
+  "validation -> dashboard",
+  "productization -> dashboard",
+  "autopilot -> dashboard",
+  "repair -> dashboard",
+  "product_build -> dashboard",
+  "miner -> product_build",
+  "miner -> repair",
+  "miner -> productization",
+  "miner -> autopilot",
+  "storage -> dashboard",
+]
+
+# miner 3건 private cross-import는 §5.1 무변경 보존의 의도적 예외 (CANON-11)
+[rules.private_import_allowlist]
+entries = [
+  "repo_idea_miner.challenge_search_pipeline <- repo_idea_miner.search_pipeline:_safe_name",
+  "repo_idea_miner.search_pipeline <- repo_idea_miner.pipeline:_key_pool_report",
+  "repo_idea_miner.viewer <- repo_idea_miner.search_pipeline:_safe_name",
+]
+
+# dashboard summary artifact의 producer 선언 (§17.5 Artifact — writer는 정적으로 판별 불가하므로 사람 정의).
+# check는 (1) producer 실재 (2) producer가 파일명을 참조 (3) 미선언 summary 부재를 검증한다.
+[artifact_producers]
+"dashboard_summary.json" = ["factory_core_pipeline"]
+"phase17_dashboard_summary.json" = ["factory_continue"]
+"phase2a_dashboard_summary.json" = ["factory_continue", "factory_queue"]
+"phase2b1_dashboard_summary.json" = ["factory_spec_repair"]
+"phase2b1b_dashboard_summary.json" = ["factory_anti_hardcode"]
+"phase2c0_dashboard_summary.json" = ["factory_review"]
+"phase2c1_dashboard_summary.json" = ["factory_product_polish"]
+"phase2c2_dashboard_summary.json" = ["factory_product_editor"]
+"phase2c3_dashboard_summary.json" = ["factory_draft_execution"]
+"phase2d1_dashboard_summary.json" = ["factory_loop_executor"]
+"product_loop_dashboard_summary.json" = ["factory_product_loop"]
+
+# Canonical Pipeline (§17.7 B) — 각 노드를 실제 module에 연결
+[[pipeline]]
+node = "Challenge"
+modules = ["challenge_pipeline"]
+
+[[pipeline]]
+node = "Build"
+modules = ["factory_core_pipeline"]
+
+[[pipeline]]
+node = "Validate"
+modules = ["factory_core_gates", "factory_validate"]
+
+[[pipeline]]
+node = "Probe"
+modules = ["factory_product_capabilities"]
+
+[[pipeline]]
+node = "Judge"
+modules = ["factory_product_loop"]
+
+[[pipeline]]
+node = "Lane"
+modules = ["factory_lane_executors"]
+
+[[pipeline]]
+node = "Child Repair"
+modules = ["factory_continue", "factory_spec_repair", "factory_anti_hardcode"]
+
+[[pipeline]]
+node = "Progress & Promote"
+modules = ["factory_loop_executor"]
+
+[[pipeline]]
+node = "Storage"
+modules = ["factory_db"]
+
+[[pipeline]]
+node = "Presentation"
+modules = ["challenge_dashboard"]

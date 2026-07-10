@@ -21,7 +21,7 @@ v1.0 (RIM_FANAL.md §35/§37 기준) 2026-07-08 완료.
 - [x] 샘플 산출물 (`samples/` — idea_card, run_report, top_ideas, search_report, evidence_packet, worker JSON, llm_calls.jsonl)
 - [x] google_genai_gemma provider / key pool / rotation / retry / failover
 - [x] secret redaction + 테스트
-- [x] 구현/미구현 범위 명시 (SCOPE.md)
+- [x] 구현/미구현 범위 명시 (SCOPE.md — 납품 후 삭제, git 이력에 보존)
 
 ## 남은 작업
 - (없음)
