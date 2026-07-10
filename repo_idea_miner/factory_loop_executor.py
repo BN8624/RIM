@@ -109,7 +109,8 @@ def _judge(run_dir: Path, probe_report: dict | None, executor, gemma_mode: str,
     quality = extract_user_facing_quality(evidence)
     hard = apply_hard_blockers(evidence, quality)
     prompts: dict = {}
-    desks = _run_desks(executor, evidence, quality, hard, gemma_mode, use_llm, prompts)
+    desks = _run_desks(executor, evidence, quality, hard, gemma_mode, use_llm, prompts,
+                       include_order=False)
     return {"evidence": evidence, "quality": quality, "hard": hard, "desks": desks,
             "prompts": prompts}
 

@@ -940,8 +940,12 @@ def build_hardcode_guard(run_dir: Path, prompts: dict[str, str]) -> dict:
 # ---------------------------------------------------------------- Loop 오케스트레이터 (§21)
 
 def _run_desks(executor, evidence, quality, hard, gemma_mode: str, use_llm: bool,
-               prompts_out: dict) -> dict:
-    """sequential 또는 unified 모드로 desk를 실행한다. 검증 기준은 동일하다 (§20)."""
+               prompts_out: dict, include_order: bool = True) -> dict:
+    """sequential 또는 unified 모드로 desk를 실행한다. 검증 기준은 동일하다 (§20).
+
+    include_order=False면 judge/gap/lane까지만 실행한다 — Phase 2D-1 closed loop는
+    auto_order/blueprint 대신 lane executor가 직접 실행하므로 두 desk가 필요 없다.
+    """
     out = {"status": "FAIL", "failure_type": None, "problems": [],
            "stage_label": None, "gap": None, "lane": None, "slots": None, "blueprint": None,
            "schema_repair_reports": [], "selected_mode": gemma_mode}
@@ -1005,6 +1009,10 @@ def _run_desks(executor, evidence, quality, hard, gemma_mode: str, use_llm: bool
         out.update(failure_type=res["failure_type"], problems=res["problems"])
         return out
     out["lane"] = res["raw"]
+
+    if not include_order:
+        out["status"] = "PASS"  # closed loop(2D-1)는 order/blueprint desk를 쓰지 않는다
+        return out
 
     template = LANE_TEMPLATES.get(out["lane"]["recommended_next_lane"]) or {}
     prompt = build_order_prompt(evidence, out["gap"], out["lane"], template)
