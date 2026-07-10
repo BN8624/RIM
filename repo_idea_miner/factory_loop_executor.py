@@ -31,7 +31,7 @@ from repo_idea_miner.factory_product_capabilities import (
     run_fresh_probe,
 )
 from repo_idea_miner.factory_product_loop import (
-    _run_desks,
+    run_judgment_desks,
     apply_hard_blockers,
     compare_protected_hashes,
     compute_loop_protected_hashes,
@@ -110,7 +110,7 @@ def _judge(run_dir: Path, probe_report: dict | None, executor, gemma_mode: str,
     quality = extract_user_facing_quality(evidence)
     hard = apply_hard_blockers(evidence, quality)
     prompts: dict = {}
-    desks = _run_desks(executor, evidence, quality, hard, gemma_mode, use_llm, prompts,
+    desks = run_judgment_desks(executor, evidence, quality, hard, gemma_mode, use_llm, prompts,
                        include_order=False)
     return {"evidence": evidence, "quality": quality, "hard": hard, "desks": desks,
             "prompts": prompts}

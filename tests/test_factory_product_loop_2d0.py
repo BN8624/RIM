@@ -41,7 +41,7 @@ from repo_idea_miner.factory_autopilot_schemas import (
 from repo_idea_miner.factory_desks import DeskError
 from repo_idea_miner.factory_product_loop import (
     REQUIRED_OUTPUTS,
-    _run_desks,
+    run_judgment_desks,
     apply_hard_blockers,
     build_auto_order_json,
     compute_loop_protected_hashes,
@@ -489,7 +489,7 @@ def test_evidence_ladder_respects_soft_rung_judgment(tmp_path):
     assert gap is live_gap
 
 
-def test_run_desks_overrides_live_gap_and_skips_lane_desk(tmp_path):
+def test_run_judgment_desks_overrides_live_gap_and_skips_lane_desk(tmp_path):
     """sequential live 흐름: gap override + hard rung은 live lane desk를 호출하지 않는다."""
     run = _47_like_run(tmp_path)
     ev, q, hard = _evidence(run)
@@ -501,7 +501,7 @@ def test_run_desks_overrides_live_gap_and_skips_lane_desk(tmp_path):
         g["type"] = "INTERACTION_UI_REQUIRED"
     ex = _ScriptedExecutor({"product_stage_label": label,
                             "product_gap_classification": wrong_gap})
-    out = _run_desks(ex, ev, q, hard, "sequential", True, {}, include_order=False)
+    out = run_judgment_desks(ex, ev, q, hard, "sequential", True, {}, include_order=False)
     assert out["status"] == "PASS"
     assert out["gap"]["primary_gap"] == "CORE_PATCH_REQUIRED"
     assert out["gap_override"]["live_gap"] == "INTERACTION_UI_REQUIRED"

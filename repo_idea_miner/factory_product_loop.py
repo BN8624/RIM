@@ -942,7 +942,7 @@ def build_hardcode_guard(run_dir: Path, prompts: dict[str, str]) -> dict:
 
 # ---------------------------------------------------------------- Loop 오케스트레이터 (§21)
 
-def _run_desks(executor, evidence, quality, hard, gemma_mode: str, use_llm: bool,
+def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_llm: bool,
                prompts_out: dict, include_order: bool = True) -> dict:
     """sequential 또는 unified 모드로 desk를 실행한다. 검증 기준은 동일하다 (§20).
 
@@ -1136,7 +1136,7 @@ def run_product_loop(
 
     for i in range(max(1, int(max_iterations))):
         it: dict = {"iteration": i + 1}
-        desks = _run_desks(executor, evidence, quality, hard, gemma_mode, use_llm, prompts)
+        desks = run_judgment_desks(executor, evidence, quality, hard, gemma_mode, use_llm, prompts)
         schema_repair_reports += desks["schema_repair_reports"]
         it["desk_status"] = desks["status"]
         if desks["status"] != "PASS":
