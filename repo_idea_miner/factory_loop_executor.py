@@ -235,6 +235,7 @@ def verify_candidate(run_dir: Path, out_dir: Path,
         "desk_status": desks["status"], "failure_type": desks.get("failure_type"),
         "stage": stage, "primary_gap": (desks.get("gap") or {}).get("primary_gap"),
         "recommended_next_lane": (desks.get("lane") or {}).get("recommended_next_lane"),
+        "gap_override": desks.get("gap_override"),
         "problems": desks.get("problems") or [],
     })
 

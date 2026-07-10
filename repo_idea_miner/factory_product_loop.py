@@ -14,7 +14,9 @@ from repo_idea_miner.factory_autopilot_desks import (
     build_lane_prompt,
     build_order_prompt,
     build_unified_prompt,
+    enforce_evidence_ladder,
     execute_desk,
+    HARD_EVIDENCE_GAPS,
     mock_gap_classifier,
     mock_next_lane_planner,
     mock_order_slots,
@@ -966,10 +968,18 @@ def _run_desks(executor, evidence, quality, hard, gemma_mode: str, use_llm: bool
             return out
         raw = res["raw"]
         out["stage_label"] = raw["product_stage_label"]
-        out["gap"] = raw["product_gap_classification"]
+        out["gap"], gap_override = enforce_evidence_ladder(
+            raw["product_gap_classification"], evidence, quality, out["stage_label"])
         out["lane"] = raw["recommended_next_lane"]
         out["slots"] = raw["auto_order_slots"]
         out["blueprint"] = raw["repair_blueprint"]
+        if gap_override:
+            # gap이 바뀌면 packet의 lane/slots/blueprint는 낡은 gap 기준 — 함께 재생성한다.
+            out["gap_override"] = gap_override
+            out["lane"] = mock_next_lane_planner(evidence, out["gap"])
+            template = LANE_TEMPLATES.get(out["lane"]["recommended_next_lane"]) or {}
+            out["slots"] = mock_order_slots(evidence, out["gap"], out["lane"], template)
+            out["blueprint"] = mock_repair_blueprint(evidence, out["gap"], out["lane"], template)
         out["status"] = "PASS"
         return out
 
@@ -993,22 +1003,29 @@ def _run_desks(executor, evidence, quality, hard, gemma_mode: str, use_llm: bool
     if res["status"] != "PASS":
         out.update(failure_type=res["failure_type"], problems=res["problems"])
         return out
-    out["gap"] = res["raw"]
+    out["gap"], gap_override = enforce_evidence_ladder(
+        res["raw"], evidence, quality, out["stage_label"])
+    if gap_override:
+        out["gap_override"] = gap_override
 
     if out["gap"].get("primary_gap") is None:
         out["status"] = "PASS"  # PRODUCT_CANDIDATE 도달 — lane/order 없음
         return out
 
-    prompt = build_lane_prompt(evidence, out["gap"])
-    prompts_out["lane"] = prompt
-    mock = None if use_llm else mock_next_lane_planner(evidence, out["gap"])
-    res = execute_desk(executor, "recommended_next_lane", prompt, RecommendedNextLane,
-                       mock_output=mock)
-    _record_repair(res)
-    if res["status"] != "PASS":
-        out.update(failure_type=res["failure_type"], problems=res["problems"])
-        return out
-    out["lane"] = res["raw"]
+    if out["gap"]["primary_gap"] in HARD_EVIDENCE_GAPS:
+        # hard rung의 lane은 GAP_TO_LANE 고정 매핑 — live desk에 물을 판단이 없다 (§7).
+        out["lane"] = mock_next_lane_planner(evidence, out["gap"])
+    else:
+        prompt = build_lane_prompt(evidence, out["gap"])
+        prompts_out["lane"] = prompt
+        mock = None if use_llm else mock_next_lane_planner(evidence, out["gap"])
+        res = execute_desk(executor, "recommended_next_lane", prompt, RecommendedNextLane,
+                           mock_output=mock)
+        _record_repair(res)
+        if res["status"] != "PASS":
+            out.update(failure_type=res["failure_type"], problems=res["problems"])
+            return out
+        out["lane"] = res["raw"]
 
     if not include_order:
         out["status"] = "PASS"  # closed loop(2D-1)는 order/blueprint desk를 쓰지 않는다

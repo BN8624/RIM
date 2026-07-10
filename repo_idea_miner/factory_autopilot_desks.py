@@ -444,6 +444,37 @@ def mock_gap_classifier(evidence: dict, quality: dict, stage_label: dict) -> dic
     }
 
 
+# boolean fact에서 직접 유도되는 rung — 여기서는 live desk의 판단 여지가 없다 (§7).
+HARD_EVIDENCE_GAPS = (
+    "EVIDENCE_INSUFFICIENT",
+    "ARCHIVE_RECOMMENDED",
+    "SPEC_REPAIR_REQUIRED",
+    "CORE_PATCH_REQUIRED",
+    "RUNNER_PATCH_REQUIRED",
+)
+
+
+def enforce_evidence_ladder(gap: dict | None, evidence: dict, quality: dict,
+                            stage_label: dict) -> tuple[dict | None, dict | None]:
+    """hard fact rung은 live desk의 gap 판정보다 우선한다 (§7: 관측이 서술을 이긴다).
+
+    deterministic ladder가 hard rung(gate 실패, runner 실행 불가 등)을 지시하는데
+    live gap이 다르면 deterministic 분류로 교체하고 override 기록을 함께 돌려준다.
+    viewer/interaction/UX 같은 판단 rung은 desk 판정을 존중한다.
+    """
+    ladder = derive_primary_gap(evidence, quality, stage_label)
+    live = (gap or {}).get("primary_gap")
+    if ladder not in HARD_EVIDENCE_GAPS or live == ladder:
+        return gap, None
+    enforced = mock_gap_classifier(evidence, quality, stage_label)
+    override = {
+        "live_gap": live,
+        "enforced_gap": ladder,
+        "reason": "deterministic evidence ladder가 hard rung을 지시 — live desk 판정을 override",
+    }
+    return enforced, override
+
+
 def mock_next_lane_planner(evidence: dict, gap: dict) -> dict:
     primary = gap.get("primary_gap")
     lane = GAP_TO_LANE.get(primary, "HOLD_FOR_HUMAN") if primary else "ARCHIVE"

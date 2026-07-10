@@ -6,9 +6,12 @@ import pytest
 
 from repo_idea_miner.cli import main
 from repo_idea_miner.factory_autopilot_desks import (
+    HARD_EVIDENCE_GAPS,
+    RawPassthrough,
     build_judge_prompt,
     derive_primary_gap,
     derive_stage_from_evidence,
+    enforce_evidence_ladder,
     execute_desk,
     mock_gap_classifier,
     mock_next_lane_planner,
@@ -38,6 +41,7 @@ from repo_idea_miner.factory_autopilot_schemas import (
 from repo_idea_miner.factory_desks import DeskError
 from repo_idea_miner.factory_product_loop import (
     REQUIRED_OUTPUTS,
+    _run_desks,
     apply_hard_blockers,
     build_auto_order_json,
     compute_loop_protected_hashes,
@@ -428,6 +432,84 @@ def test_gap_lane_mismatch_fails(tmp_path):
                   "requires_human_approval_before_apply")})
     problems = validate_stage_gap_lane_consistency(label, gap, lane)
     assert any("불일치" in p for p in problems)
+
+
+# ---------------------------------------------------------------- Group F-1: evidence ladder enforcement (§7 — 관측이 서술을 이긴다)
+
+class _ScriptedExecutor:
+    """desk별로 준비된 raw 출력을 돌려주는 live executor 스텁."""
+
+    def __init__(self, outputs: dict):
+        self.outputs = outputs
+        self.calls: list[str] = []
+
+    def call(self, schema_name, prompt, model_cls):
+        self.calls.append(schema_name)
+        return RawPassthrough.model_validate(self.outputs[schema_name]), "scripted"
+
+
+def test_evidence_ladder_overrides_soft_gap_on_gate_fail(tmp_path):
+    """#54류: fresh gate 실패인데 live desk가 soft gap을 고르면 hard rung으로 override한다."""
+    run = _47_like_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    ev["facts"]["gate_fail"] = True
+    label = {"stage": "REVIEWABLE_ARTIFACT"}
+    live_gap = {"primary_gap": "INTERACTION_UI_REQUIRED", "gaps": [],
+                "primary_gap_evidence_refs": []}
+    gap, override = enforce_evidence_ladder(live_gap, ev, q, label)
+    assert override is not None
+    assert override["live_gap"] == "INTERACTION_UI_REQUIRED"
+    assert override["enforced_gap"] == "CORE_PATCH_REQUIRED"
+    assert gap["primary_gap"] == "CORE_PATCH_REQUIRED"
+    assert "CORE_PATCH_REQUIRED" in HARD_EVIDENCE_GAPS
+
+
+def test_evidence_ladder_no_override_when_agreeing(tmp_path):
+    run = _47_like_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    ev["facts"]["gate_fail"] = True
+    label = {"stage": "REVIEWABLE_ARTIFACT"}
+    live_gap = mock_gap_classifier(ev, q, label)
+    assert live_gap["primary_gap"] == "CORE_PATCH_REQUIRED"
+    gap, override = enforce_evidence_ladder(live_gap, ev, q, label)
+    assert override is None
+    assert gap is live_gap
+
+
+def test_evidence_ladder_respects_soft_rung_judgment(tmp_path):
+    """ladder가 soft rung을 지시하면 live desk의 (다른) soft 판정을 존중한다."""
+    run = _47_like_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    label = mock_product_judge(ev, q, hard)
+    assert derive_primary_gap(ev, q, label) not in HARD_EVIDENCE_GAPS
+    live_gap = {"primary_gap": "UX_POLISH_REQUIRED", "gaps": [],
+                "primary_gap_evidence_refs": []}
+    gap, override = enforce_evidence_ladder(live_gap, ev, q, label)
+    assert override is None
+    assert gap is live_gap
+
+
+def test_run_desks_overrides_live_gap_and_skips_lane_desk(tmp_path):
+    """sequential live 흐름: gap override + hard rung은 live lane desk를 호출하지 않는다."""
+    run = _47_like_run(tmp_path)
+    ev, q, hard = _evidence(run)
+    ev["facts"]["gate_fail"] = True
+    label = mock_product_judge(ev, q, hard)
+    wrong_gap = json.loads(json.dumps(mock_gap_classifier(ev, q, label)))
+    wrong_gap["primary_gap"] = "INTERACTION_UI_REQUIRED"
+    for g in wrong_gap["gaps"]:
+        g["type"] = "INTERACTION_UI_REQUIRED"
+    ex = _ScriptedExecutor({"product_stage_label": label,
+                            "product_gap_classification": wrong_gap})
+    out = _run_desks(ex, ev, q, hard, "sequential", True, {}, include_order=False)
+    assert out["status"] == "PASS"
+    assert out["gap"]["primary_gap"] == "CORE_PATCH_REQUIRED"
+    assert out["gap_override"]["live_gap"] == "INTERACTION_UI_REQUIRED"
+    assert out["lane"]["recommended_next_lane"] == "CORE_PATCH"
+    # hard rung의 lane은 GAP_TO_LANE 고정 매핑 — live desk를 부르지 않는다
+    assert "recommended_next_lane" not in ex.calls
+    # override 결과는 stage/gap/lane 정합성 검사를 통과해야 한다
+    assert validate_stage_gap_lane_consistency(label, out["gap"], out["lane"]) == []
 
 
 def test_interaction_stage_with_closed_loop_fails(tmp_path):
