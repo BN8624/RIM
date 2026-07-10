@@ -82,7 +82,7 @@ modules = ["config", "errors", "redaction", "llm_client", "key_pool", "jsonutil"
 [components.atlas]
 status = "canonical"
 canon_ids = ["CANON-12"]
-modules = ["architecture_scanner", "architecture_atlas"]
+modules = ["architecture_scanner", "architecture_atlas", "architecture_context"]
 
 [rules.dependencies]
 # component 수준 금지 의존 (모듈 import edge를 component로 접어 검사)
@@ -97,6 +97,17 @@ forbid = [
   "miner -> productization",
   "miner -> autopilot",
   "storage -> dashboard",
+]
+
+# AI Context Pack do_not_modify — 어떤 selector에서도 항상 반환되는 전역 금지 대상 (§15.3)
+[rules.do_not_modify]
+entries = [
+  "repo_idea_miner/pipeline.py — Miner core frozen since v1.0 (CANON-02)",
+  "repo_idea_miner/search_pipeline.py — Miner core frozen (CANON-02)",
+  "repo_idea_miner/schemas.py — Miner core frozen (CANON-02)",
+  "architecture/atlas.json — generated, architecture-build로만 갱신",
+  "architecture/atlas.schema.json — generated",
+  "runs/** judged base runs — immutable, child run으로만 진행 (CANON-07)",
 ]
 
 # miner 3건 private cross-import는 §5.1 무변경 보존의 의도적 예외 (CANON-11)
@@ -273,6 +284,15 @@ cli = "architecture-check"
 steps = [
   "repo_idea_miner.cli_handlers._cmd_architecture_check",
   "repo_idea_miner.architecture_atlas.run_architecture_check",
+]
+
+[[routes]]
+id = "architecture_context"
+canon_ids = ["CANON-12"]
+cli = "architecture-context"
+steps = [
+  "repo_idea_miner.cli_handlers._cmd_architecture_context",
+  "repo_idea_miner.architecture_context.build_context",
 ]
 
 # ---------------------------------------------------------------- Contracts (§14.1)

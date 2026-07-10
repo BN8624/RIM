@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Callable
@@ -822,6 +823,33 @@ def _cmd_architecture_build(args) -> int:
     return 0
 
 
+def _cmd_architecture_context(args) -> int:
+    from repo_idea_miner.architecture_context import build_context, render_compact
+
+    selectors = {
+        "canon": args.canon, "component": args.component, "route": args.route,
+        "module": args.module, "symbol": args.symbol, "cli": args.cli,
+        "artifact": args.artifact, "changed": args.changed,
+    }
+    if not any(v for v in selectors.values()):
+        print("오류: selector 최소 1개 필요 "
+              "(--canon/--component/--route/--module/--symbol/--cli/--artifact/--changed)",
+              file=sys.stderr)
+        return 1
+    try:
+        ctx = build_context(
+            Path.cwd(), selectors, impact=args.impact, depth=args.depth,
+            max_primary=args.max_primary_files, max_secondary=args.max_secondary_files)
+    except FileNotFoundError as exc:
+        print(f"오류: {exc}", file=sys.stderr)
+        return 1
+    if args.compact:
+        print(render_compact(ctx))
+    else:
+        print(json.dumps(ctx, ensure_ascii=False, sort_keys=True, indent=1))
+    return 0
+
+
 def _cmd_architecture_check(args) -> int:
     from repo_idea_miner.architecture_atlas import run_architecture_check
 
@@ -865,6 +893,7 @@ HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
     "factory-validate": _cmd_factory_validate,
     "architecture-build": _cmd_architecture_build,
     "architecture-check": _cmd_architecture_check,
+    "architecture-context": _cmd_architecture_context,
 }
 
 

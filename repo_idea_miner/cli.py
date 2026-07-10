@@ -224,6 +224,22 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("architecture-build", help="architecture/atlas.json 생성 (결정론, AI 전용)")
 
     sub.add_parser("architecture-check", help="구조·문서 거버넌스 검사")
+
+    ac_p = sub.add_parser("architecture-context",
+                          help="AI Context Pack — atlas slice 조회 (JSON, 결정론)")
+    ac_p.add_argument("--canon", action="append", default=[], help="CANON-ID (복수 허용)")
+    ac_p.add_argument("--component", action="append", default=[], help="component id")
+    ac_p.add_argument("--route", action="append", default=[], help="canonical route id")
+    ac_p.add_argument("--module", action="append", default=[], help="모듈 stem 또는 전체 이름")
+    ac_p.add_argument("--symbol", action="append", default=[], help="symbol id 또는 suffix")
+    ac_p.add_argument("--cli", action="append", default=[], help="CLI command")
+    ac_p.add_argument("--artifact", action="append", default=[], help="artifact id 또는 부분 경로")
+    ac_p.add_argument("--changed", action="store_true", help="git diff --name-only HEAD 기반 선택")
+    ac_p.add_argument("--impact", action="store_true", help="direct_static_impact 포함")
+    ac_p.add_argument("--compact", action="store_true", help="결정론적 line format (AI용)")
+    ac_p.add_argument("--depth", type=int, default=1)
+    ac_p.add_argument("--max-primary-files", type=int, default=5)
+    ac_p.add_argument("--max-secondary-files", type=int, default=8)
     return parser
 
 

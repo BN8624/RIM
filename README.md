@@ -24,11 +24,13 @@ RIM = Repo Idea Miner + Challenge Mode + Product Factory. Runtime UI(dashboard/v
 - env names: `GOOGLE_API_KEY_1..11`, `GITHUB_TOKEN`, `RIM_GEMMA_MODEL`, `RIM_FACTORY_USE_DOCKER`
 
 ## CONTEXT COMMAND
-```text
-architecture-context --canon CANON-07
-architecture-context --route factory_closed_loop
-architecture-context --changed --impact
+```bash
+python -m repo_idea_miner architecture-context --canon CANON-07
+python -m repo_idea_miner architecture-context --route factory_closed_loop --impact
+python -m repo_idea_miner architecture-context --changed --impact
 ```
+selectors: `--canon/--component/--route/--module/--symbol/--cli/--artifact/--changed`
+(복수 허용, `--compact`=line format, 출력은 결정론적 JSON)
 
 ## VALIDATION COMMANDS
 ```bash

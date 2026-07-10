@@ -7053,6 +7053,26 @@
    "source": "repo_idea_miner.cli_handlers"
   },
   {
+   "command": "architecture-context",
+   "handler": "_cmd_architecture_context",
+   "options": [
+    "--artifact",
+    "--canon",
+    "--changed",
+    "--cli",
+    "--compact",
+    "--component",
+    "--depth",
+    "--impact",
+    "--max-primary-files",
+    "--max-secondary-files",
+    "--module",
+    "--route",
+    "--symbol"
+   ],
+   "source": "repo_idea_miner.cli_handlers"
+  },
+  {
    "command": "challenge",
    "handler": "_cmd_challenge",
    "options": [
@@ -7369,6 +7389,7 @@
    "component_id": "atlas",
    "modules": [
     "architecture_atlas",
+    "architecture_context",
     "architecture_scanner"
    ],
    "status": "canonical"
@@ -7884,7 +7905,7 @@
  ],
  "health": {
   "import_cycles": [],
-  "module_count": 73,
+  "module_count": 74,
   "orphan_modules": [],
   "over_500_loc": [
    "repo_idea_miner/architecture_atlas.py",
@@ -7950,7 +7971,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 947,
+  "test_count": 957,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -8123,6 +8144,7 @@
    ],
    "component": "atlas",
    "imported_by": [
+    "repo_idea_miner.architecture_context",
     "repo_idea_miner.cli_handlers"
    ],
    "imports": [
@@ -8176,6 +8198,50 @@
    ],
    "tests": [
     "test_architecture_atlas"
+   ]
+  },
+  {
+   "artifact_refs": [],
+   "component": "atlas",
+   "imported_by": [
+    "repo_idea_miner.cli_handlers"
+   ],
+   "imports": [
+    {
+     "from": "repo_idea_miner.architecture_atlas",
+     "names": [
+      "ATLAS_DIR",
+      "ATLAS_JSON",
+      "load_manifest"
+     ]
+    },
+    {
+     "from": "repo_idea_miner.architecture_atlas",
+     "names": [
+      "build_atlas"
+     ]
+    }
+   ],
+   "loc": 397,
+   "module": "repo_idea_miner.architecture_context",
+   "path": "repo_idea_miner/architecture_context.py",
+   "private_symbols": [
+    "_all_canon_ids",
+    "_changed_py_stems",
+    "_direct_static_impact",
+    "_symbol_module_stem"
+   ],
+   "public_symbols": [
+    "DEFAULT_DEPTH",
+    "DEFAULT_MAX_PRIMARY",
+    "DEFAULT_MAX_SECONDARY",
+    "SELECTOR_KEYS",
+    "build_context",
+    "load_atlas",
+    "render_compact"
+   ],
+   "tests": [
+    "test_architecture_context"
    ]
   },
   {
@@ -9242,7 +9308,7 @@
      ]
     }
    ],
-   "loc": 239,
+   "loc": 255,
    "module": "repo_idea_miner.cli",
    "path": "repo_idea_miner/cli.py",
    "private_symbols": [],
@@ -9251,6 +9317,7 @@
     "main"
    ],
    "tests": [
+    "test_architecture_context",
     "test_challenge_cli",
     "test_challenge_validate",
     "test_factory_anti_hardcode_2b1b",
@@ -9282,6 +9349,13 @@
      "from": "repo_idea_miner.architecture_atlas",
      "names": [
       "write_atlas"
+     ]
+    },
+    {
+     "from": "repo_idea_miner.architecture_context",
+     "names": [
+      "build_context",
+      "render_compact"
      ]
     },
     {
@@ -9525,12 +9599,13 @@
      ]
     }
    ],
-   "loc": 873,
+   "loc": 902,
    "module": "repo_idea_miner.cli_handlers",
    "path": "repo_idea_miner/cli_handlers.py",
    "private_symbols": [
     "_cmd_architecture_build",
     "_cmd_architecture_check",
+    "_cmd_architecture_context",
     "_cmd_challenge",
     "_cmd_challenge_search",
     "_cmd_daemon",
@@ -14288,10 +14363,10 @@
   }
  ],
  "repository": {
-  "head": "7fce15730b985151d210d6015118a33655d00327",
+  "head": "117922dd4256b260a8fa3241db7ba3cf8427a0c4",
   "structural_diff": true,
-  "structural_fingerprint": "3fe621524ed1c019a7697921514c67e7e292e0fc28e7a070e953c5d0ed6414bb",
-  "structure_snapshot": "2f778be1e2662e340702a63d8b0441b706469a915498c2a547ba9dc4d7e2d282"
+  "structural_fingerprint": "46aa0abdaa5b6e849e563edf64755faf920a0684532add08b0a38f6edc5a7731",
+  "structure_snapshot": "845ec77d9279f203662b1daa9486bea74aa7e982344d2f924f18da229ee9906d"
  },
  "routes": [
   {
@@ -14481,6 +14556,17 @@
     "repo_idea_miner.cli_handlers._cmd_architecture_check",
     "repo_idea_miner.architecture_atlas.run_architecture_check"
    ]
+  },
+  {
+   "canon_ids": [
+    "CANON-12"
+   ],
+   "cli": "architecture-context",
+   "route_id": "architecture_context",
+   "steps": [
+    "repo_idea_miner.cli_handlers._cmd_architecture_context",
+    "repo_idea_miner.architecture_context.build_context"
+   ]
   }
  ],
  "schema_version": 2,
@@ -14521,6 +14607,24 @@
    "signature": "def write_atlas(root: Path) -> dict",
    "start_line": 389,
    "symbol_id": "repo_idea_miner.architecture_atlas.write_atlas"
+  },
+  {
+   "canon_ids": [
+    "CANON-12"
+   ],
+   "component_id": "atlas",
+   "end_line": 278,
+   "kind": "function",
+   "path": "repo_idea_miner/architecture_context.py",
+   "related_tests": [
+    "test_architecture_context"
+   ],
+   "roles": [
+    "orchestrator"
+   ],
+   "signature": "def build_context(root: Path, selectors: dict, impact: bool=False, depth: int=DEFAULT_DEPTH, max_primary: int=DEFAULT_MAX_PRIMARY, max_secondary: int=DEFAULT_MAX_SECONDARY) -> dict",
+   "start_line": 53,
+   "symbol_id": "repo_idea_miner.architecture_context.build_context"
   },
   {
    "canon_ids": [
@@ -14633,7 +14737,7 @@
     "CANON-12"
    ],
    "component_id": "cli",
-   "end_line": 822,
+   "end_line": 823,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14645,7 +14749,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_architecture_build(args) -> int",
-   "start_line": 810,
+   "start_line": 811,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_architecture_build"
   },
   {
@@ -14653,7 +14757,7 @@
     "CANON-12"
    ],
    "component_id": "cli",
-   "end_line": 835,
+   "end_line": 863,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14665,15 +14769,35 @@
     "entrypoint"
    ],
    "signature": "def _cmd_architecture_check(args) -> int",
-   "start_line": 825,
+   "start_line": 853,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_architecture_check"
+  },
+  {
+   "canon_ids": [
+    "CANON-12"
+   ],
+   "component_id": "cli",
+   "end_line": 850,
+   "kind": "function",
+   "path": "repo_idea_miner/cli_handlers.py",
+   "related_tests": [
+    "test_architecture_atlas",
+    "test_structural_reset_characterization"
+   ],
+   "roles": [
+    "cli_handler",
+    "entrypoint"
+   ],
+   "signature": "def _cmd_architecture_context(args) -> int",
+   "start_line": 826,
+   "symbol_id": "repo_idea_miner.cli_handlers._cmd_architecture_context"
   },
   {
    "canon_ids": [
     "CANON-02"
    ],
    "component_id": "cli",
-   "end_line": 172,
+   "end_line": 173,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14685,7 +14809,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_challenge(args) -> int",
-   "start_line": 144,
+   "start_line": 145,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_challenge"
   },
   {
@@ -14693,7 +14817,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 199,
+   "end_line": 200,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14704,7 +14828,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_challenge_search(args) -> int",
-   "start_line": 175,
+   "start_line": 176,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_challenge_search"
   },
   {
@@ -14712,7 +14836,7 @@
     "CANON-02"
    ],
    "component_id": "cli",
-   "end_line": 221,
+   "end_line": 222,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14724,7 +14848,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_daemon(args) -> int",
-   "start_line": 202,
+   "start_line": 203,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_daemon"
   },
   {
@@ -14732,7 +14856,7 @@
     "CANON-09"
    ],
    "component_id": "cli",
-   "end_line": 229,
+   "end_line": 230,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14744,7 +14868,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_dashboard(args) -> int",
-   "start_line": 224,
+   "start_line": 225,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_dashboard"
   },
   {
@@ -14752,7 +14876,7 @@
     "CANON-04"
    ],
    "component_id": "cli",
-   "end_line": 300,
+   "end_line": 301,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14764,7 +14888,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory(args) -> int",
-   "start_line": 281,
+   "start_line": 282,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory"
   },
   {
@@ -14773,7 +14897,7 @@
     "CANON-10"
    ],
    "component_id": "cli",
-   "end_line": 485,
+   "end_line": 486,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14785,7 +14909,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_anti_hardcode_patch(args) -> int",
-   "start_line": 446,
+   "start_line": 447,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_anti_hardcode_patch"
   },
   {
@@ -14794,7 +14918,7 @@
     "CANON-10"
    ],
    "component_id": "cli",
-   "end_line": 356,
+   "end_line": 357,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14806,7 +14930,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_build(args) -> int",
-   "start_line": 303,
+   "start_line": 304,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_build"
   },
   {
@@ -14815,7 +14939,7 @@
     "CANON-10"
    ],
    "component_id": "cli",
-   "end_line": 398,
+   "end_line": 399,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14827,7 +14951,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_continue(args) -> int",
-   "start_line": 359,
+   "start_line": 360,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_continue"
   },
   {
@@ -14835,7 +14959,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 747,
+   "end_line": 748,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14846,7 +14970,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_factory_continue_queue(args) -> int",
-   "start_line": 707,
+   "start_line": 708,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_continue_queue"
   },
   {
@@ -14854,7 +14978,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 628,
+   "end_line": 629,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14865,7 +14989,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_factory_draft_execution(args) -> int",
-   "start_line": 595,
+   "start_line": 596,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_draft_execution"
   },
   {
@@ -14873,7 +14997,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 592,
+   "end_line": 593,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14884,7 +15008,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_factory_product_editor(args) -> int",
-   "start_line": 557,
+   "start_line": 558,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_product_editor"
   },
   {
@@ -14894,7 +15018,7 @@
     "CANON-11"
    ],
    "component_id": "cli",
-   "end_line": 704,
+   "end_line": 705,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14906,7 +15030,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_product_loop(args) -> int",
-   "start_line": 631,
+   "start_line": 632,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_product_loop"
   },
   {
@@ -14914,7 +15038,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 554,
+   "end_line": 555,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14925,7 +15049,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_factory_product_polish(args) -> int",
-   "start_line": 522,
+   "start_line": 523,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_product_polish"
   },
   {
@@ -14934,7 +15058,7 @@
     "CANON-11"
    ],
    "component_id": "cli",
-   "end_line": 519,
+   "end_line": 520,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14946,7 +15070,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_review(args) -> int",
-   "start_line": 488,
+   "start_line": 489,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_review"
   },
   {
@@ -14955,7 +15079,7 @@
     "CANON-10"
    ],
    "component_id": "cli",
-   "end_line": 443,
+   "end_line": 444,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14967,7 +15091,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_spec_repair_apply(args) -> int",
-   "start_line": 401,
+   "start_line": 402,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_spec_repair_apply"
   },
   {
@@ -14975,7 +15099,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 764,
+   "end_line": 765,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14986,7 +15110,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_factory_status(args) -> int",
-   "start_line": 750,
+   "start_line": 751,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_status"
   },
   {
@@ -14994,7 +15118,7 @@
     "CANON-10"
    ],
    "component_id": "cli",
-   "end_line": 804,
+   "end_line": 805,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15006,7 +15130,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_factory_validate(args) -> int",
-   "start_line": 767,
+   "start_line": 768,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_factory_validate"
   },
   {
@@ -15014,7 +15138,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 255,
+   "end_line": 256,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15025,7 +15149,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_pause(args) -> int",
-   "start_line": 250,
+   "start_line": 251,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_pause"
   },
   {
@@ -15033,7 +15157,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 263,
+   "end_line": 264,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15044,7 +15168,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_resume(args) -> int",
-   "start_line": 258,
+   "start_line": 259,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_resume"
   },
   {
@@ -15052,7 +15176,7 @@
     "CANON-01"
    ],
    "component_id": "cli",
-   "end_line": 75,
+   "end_line": 76,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15064,7 +15188,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_run(args) -> int",
-   "start_line": 57,
+   "start_line": 58,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_run"
   },
   {
@@ -15072,7 +15196,7 @@
     "CANON-01"
    ],
    "component_id": "cli",
-   "end_line": 95,
+   "end_line": 96,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15084,7 +15208,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_search(args) -> int",
-   "start_line": 78,
+   "start_line": 79,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_search"
   },
   {
@@ -15092,7 +15216,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 110,
+   "end_line": 111,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15103,7 +15227,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_serve(args) -> int",
-   "start_line": 106,
+   "start_line": 107,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_serve"
   },
   {
@@ -15111,7 +15235,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 247,
+   "end_line": 248,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15122,7 +15246,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_status(args) -> int",
-   "start_line": 232,
+   "start_line": 233,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_status"
   },
   {
@@ -15130,7 +15254,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 138,
+   "end_line": 139,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15141,7 +15265,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_validate(args) -> int",
-   "start_line": 113,
+   "start_line": 114,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_validate"
   },
   {
@@ -15149,7 +15273,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 275,
+   "end_line": 276,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15160,7 +15284,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_validate_db(args) -> int",
-   "start_line": 266,
+   "start_line": 267,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_validate_db"
   },
   {
@@ -15168,7 +15292,7 @@
     "CANON-03"
    ],
    "component_id": "cli",
-   "end_line": 103,
+   "end_line": 104,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -15179,7 +15303,7 @@
     "cli_handler"
    ],
    "signature": "def _cmd_view(args) -> int",
-   "start_line": 98,
+   "start_line": 99,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_view"
   },
   {
@@ -15919,6 +16043,10 @@
    "architecture_scanner",
    "cli_handlers",
    "config"
+  ],
+  "test_architecture_context": [
+   "architecture_context",
+   "cli"
   ],
   "test_architecture_scanner": [
    "architecture_scanner"

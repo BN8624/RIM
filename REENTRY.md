@@ -1,13 +1,13 @@
 # REENTRY
 
 HEAD:
-- commit: (A3 commit — atlas schema V2)
+- commit: (A4 commit — architecture-context CLI)
 - branch: main
 - clean: true (untracked order docs only — never commit them)
 
 SYSTEM_STATUS:
-- tests: full suite PASS at 7fce157 (1001 passed, pre-A3); after A3 targeted 50 PASS
-  (architecture atlas/scanner/cli/dependency), full suite NOT re-run after A3
+- tests: full suite PASS at 7fce157 (1001, pre-A3); A3 full-suite run caught mid-A4 edits
+  (dispatch registry race — not a code defect); after A4 targeted 61 PASS, full suite rerun pending
 - architecture_check: PASS (atlas schema V2, build byte-identical x2)
 - known_flaky: []
 
@@ -16,17 +16,21 @@ RECENT_SEMANTIC_CHANGES:
 - A1 done: no Atlas HTML/renderer, no architecture-serve/summary CLI
 - A2 done: root markdown = 4 (checklist.md deleted, git history only), docs rewritten AI-only
 - A3 done: atlas.json schema V2 — repository block(head/snapshot/fingerprint/diff),
-  core symbol index (AST line ranges + signatures), 16 canonical routes, artifacts with
+  core symbol index (AST line ranges + signatures), canonical routes, artifacts with
   role+provenance (PRODUCES/CONSUMES/LITERAL_REFERENCE; MANIFEST/AST_IO_CALL/AST_STRING_LITERAL),
   10 contracts, 11 invariants, document_routes from AI_INDEX; manifest.toml schema 2;
   [[pipeline]] removed (routes supersede)
+- A4 done: architecture-context CLI — selectors --canon/--component/--route/--module/--symbol/
+  --cli/--artifact/--changed (multiple), --impact=direct_static_impact (static 1-hop only),
+  --compact line format, deterministic JSON; read_first symbol line ranges; LITERAL_REFERENCE
+  excluded by default; do_not_modify from manifest [rules.do_not_modify]; route 17
+  (architecture_context) added; README CONTEXT COMMAND = python -m form
 
 OPEN_BLOCKERS:
-- id: ai_only_atlas_A4_A6
-  state: pending (A0~A3 done)
+- id: ai_only_atlas_A5_A6
+  state: pending (A0~A4 done)
   evidence: runs/_ai_only_atlas/state.json (detailed per-stage plan) + order doc at repo root
-  next_action: A4 architecture-context CLI (+ add architecture_context route to manifest)
-  → A5 check 22 items + 8 task fixtures → A6 regression + final report
+  next_action: A5 check 22 hard items + doc-size warnings + 8 task fixtures → A6 regression + final report
 - id: hold_54
   state: waiting_human
   evidence: runs/factory_20260710_021635/review/phase2d1/loop_20260710_141947/hold_for_human_packet.json
@@ -37,11 +41,8 @@ OPEN_BLOCKERS:
   next_action: human final review/release decision; rerun loop if a fresh record is wanted
 
 NEXT_ACTIONS:
-1. A4: architecture-context CLI (selectors --canon/--route/--module/--symbol/--cli/--artifact/--changed,
-   --impact=direct_static_impact, --compact, JSON deterministic; then README/CANON-12 QUERY 정합
-   + architecture_context route 17번째로 추가)
-2. A5: architecture-check 22 hard failures + warnings(doc size) + 8 representative AI task fixtures
-3. A6: build×2 byte-identical, full pytest, runtime UI regression, final report (response only)
+1. A5: architecture-check 22 hard failures + warnings(doc size §18) + 8 representative AI task fixtures
+2. A6: build×2 byte-identical, full pytest, runtime UI regression, final report (response only)
 
 DO_NOT_REPEAT:
 - do not commit the two untracked root order docs

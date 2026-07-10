@@ -157,14 +157,14 @@ def test_symbols_are_canonical_and_resolved():
 
 
 def test_routes_declared_and_linked():
-    """§12: 16 route(architecture_context는 A4에서 추가), cli/steps 실재는 check가 보증."""
+    """§12: 필수 17 route, cli/steps 실재는 check가 보증."""
     a = _atlas()
     ids = {r["route_id"] for r in a["routes"]}
-    assert len(a["routes"]) == 16
+    assert len(a["routes"]) == 17
     for rid in ("miner_direct", "core_factory_build", "continuation", "spec_repair",
                 "anti_hardcode_repair", "productization_chain", "factory_judge_only",
                 "factory_closed_loop", "factory_validate", "dashboard_read",
-                "architecture_build", "architecture_check"):
+                "architecture_build", "architecture_check", "architecture_context"):
         assert rid in ids, rid
     closed = next(r for r in a["routes"] if r["route_id"] == "factory_closed_loop")
     assert closed["cli"] == "factory-product-loop"
