@@ -96,8 +96,8 @@ def _run_id_of(db_conn, run_dir: Path) -> int | None:
 # ---------------------------------------------------------------- judge (evidence + desks)
 
 def _judge(run_dir: Path, probe_report: dict | None, executor, gemma_mode: str,
-           use_llm: bool) -> dict:
-    """run 1개를 judge한다. probe가 있으면 loop evidence를 probe 관측으로 덮는다 (§7 — 보고서 boolean 불신)."""
+           use_llm: bool, fresh_gate_summary: dict | None = None) -> dict:
+    """run 1개를 judge한다. probe/fresh gate 관측이 기록된 report boolean보다 우선한다 (§7)."""
     evidence = extract_artifact_evidence(run_dir)
     if probe_report is not None:
         fresh_loop = loop_evidence_from_probe(probe_report, evidence["product_loop"])
@@ -106,6 +106,14 @@ def _judge(run_dir: Path, probe_report: dict | None, executor, gemma_mode: str,
             ref = f"artifact_evidence.product_loop.{k}={str(bool(v)).lower()}"
             evidence["refs"][f"loop.{k}"] = ref
             evidence["known_refs"].add(ref)
+    if fresh_gate_summary is not None:
+        # 기록된 gate_results.json은 이후 repair로 낡았을 수 있다 — 방금 재실행한 gate가 진실이다.
+        from repo_idea_miner.factory_core_schemas import CORE_GATE_ORDER
+        evidence["facts"]["gate_fail"] = not all(
+            fresh_gate_summary.get(g) for g in CORE_GATE_ORDER)
+        ref = f"artifact_evidence.facts.gate_fail={str(evidence['facts']['gate_fail']).lower()}"
+        evidence["refs"]["facts.gate_fail"] = ref
+        evidence["known_refs"].add(ref)
     quality = extract_user_facing_quality(evidence)
     hard = apply_hard_blockers(evidence, quality)
     prompts: dict = {}
@@ -175,7 +183,7 @@ def _judge_requirement_coverage(run_dir: Path, profile: dict, probe: dict,
 
 # ---------------------------------------------------------------- 검증 체인 (§14)
 
-def verify_candidate(run_dir: Path, out_dir: Path, rerun_gates: bool,
+def verify_candidate(run_dir: Path, out_dir: Path,
                      executor, use_llm: bool, timeout: float, use_docker: bool | None,
                      secrets: list[str], protected_hash_status: str = "PASS",
                      gemma_mode: str = "sequential") -> dict:
@@ -186,16 +194,21 @@ def verify_candidate(run_dir: Path, out_dir: Path, rerun_gates: bool,
     goldens = [g for g in (_load_json(p) for p in sorted((ws / "golden").glob("expected_*.json")))
                if g is not None]
 
-    if rerun_gates:
-        gates = run_core_gates(ws, core_contract, runner_contract, goldens,
+    # gate는 항상 temp copy에서 재실행한다 (§7: 기록된 gate_results.json은 이후 repair로
+    # 낡았을 수 있고, level2 변형 실행이 workspace에 파일을 쓰므로 원본 보호도 겸한다).
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="phase2d1_gates_"))
+    try:
+        tmp_ws = tmp / "ws"
+        shutil.copytree(ws, tmp_ws)
+        gates = run_core_gates(tmp_ws, core_contract, runner_contract, goldens,
                                timeout_seconds=timeout, use_docker=use_docker, secrets=secrets)
-        gate_summary = dict(gates["summary"])
-        _write_json(out_dir / "gate_rerun.json",
-                    {g: {"ok": ok, "problems": gates["problems"][g]}
-                     for g, ok in gate_summary.items()})
-    else:
-        recorded = _load_json(ws / "gate_results.json") or {}
-        gate_summary = {g: bool((recorded.get(g) or {}).get("ok")) for g in recorded}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    gate_summary = dict(gates["summary"])
+    _write_json(out_dir / "gate_rerun.json",
+                {g: {"ok": ok, "problems": gates["problems"][g]}
+                 for g, ok in gate_summary.items()})
 
     # post-product anti-hardcode (§1-7) — 항상 다시 계산, run에는 쓰지 않고 out_dir에 기록
     anti_result, anti_summary = run_anti_hardcode_gate(
@@ -214,7 +227,8 @@ def verify_candidate(run_dir: Path, out_dir: Path, rerun_gates: bool,
     profile = build_capability_profile(run_dir)
     _write_json(out_dir / "capability_profile.json", profile)
 
-    judge = _judge(run_dir, probe, executor, gemma_mode, use_llm)
+    judge = _judge(run_dir, probe, executor, gemma_mode, use_llm,
+                   fresh_gate_summary=gate_summary)
     desks = judge["desks"]
     stage = (desks.get("stage_label") or {}).get("stage")
     _write_json(out_dir / "judge_snapshot.json", {
@@ -373,7 +387,6 @@ def run_closed_product_loop(
         # ---- Probe + Judge + 검증 (parent 상태 확정 — 재사용 금지 §1-9)
         if parent_verify is None:
             parent_verify = verify_candidate(parent_run_dir, it_dir / "before",
-                                             rerun_gates=parent_run_dir != base_run_dir,
                                              executor=executor, use_llm=use_llm,
                                              timeout=timeout, use_docker=use_docker,
                                              secrets=secrets, gemma_mode=gemma_mode)
@@ -498,7 +511,7 @@ def run_closed_product_loop(
 
         # ---- Child 검증 체인 (§14) + Progress (§9)
         _ensure_final_artifact(child)
-        child_verify = verify_candidate(child, it_dir / "after", rerun_gates=True,
+        child_verify = verify_candidate(child, it_dir / "after",
                                         executor=executor, use_llm=use_llm,
                                         timeout=timeout, use_docker=use_docker, secrets=secrets,
                                         protected_hash_status=lane_result["protected_hash_check"],
