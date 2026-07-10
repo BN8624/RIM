@@ -244,6 +244,7 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
     problems += _check_phase2c2(run_dir)
     problems += _check_phase2c3(run_dir)
     problems += _check_phase2d0(run_dir)
+    problems += _check_phase2d1(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:
@@ -1129,6 +1130,44 @@ def _check_phase2d0(run_dir: Path) -> list[str]:
     return p
 
 
+PHASE2D1_SUBDIR = "review/phase2d1"
+
+
+def _check_phase2d1(run_dir: Path) -> list[str]:
+    """Phase 2D-1 closed loop marker(review/phase2d1/loop_*)가 있는 run만 검사한다. 없으면 no-op."""
+    root = Path(run_dir) / PHASE2D1_SUBDIR
+    if not root.is_dir():
+        return []
+    p: list[str] = []
+    for loop_dir in sorted(d for d in root.iterdir() if d.is_dir()):
+        rel = f"{PHASE2D1_SUBDIR}/{loop_dir.name}"
+        summary = _load_json(loop_dir / "loop_summary.json")
+        if summary is None:
+            # summary 없는 loop dir = 진행 중이거나 중도 종료 — 아무 주장도 없으므로 검사하지 않는다.
+            # (loop 실행 중 verify_candidate가 validate를 호출할 때 자기 자신을 오탐하지 않기 위함)
+            continue
+        for name in ("lineage.json", "base_hash_check.json", "phase2d1_dashboard_summary.json"):
+            if not (loop_dir / name).is_file():
+                p.append(f"Phase 2D-1: {rel}/{name} 없음")
+        hash_check = _load_json(loop_dir / "base_hash_check.json") or {}
+        if hash_check and hash_check.get("status") != "PASS":
+            p.append(f"Phase 2D-1: {rel} base run 보호 대상 변경됨 (§1-1 위반)")
+        if summary.get("status") == "AUTOPILOT_HOLD_FOR_HUMAN" and \
+                not (loop_dir / "hold_for_human_packet.json").is_file():
+            p.append(f"Phase 2D-1: {rel} HOLD인데 hold_for_human_packet.json 없음 (§11)")
+        # PRODUCT_CANDIDATE 주장에는 마지막 iteration acceptance PASS 근거 필요 (§8)
+        if summary.get("status") == "PRODUCT_CANDIDATE":
+            accepted = False
+            for it_dir in sorted((loop_dir / "iterations").glob("iter*")):
+                for sub in ("after", "before"):
+                    acc = _load_json(it_dir / sub / "product_acceptance.json") or {}
+                    if acc.get("product_candidate_allowed") is True:
+                        accepted = True
+            if not accepted:
+                p.append(f"Phase 2D-1: {rel} PRODUCT_CANDIDATE인데 acceptance PASS 근거 없음")
+    return p
+
+
 def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     """§7: spec repair proposal/review는 있으면 검사 — apply는 Phase 2A에서 무조건 금지."""
     p: list[str] = []
@@ -1440,6 +1479,7 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_phase2c2(run_dir)
     problems += _check_phase2c3(run_dir)
     problems += _check_phase2d0(run_dir)
+    problems += _check_phase2d1(run_dir)
 
     leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
     if leaked:

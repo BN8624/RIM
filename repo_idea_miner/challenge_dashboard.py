@@ -1095,6 +1095,120 @@ def _phase2d0_panel(p2d0: dict | None, run_root: Path | None) -> str:
 </section>"""
 
 
+_PHASE2D1_SUBDIR = "review/phase2d1"
+
+
+def _load_phase2d1(run_root: Path | None) -> dict | None:
+    """Phase 2D-1 closed loop 요약 — 가장 최근 loop_*의 dashboard summary. 없으면 None."""
+    if run_root is None:
+        return None
+    root = run_root / _PHASE2D1_SUBDIR
+    if not root.is_dir():
+        return None
+    for loop_dir in sorted((d for d in root.iterdir() if d.is_dir()), reverse=True):
+        p = loop_dir / "phase2d1_dashboard_summary.json"
+        if p.is_file():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                data["_loop_dir"] = str(loop_dir.relative_to(run_root).as_posix())
+                return data
+            except (OSError, json.JSONDecodeError):
+                continue
+    return None
+
+
+def _phase2d1_card_lines(p2d1: dict | None) -> str:
+    """목록 카드 3줄: iteration/stage, gap/lane, stop/coverage (§12 — 기술 로그는 상세로)."""
+    if not p2d1:
+        return ""
+    cov = p2d1.get("critical_requirement_coverage")
+    return (
+        f'<p class="meta">closed loop: iter {_e(p2d1.get("iteration"))}/{_e(p2d1.get("max_iterations"))}'
+        f' · stage: <b>{_e(p2d1.get("current_stage") or "-")}</b>'
+        f' (이전: {_e(p2d1.get("previous_stage") or "-")})</p>'
+        f'<p class="meta">gap: {_e(p2d1.get("primary_gap") or "-")}'
+        f' · lane: {_e(p2d1.get("selected_lane") or "-")}'
+        f' · mock fallback: {_e(p2d1.get("mock_fallback_count"))}'
+        f' · coverage: {_e(cov if cov is not None else "-")}</p>'
+        f'<p class="meta">loop status: <b>{_e(p2d1.get("status") or "-")}</b>'
+        f' · stop: {_e(p2d1.get("stop_reason") or "-")}'
+        f'{" · <b>사람 검수 필요</b>" if p2d1.get("hold_for_human") else ""}</p>'
+    )
+
+
+def _phase2d1_panel(p2d1: dict | None, run_root: Path | None) -> str:
+    """상세 페이지 Phase 2D-1 패널: iteration별 stage/gap/lane/delta + lineage (§12)."""
+    if not p2d1:
+        return ""
+    loop_rel = p2d1.get("_loop_dir") or ""
+    loop_dir = (run_root / loop_rel) if run_root and loop_rel else None
+
+    def _j(name):
+        if loop_dir is None:
+            return {}
+        try:
+            return json.loads((loop_dir / name).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    summary = _j("loop_summary.json")
+    lineage = _j("lineage.json")
+    hold = _j("hold_for_human_packet.json")
+
+    def _tf(v):
+        return "true" if v is True else ("false" if v is False else "-")
+
+    iter_rows = ""
+    for it in summary.get("iterations") or []:
+        delta = it.get("metric_delta") or {}
+        delta_line = " ".join(f"{k}={v}" for k, v in delta.items()) or "-"
+        iter_rows += (
+            f'<tr><td>{_e(it.get("iteration"))}</td>'
+            f'<td>{_e(it.get("stage_before") or "-")}'
+            f'{_e(" → " + it["stage_after"] if it.get("stage_after") else "")}</td>'
+            f'<td>{_e(it.get("primary_gap_before") or "-")}</td>'
+            f'<td>{_e(it.get("selected_lane") or "-")}</td>'
+            f'<td>{_e(it.get("lane_status") or "-")}</td>'
+            f'<td>{_e(it.get("progress") or "-")}</td>'
+            f'<td class="meta">{_e(delta_line)}</td></tr>')
+    lineage_rows = ""
+    for en in lineage.get("entries") or []:
+        lineage_rows += (
+            f'<tr><td>{_e(en.get("iteration"))}</td>'
+            f'<td class="meta">{_e(en.get("parent_run_dir") or "-")}</td>'
+            f'<td class="meta">{_e(en.get("child_run_dir") or "-")}</td>'
+            f'<td>{_e(en.get("selected_lane") or "-")}</td></tr>')
+    hold_html = ""
+    if hold:
+        hold_html = (
+            f'<div class="field"><span class="k">HOLD_FOR_HUMAN</span>'
+            f'<p class="meta">{_e(hold.get("why_not_automated") or "-")}</p>'
+            f'<p class="meta"><b>질문: {_e(hold.get("single_question_for_human") or "-")}</b></p>'
+            f'<ul class="evi">{"".join(f"<li>{_e(o)}</li>" for o in hold.get("recommended_options") or [])}</ul></div>')
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Phase 2D-1 Closed Productization Loop</h2>
+  <p class="meta">loop: {_e(p2d1.get('loop_id') or '-')}
+    · iteration {_e(p2d1.get('iteration'))}/{_e(p2d1.get('max_iterations'))}
+    · stage: <b>{_e(p2d1.get('current_stage') or '-')}</b> (이전: {_e(p2d1.get('previous_stage') or '-')})
+    · status: <b>{_e(p2d1.get('status') or '-')}</b></p>
+  <p class="meta">critical requirement coverage: {_e(p2d1.get('critical_requirement_coverage'))}
+    · anchor coverage: {_e(p2d1.get('anchor_coverage'))}
+    · mock fallback: {_e(p2d1.get('mock_fallback_count'))}
+    · regression: {_tf(p2d1.get('regression'))}
+    · base hash: {_e(p2d1.get('base_hash_status') or '-')}</p>
+  <p class="meta">active candidate: {_e(p2d1.get('active_child_run') or '-')}
+    · stop: {_e(p2d1.get('stop_reason') or '-')}</p>
+  <div class="field"><span class="k">Iterations</span>
+  <table class="tbl"><tr><th>#</th><th>stage</th><th>gap</th><th>lane</th><th>lane 결과</th><th>progress</th><th>delta</th></tr>
+  {iter_rows or '<tr><td colspan="7" class="muted">없음</td></tr>'}</table></div>
+  <div class="field"><span class="k">Lineage</span>
+  <table class="tbl"><tr><th>#</th><th>parent</th><th>child</th><th>lane</th></tr>
+  {lineage_rows or '<tr><td colspan="4" class="muted">없음</td></tr>'}</table></div>
+  {hold_html}
+</section>"""
+
+
 def _match_product_filters(run: dict, rev: dict | None, filters: dict) -> bool:
     verdict = filters.get("verdict")
     status = filters.get("status")
@@ -1300,6 +1414,7 @@ def render_products_index(conn: sqlite3.Connection, filters: dict) -> str:
         else:
             body_lines += _phase2c0_card_lines(_load_phase2c0(run_root))
         body_lines += _phase2d0_card_lines(_load_phase2d0(run_root))
+        body_lines += _phase2d1_card_lines(_load_phase2d1(run_root))
         cards.append(
             f"""  <article class="card">
     <div class="chead">
@@ -1563,6 +1678,7 @@ def render_product_detail(
         + _phase2c2_panel(_load_phase2c2(run_root))
         + _phase2c3_panel(_load_phase2c3(run_root))
         + _phase2d0_panel(_load_phase2d0(run_root), run_root)
+        + _phase2d1_panel(_load_phase2d1(run_root), run_root)
         + gate_html + qa_html + issues_html
         + smoke_html + paths_html + tree_html + source_html + report_html + bottom_actions
     )

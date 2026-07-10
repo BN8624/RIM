@@ -183,13 +183,18 @@ def build_parser() -> argparse.ArgumentParser:
     fde_p.add_argument("--db", default="challenge.db")
 
     fpl_p = sub.add_parser("factory-product-loop",
-                           help="Gemma Productization Autopilot 최소 루프 (Phase 2D-0, apply 없음)")
+                           help="Productization Autopilot — 기본 judge/order/blueprint, "
+                                "--execute면 child run closed loop (Phase 2D-1)")
     fpl_p.add_argument("--run-dir", default=None, help="대상 run 디렉터리 (권장)")
     fpl_p.add_argument("--run-id", type=int, default=None, help="보조: product run id")
     fpl_p.add_argument("--mode", choices=["mock", "live"], default="mock")
     fpl_p.add_argument("--gemma-mode", choices=["sequential", "unified"], default="sequential",
                        help="desk 호출 방식 (검증 기준은 동일)")
-    fpl_p.add_argument("--max-iterations", type=int, default=1, help="기본 1 (§21)")
+    fpl_p.add_argument("--max-iterations", type=int, default=None,
+                       help="기본: judge-only 1, --execute 4 (§10)")
+    fpl_p.add_argument("--execute", action="store_true",
+                       help="child run 기반 closed loop 실행 (§13 — 원본 base run은 불변, "
+                            "--apply-original 같은 원본 수정 옵션은 없음)")
     fpl_p.add_argument("--db", default="challenge.db")
 
     fq_p = sub.add_parser("factory-continue-queue",
@@ -854,14 +859,42 @@ def main(argv: list[str] | None = None) -> int:
                     if settings.google_keys:
                         scheduler = ChallengeKeyScheduler(db_conn, settings.google_keys,
                                                           load_challenge_miner_settings())
-                out = run_product_loop(
-                    run_dir=args.run_dir, run_id=args.run_id, mode=args.mode,
-                    gemma_mode=args.gemma_mode, max_iterations=args.max_iterations,
-                    db_conn=db_conn, scheduler=scheduler,
-                )
+                if args.execute:
+                    from repo_idea_miner.factory_loop_executor import run_closed_product_loop
+                    out = run_closed_product_loop(
+                        run_dir=args.run_dir, run_id=args.run_id, mode=args.mode,
+                        gemma_mode=args.gemma_mode, execute=True,
+                        max_iterations=args.max_iterations or 4,
+                        db_conn=db_conn, scheduler=scheduler,
+                    )
+                else:
+                    out = run_product_loop(
+                        run_dir=args.run_dir, run_id=args.run_id, mode=args.mode,
+                        gemma_mode=args.gemma_mode, max_iterations=args.max_iterations or 1,
+                        db_conn=db_conn, scheduler=scheduler,
+                    )
             finally:
                 if db_conn is not None:
                     db_conn.close()
+            if args.execute:
+                print(f"CLOSED PRODUCT LOOP ({args.mode} / Phase 2D-1)")
+                print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
+                print(f"- loop_dir: {out.get('loop_dir')} / status: {out.get('status')}")
+                if out.get("error"):
+                    print(f"오류: {out['error']}", file=sys.stderr)
+                    return 1
+                print(f"- final_stage: {out.get('final_stage')}")
+                print(f"- active candidate: {out.get('active_candidate_run_dir')}")
+                print(f"- base hash: {out.get('base_hash_status')}")
+                for it in out.get("iterations") or []:
+                    print(f"  iter{it.get('iteration')}: stage={it.get('stage_before')} "
+                          f"gap={it.get('primary_gap_before')} lane={it.get('selected_lane')} "
+                          f"→ {it.get('lane_status') or it.get('progress') or '-'}")
+                for c in out.get("stop_conditions") or []:
+                    print(f"  stop: {c}")
+                if out.get("hold_packet"):
+                    print(f"- HOLD_FOR_HUMAN: {out['hold_packet']['single_question_for_human']}")
+                return 0 if out.get("ok") else 1
             print(f"PRODUCT LOOP ({args.mode} / {args.gemma_mode})")
             print(f"- resolved_run_dir: {out.get('resolved_run_dir')}")
             print(f"- challenge_id: {out.get('challenge_id')} / status: {out.get('status')}")
