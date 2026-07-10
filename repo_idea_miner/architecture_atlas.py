@@ -5,19 +5,19 @@ import hashlib
 import json
 import re
 import subprocess
-import tomllib
 from pathlib import Path
 
 from repo_idea_miner.architecture_scanner import (
+    ATLAS_DIR,
+    ATLAS_JSON,
+    MANIFEST_NAME,
     PACKAGE,
     build_baseline,
     extract_cli_details,
+    load_manifest,
     resolve_symbols,
 )
 
-ATLAS_DIR = "architecture"
-MANIFEST_NAME = "manifest.toml"
-ATLAS_JSON = "atlas.json"
 ATLAS_SCHEMA = "atlas.schema.json"
 
 ROOT_MD_WHITELIST = ("AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md")
@@ -33,10 +33,6 @@ _MD_LINK_RE = re.compile(r"\]\(([^)#`\s]+\.md)\)")
 
 
 # ---------------------------------------------------------------- manifest
-
-def load_manifest(root: Path) -> dict:
-    return tomllib.loads((root / ATLAS_DIR / MANIFEST_NAME).read_text(encoding="utf-8"))
-
 
 def module_component_map(manifest: dict) -> dict[str, str]:
     """짧은 모듈명(stem) → component id."""
@@ -434,8 +430,20 @@ def _last_commit_files(root: Path) -> set[str]:
         return set()
 
 
-def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list[str]:
-    """구조·문서 governance 검사 — 문제 목록을 돌려준다 (비면 PASS)."""
+README_REQUIRED_SECTIONS = ("## READ ORDER", "## REPOSITORY RULES", "## CONTEXT COMMAND",
+                            "## VALIDATION COMMANDS", "## DO NOT")
+REENTRY_REQUIRED_SECTIONS = ("HEAD:", "SYSTEM_STATUS:", "RECENT_SEMANTIC_CHANGES:",
+                             "OPEN_BLOCKERS:", "NEXT_ACTIONS:", "DO_NOT_REPEAT:", "VERIFY:")
+FORBIDDEN_HUMAN_ATLAS_TOKENS = ("architecture/index.html", "architecture-serve",
+                                "architecture-summary", "모바일 Atlas")
+DOC_SIZE_LIMITS = {"README.md": 4096, "AI_INDEX.md": 6144,
+                   "PROJECT_CANON.md": 20480, "REENTRY.md": 8192}
+
+
+def run_architecture_check(root: Path, secrets: list[str] | None = None,
+                           warnings: list[str] | None = None) -> list[str]:
+    """구조·문서 governance 검사 — 문제 목록을 돌려준다 (비면 PASS).
+    warnings 리스트를 넘기면 §17.2 비차단 경고를 채운다."""
     problems: list[str] = []
     atlas = build_atlas(root)
     manifest = load_manifest(root)
@@ -638,6 +646,60 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
             if f"]({ghost}" in text:
                 problems.append(f"{name}: 삭제된 문서 링크 {ghost}")
 
+    # 21. README AI bootstrap 구조 (§17.1-3, §6)
+    for sec in README_REQUIRED_SECTIONS:
+        if sec not in readme:
+            problems.append(f"README bootstrap 섹션 누락: {sec}")
+
+    # 22. REENTRY 필수 섹션 (§17.1-6, §9)
+    reentry = (root / "REENTRY.md").read_text(encoding="utf-8")
+    for sec in REENTRY_REQUIRED_SECTIONS:
+        if sec not in reentry:
+            problems.append(f"REENTRY 필수 섹션 누락: {sec}")
+
+    # 23. architecture-serve/summary CLI 부재 (§17.1-9/10)
+    for gone in ("architecture-serve", "architecture-summary"):
+        if gone in known_cmds:
+            problems.append(f"제거 대상 CLI 존재: {gone}")
+
+    # 24. README·CANON에 사람용 Atlas(HTML/serve/모바일) 설명 부재 (§17.1-22)
+    for name in ("README.md", "PROJECT_CANON.md"):
+        text = (root / name).read_text(encoding="utf-8")
+        for tok in FORBIDDEN_HUMAN_ATLAS_TOKENS:
+            if tok in text:
+                problems.append(f"{name}: 사람용 Atlas 설명 토큰 잔존 — {tok}")
+
+    # 25. AI_INDEX 라우팅 표 정합 (§17.1-4): CANON 실재 + ATLAS_QUERY selector 해석 가능
+    valid_selector_values = {
+        "canon": canon,
+        "component": set(atlas["components"]),
+        "route": {r["route_id"] for r in atlas["routes"]},
+        "module": {m["module"].split(".")[-1] for m in atlas["modules"]},
+        "symbol": {s["symbol_id"] for s in atlas["symbols"]}
+        | {s["symbol_id"].split(".")[-1] for s in atlas["symbols"]},
+        "cli": known_cmds,
+        "artifact": {a["artifact_id"] for a in atlas["artifacts"]},
+    }
+    for row in atlas["document_routes"]:
+        for c in row["canon_ids"]:
+            if c not in canon:
+                problems.append(f"AI_INDEX {row['route_id']}: 없는 CANON {c}")
+        parts = row["atlas_query"].split()
+        kind = parts[0].lstrip("-") if parts and parts[0].startswith("--") else None
+        if kind not in valid_selector_values or len(parts) != 2:
+            problems.append(f"AI_INDEX {row['route_id']}: 해석 불가 ATLAS_QUERY '{row['atlas_query']}'")
+        elif parts[1] not in valid_selector_values[kind]:
+            problems.append(f"AI_INDEX {row['route_id']}: 없는 {kind} '{parts[1]}'")
+
+    # 26. contract owner 누락 (§17.1-13)
+    for c in atlas["contracts"]:
+        if not c["owner_symbol"]:
+            problems.append(f"contract {c['contract_id']}: owner_symbol 없음")
+
+    # 27. 같은 입력에서 비결정 atlas (§17.1-20) — 두 번 빌드해 비교
+    if build_atlas(root) != atlas:
+        problems.append("비결정 atlas: 같은 입력에서 두 빌드 결과가 다름")
+
     # §17.12 문서 정책: 구조 fingerprint가 바뀌었는데 마지막 commit에 PROJECT_CANON.md가 없으면 FAIL
     if committed.is_file():
         try:
@@ -649,4 +711,77 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
                 and "PROJECT_CANON.md" not in _last_commit_files(root):
             problems.append("구조 변경이 커밋되지 않았거나 PROJECT_CANON.md가 같은 커밋에 없음 (§17.12)")
 
+    if warnings is not None:
+        warnings.extend(_collect_warnings(root, atlas))
     return problems
+
+
+def _collect_warnings(root: Path, atlas: dict) -> list[str]:
+    """§17.2 비차단 경고 7종 + §18 문서 크기."""
+    out: list[str] = []
+
+    # 1. canonical symbol에 test 없음
+    for s in atlas["symbols"]:
+        if not s["related_tests"]:
+            out.append(f"symbol test 없음: {s['symbol_id']}")
+
+    # 2. literal reference로만 존재하는 artifact (집계)
+    ids_with_fact = {a["artifact_id"] for a in atlas["artifacts"]
+                     if a["role"] != "LITERAL_REFERENCE"}
+    literal_only = {a["artifact_id"] for a in atlas["artifacts"]
+                    if a["role"] == "LITERAL_REFERENCE"} - ids_with_fact
+    if literal_only:
+        out.append(f"literal reference로만 존재하는 artifact {len(literal_only)}개 (IO/manifest 실증 없음)")
+
+    # 3. route 밖 public entrypoint (route가 없는 CLI command)
+    routed = {r["cli"] for r in atlas["routes"]}
+    unrouted = sorted(c["command"] for c in atlas["cli"] if c["command"] not in routed)
+    if unrouted:
+        out.append(f"route 미선언 CLI: {', '.join(unrouted)}")
+
+    # 4. AI_INDEX query의 Context primary file 제한 초과
+    from repo_idea_miner.architecture_context import build_context
+
+    for row in atlas["document_routes"]:
+        parts = row["atlas_query"].split()
+        if len(parts) != 2 or not parts[0].startswith("--"):
+            continue
+        try:
+            ctx = build_context(root, {parts[0].lstrip("-"): [parts[1]]})
+        except FileNotFoundError:
+            break
+        for w in ctx["warnings"]:
+            if "primary file 제한 초과" in w:
+                out.append(f"AI_INDEX {row['route_id']}: {w}")
+
+    # 5. contract consumer 미등록
+    for c in atlas["contracts"]:
+        if not c["consumer_symbols"]:
+            out.append(f"contract consumer 미등록: {c['contract_id']}")
+
+    # 6. repository HEAD와 committed atlas HEAD 다름 — 커밋에 포함된 atlas는 필연적으로
+    #    직전 HEAD에서 빌드되므로 HEAD~1까지는 정상, 그보다 오래되면 경고
+    committed = root / ATLAS_DIR / ATLAS_JSON
+    if committed.is_file():
+        try:
+            old_head = json.loads(committed.read_text(encoding="utf-8")) \
+                .get("repository", {}).get("head")
+        except json.JSONDecodeError:
+            old_head = None
+        allowed = {atlas["repository"]["head"]}
+        try:
+            r = subprocess.run(["git", "rev-parse", "HEAD^"], cwd=root,
+                               capture_output=True, text=True, timeout=30)
+            if r.returncode == 0:
+                allowed.add(r.stdout.strip())
+        except OSError:
+            pass
+        if old_head and old_head not in allowed:
+            out.append("committed atlas.json의 head가 HEAD/HEAD~1보다 오래됨 (구조 지문은 동일 — 참고)")
+
+    # 7. AI 문서 크기 상한 (§18)
+    for name, limit in DOC_SIZE_LIMITS.items():
+        size = (root / name).stat().st_size if (root / name).is_file() else 0
+        if size > limit:
+            out.append(f"문서 크기 초과: {name} {size}B > {limit}B")
+    return out

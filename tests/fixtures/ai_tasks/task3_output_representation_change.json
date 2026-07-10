@@ -1,0 +1,11 @@
+{
+ "task": "output representation 계약 변경",
+ "query": {"symbol": ["OutputRepresentation"]},
+ "required_canon_ids": ["CANON-04"],
+ "required_primary_files": ["repo_idea_miner/factory_core_schemas.py"],
+ "required_symbols": ["repo_idea_miner.factory_core_schemas.OutputRepresentation"],
+ "required_invariants": ["INV-SUMMARY-STRING"],
+ "required_tests": ["test_factory_core_schemas"],
+ "required_contracts": ["output_representation"],
+ "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
+}

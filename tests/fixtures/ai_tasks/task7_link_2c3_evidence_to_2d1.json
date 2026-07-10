@@ -1,0 +1,13 @@
+{
+ "task": "2C-3 실행 실증을 2D-1 evidence에 연결",
+ "query": {"symbol": ["extract_artifact_evidence"], "module": ["factory_draft_execution"]},
+ "required_canon_ids": ["CANON-06", "CANON-07"],
+ "required_primary_files": ["repo_idea_miner/factory_product_loop.py",
+                            "repo_idea_miner/factory_draft_execution.py"],
+ "required_symbols": ["repo_idea_miner.factory_product_loop.extract_artifact_evidence",
+                      "repo_idea_miner.factory_draft_execution.run_draft_execution"],
+ "required_invariants": ["INV-BASE-RUN-IMMUTABLE"],
+ "required_tests": ["test_factory_draft_execution_2c3", "test_factory_phase2d1_loop"],
+ "required_contracts": ["product_evidence"],
+ "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
+}

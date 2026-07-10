@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from repo_idea_miner.architecture_atlas import (
+from repo_idea_miner.architecture_scanner import (
     ATLAS_DIR,
     ATLAS_JSON,
     load_manifest,
@@ -53,8 +53,11 @@ def _symbol_module_stem(symbol_id: str, module_stems: set[str]) -> str:
 def build_context(root: Path, selectors: dict, impact: bool = False,
                   depth: int = DEFAULT_DEPTH,
                   max_primary: int = DEFAULT_MAX_PRIMARY,
-                  max_secondary: int = DEFAULT_MAX_SECONDARY) -> dict:
-    """selector → AI Context Pack (§15.3). 같은 atlas.json·같은 query면 byte-identical."""
+                  max_secondary: int = DEFAULT_MAX_SECONDARY,
+                  live_fingerprint: str | None = None) -> dict:
+    """selector → AI Context Pack (§15.3). 같은 atlas.json·같은 query면 byte-identical.
+    live_fingerprint: --changed --impact에서 현재 트리를 재스캔한 구조 지문 (caller가 계산해
+    주입 — 이 모듈은 atlas builder를 import하지 않는다, cycle 방지)."""
     atlas = load_atlas(root)
     manifest = load_manifest(root)
     warnings: list[str] = []
@@ -273,8 +276,9 @@ def build_context(root: Path, selectors: dict, impact: bool = False,
     }
     if impact:
         out["direct_static_impact"] = _direct_static_impact(
-            root, atlas, sel_stems, mod_by_stem, module_stems, contracts, invariants,
-            changed=bool(selectors.get("changed")), changed_other=changed_other)
+            atlas, sel_stems, mod_by_stem, module_stems, contracts, invariants,
+            changed=bool(selectors.get("changed")), changed_other=changed_other,
+            live_fingerprint=live_fingerprint)
     return out
 
 
@@ -287,10 +291,11 @@ def _all_canon_ids(atlas: dict) -> set[str]:
     return out
 
 
-def _direct_static_impact(root: Path, atlas: dict, sel_stems: list[str],
+def _direct_static_impact(atlas: dict, sel_stems: list[str],
                           mod_by_stem: dict, module_stems: set[str],
                           contracts: list[dict], invariants: list[dict],
-                          changed: bool, changed_other: list[str]) -> dict:
+                          changed: bool, changed_other: list[str],
+                          live_fingerprint: str | None) -> dict:
     """§16 direct static impact — 완전한 runtime 영향이 아니라 정적 1-hop 사실만."""
     sel_full = {mod_by_stem[s]["module"] for s in sel_stems}
     consumers = sorted({
@@ -338,11 +343,8 @@ def _direct_static_impact(root: Path, atlas: dict, sel_stems: list[str],
         "presentation_consumers": presentation,
     }
     if changed:
-        from repo_idea_miner.architecture_atlas import build_atlas
-
-        live_fp = build_atlas(root)["repository"]["structural_fingerprint"]
         committed_fp = atlas["repository"]["structural_fingerprint"]
-        fp_changed = live_fp != committed_fp
+        fp_changed = (live_fingerprint != committed_fp) if live_fingerprint else None
         impact["changed"] = {
             "changed_components": sorted({mod_by_stem[s]["component"] for s in sel_stems}),
             "affected_routes": affected_routes,
@@ -391,7 +393,7 @@ def render_compact(ctx: dict) -> str:
             lines.append(f"IMPACT_ROUTE {r}")
         ch = impact.get("changed")
         if ch:
-            lines.append(f"IMPACT_FINGERPRINT_CHANGED {str(ch['structure_fingerprint_changed']).lower()}")
+            lines.append(f"IMPACT_FINGERPRINT_CHANGED {json.dumps(ch['structure_fingerprint_changed'])}")
     for w in ctx["warnings"]:
         lines.append(f"WARN {w}")
     return "\n".join(lines)

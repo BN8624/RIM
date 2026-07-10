@@ -1,0 +1,10 @@
+{
+ "task": "protected hash 대상 추가",
+ "query": {"symbol": ["compute_protected_hashes"]},
+ "required_canon_ids": ["CANON-06"],
+ "required_primary_files": ["repo_idea_miner/factory_product_evidence.py"],
+ "required_symbols": ["repo_idea_miner.factory_product_evidence.compute_protected_hashes"],
+ "required_invariants": ["INV-PROTECTED-HASH"],
+ "required_tests": ["test_factory_product_polish_2c1", "test_factory_spec_repair_2b1"],
+ "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
+}

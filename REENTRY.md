@@ -1,14 +1,15 @@
 # REENTRY
 
 HEAD:
-- commit: (A4 commit — architecture-context CLI)
+- commit: (A5 commit — check 강화 + AI task fixtures)
 - branch: main
 - clean: true (untracked order docs only — never commit them)
 
 SYSTEM_STATUS:
-- tests: full suite PASS at 7fce157 (1001, pre-A3); A3 full-suite run caught mid-A4 edits
-  (dispatch registry race — not a code defect); after A4 targeted 61 PASS, full suite rerun pending
-- architecture_check: PASS (atlas schema V2, build byte-identical x2)
+- tests: full suite PASS at 7fce157 (1001, pre-A3); after A5 targeted 70 PASS
+  (atlas/scanner/context/fixtures/cli/characterization), full suite rerun = A6
+- architecture_check: PASS + WARN 채널 (literal-only artifacts, route 미선언 CLI,
+  AI_INDEX component query primary 초과 — 모두 §17.2 비차단)
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
@@ -26,11 +27,17 @@ RECENT_SEMANTIC_CHANGES:
   excluded by default; do_not_modify from manifest [rules.do_not_modify]; route 17
   (architecture_context) added; README CONTEXT COMMAND = python -m form
 
+- A5 done: check hard 항목 확장(README bootstrap 구조/REENTRY 필수 섹션/serve·summary CLI 부재/
+  사람용 Atlas 토큰/AI_INDEX ATLAS_QUERY 해석 검증/contract owner/이중 빌드 결정론) + §17.2
+  warning 7종·§18 문서 크기(비차단 채널); 대표 AI task fixture 8종(tests/fixtures/ai_tasks)
+  recall 100% 테스트; atlas↔context import cycle 해소(공유 상수·load_manifest를 scanner로,
+  context는 builder 미import — live fingerprint는 handler가 주입)
+
 OPEN_BLOCKERS:
-- id: ai_only_atlas_A5_A6
-  state: pending (A0~A4 done)
+- id: ai_only_atlas_A6
+  state: pending (A0~A5 done)
   evidence: runs/_ai_only_atlas/state.json (detailed per-stage plan) + order doc at repo root
-  next_action: A5 check 22 hard items + doc-size warnings + 8 task fixtures → A6 regression + final report
+  next_action: A6 final regression (build×2, full pytest, dashboard/viewer smoke, md 정책) + §25 보고
 - id: hold_54
   state: waiting_human
   evidence: runs/factory_20260710_021635/review/phase2d1/loop_20260710_141947/hold_for_human_packet.json
@@ -41,8 +48,8 @@ OPEN_BLOCKERS:
   next_action: human final review/release decision; rerun loop if a fresh record is wanted
 
 NEXT_ACTIONS:
-1. A5: architecture-check 22 hard failures + warnings(doc size §18) + 8 representative AI task fixtures
-2. A6: build×2 byte-identical, full pytest, runtime UI regression, final report (response only)
+1. A6: build×2 byte-identical, full pytest, runtime UI regression(dashboard smoke),
+   tracked md 정책, root md 4, 최종 보고 (응답으로만 — 새 md 보고 금지)
 
 DO_NOT_REPEAT:
 - do not commit the two untracked root order docs

@@ -3,9 +3,20 @@ from __future__ import annotations
 
 import ast
 import re
+import tomllib
 from pathlib import Path
 
 PACKAGE = "repo_idea_miner"
+
+# Atlas 산출물 위치 — atlas/context 양쪽이 쓰는 최하층 상수 (import cycle 방지).
+ATLAS_DIR = "architecture"
+MANIFEST_NAME = "manifest.toml"
+ATLAS_JSON = "atlas.json"
+
+
+def load_manifest(root: Path) -> dict:
+    """architecture/manifest.toml — 사람 정의 의미의 정본."""
+    return tomllib.loads((root / ATLAS_DIR / MANIFEST_NAME).read_text(encoding="utf-8"))
 
 _ARTIFACT_RE = re.compile(r"^[\w./-]+\.(json|md|html|toml|jsonl)$")
 _RUN_KIND_RE = re.compile(r"^[A-Z][A-Z0-9_]*_RUN$")

@@ -271,6 +271,15 @@
    "symbol_id": "repo_idea_miner.factory_core_pipeline"
   },
   {
+   "artifact_id": "architecture_index_html",
+   "path_pattern": "architecture/index.html",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/architecture_atlas.py",
+   "symbol_id": "repo_idea_miner.architecture_atlas"
+  },
+  {
    "artifact_id": "architecture_md",
    "path_pattern": "ARCHITECTURE.md",
    "provenance": "AST_STRING_LITERAL",
@@ -384,8 +393,8 @@
    "provenance": "AST_STRING_LITERAL",
    "role": "LITERAL_REFERENCE",
    "source_line": 0,
-   "source_path": "repo_idea_miner/architecture_atlas.py",
-   "symbol_id": "repo_idea_miner.architecture_atlas"
+   "source_path": "repo_idea_miner/architecture_scanner.py",
+   "symbol_id": "repo_idea_miner.architecture_scanner"
   },
   {
    "artifact_id": "atlas_schema_json",
@@ -2886,8 +2895,8 @@
    "provenance": "AST_STRING_LITERAL",
    "role": "LITERAL_REFERENCE",
    "source_line": 0,
-   "source_path": "repo_idea_miner/architecture_atlas.py",
-   "symbol_id": "repo_idea_miner.architecture_atlas"
+   "source_path": "repo_idea_miner/architecture_scanner.py",
+   "symbol_id": "repo_idea_miner.architecture_scanner"
   },
   {
    "artifact_id": "mock_loop_order_following_report_json",
@@ -7971,7 +7980,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 957,
+  "test_count": 959,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -8136,29 +8145,37 @@
     "REENTRY.md",
     "SCOPE.md",
     "VERIFICATION.md",
-    "atlas.json",
+    "architecture/index.html",
     "atlas.schema.json",
     "checklist.md",
-    "index.html",
-    "manifest.toml"
+    "index.html"
    ],
    "component": "atlas",
    "imported_by": [
-    "repo_idea_miner.architecture_context",
     "repo_idea_miner.cli_handlers"
    ],
    "imports": [
     {
+     "from": "repo_idea_miner.architecture_context",
+     "names": [
+      "build_context"
+     ]
+    },
+    {
      "from": "repo_idea_miner.architecture_scanner",
      "names": [
+      "ATLAS_DIR",
+      "ATLAS_JSON",
+      "MANIFEST_NAME",
       "PACKAGE",
       "build_baseline",
       "extract_cli_details",
+      "load_manifest",
       "resolve_symbols"
      ]
     }
    ],
-   "loc": 652,
+   "loc": 787,
    "module": "repo_idea_miner.architecture_atlas",
    "path": "repo_idea_miner/architecture_atlas.py",
    "private_symbols": [
@@ -8174,6 +8191,7 @@
     "_canon_section_bodies",
     "_cli_handlers_map",
     "_collect_symbol_specs",
+    "_collect_warnings",
     "_committed_structural_fingerprint",
     "_document_routes",
     "_git_head",
@@ -8184,14 +8202,14 @@
    "public_symbols": [
     "ARTIFACT_PROVENANCES",
     "ARTIFACT_ROLES",
-    "ATLAS_DIR",
-    "ATLAS_JSON",
     "ATLAS_SCHEMA",
-    "MANIFEST_NAME",
+    "DOC_SIZE_LIMITS",
+    "FORBIDDEN_HUMAN_ATLAS_TOKENS",
+    "README_REQUIRED_SECTIONS",
+    "REENTRY_REQUIRED_SECTIONS",
     "ROOT_MD_WHITELIST",
     "build_atlas",
     "compute_fingerprint",
-    "load_manifest",
     "module_component_map",
     "run_architecture_check",
     "write_atlas"
@@ -8204,25 +8222,20 @@
    "artifact_refs": [],
    "component": "atlas",
    "imported_by": [
+    "repo_idea_miner.architecture_atlas",
     "repo_idea_miner.cli_handlers"
    ],
    "imports": [
     {
-     "from": "repo_idea_miner.architecture_atlas",
+     "from": "repo_idea_miner.architecture_scanner",
      "names": [
       "ATLAS_DIR",
       "ATLAS_JSON",
       "load_manifest"
      ]
-    },
-    {
-     "from": "repo_idea_miner.architecture_atlas",
-     "names": [
-      "build_atlas"
-     ]
     }
    ],
-   "loc": 397,
+   "loc": 399,
    "module": "repo_idea_miner.architecture_context",
    "path": "repo_idea_miner/architecture_context.py",
    "private_symbols": [
@@ -8241,17 +8254,22 @@
     "render_compact"
    ],
    "tests": [
+    "test_ai_task_fixtures",
     "test_architecture_context"
    ]
   },
   {
-   "artifact_refs": [],
+   "artifact_refs": [
+    "atlas.json",
+    "manifest.toml"
+   ],
    "component": "atlas",
    "imported_by": [
-    "repo_idea_miner.architecture_atlas"
+    "repo_idea_miner.architecture_atlas",
+    "repo_idea_miner.architecture_context"
    ],
    "imports": [],
-   "loc": 344,
+   "loc": 355,
    "module": "repo_idea_miner.architecture_scanner",
    "path": "repo_idea_miner/architecture_scanner.py",
    "private_symbols": [
@@ -8265,6 +8283,9 @@
     "_module_name"
    ],
    "public_symbols": [
+    "ATLAS_DIR",
+    "ATLAS_JSON",
+    "MANIFEST_NAME",
     "PACKAGE",
     "build_baseline",
     "count_tests",
@@ -8273,6 +8294,7 @@
     "extract_validator_ids",
     "find_import_cycles",
     "find_private_imports",
+    "load_manifest",
     "resolve_symbols",
     "scan_module"
    ],
@@ -9342,6 +9364,12 @@
     {
      "from": "repo_idea_miner.architecture_atlas",
      "names": [
+      "build_atlas"
+     ]
+    },
+    {
+     "from": "repo_idea_miner.architecture_atlas",
+     "names": [
       "run_architecture_check"
      ]
     },
@@ -9599,7 +9627,7 @@
      ]
     }
    ],
-   "loc": 902,
+   "loc": 911,
    "module": "repo_idea_miner.cli_handlers",
    "path": "repo_idea_miner/cli_handlers.py",
    "private_symbols": [
@@ -14363,9 +14391,9 @@
   }
  ],
  "repository": {
-  "head": "117922dd4256b260a8fa3241db7ba3cf8427a0c4",
+  "head": "1e503e707f8c7d34704f61fa6ea032fb8d1fdc80",
   "structural_diff": true,
-  "structural_fingerprint": "46aa0abdaa5b6e849e563edf64755faf920a0684532add08b0a38f6edc5a7731",
+  "structural_fingerprint": "bba03b884eabe272cf900a062ec64e9a477199832853177edaaa23ec8065f0a7",
   "structure_snapshot": "845ec77d9279f203662b1daa9486bea74aa7e982344d2f924f18da229ee9906d"
  },
  "routes": [
@@ -14576,7 +14604,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 652,
+   "end_line": 716,
    "kind": "function",
    "path": "repo_idea_miner/architecture_atlas.py",
    "related_tests": [
@@ -14586,8 +14614,8 @@
     "invariant_target",
     "orchestrator"
    ],
-   "signature": "def run_architecture_check(root: Path, secrets: list[str] | None=None) -> list[str]",
-   "start_line": 437,
+   "signature": "def run_architecture_check(root: Path, secrets: list[str] | None=None, warnings: list[str] | None=None) -> list[str]",
+   "start_line": 443,
    "symbol_id": "repo_idea_miner.architecture_atlas.run_architecture_check"
   },
   {
@@ -14595,7 +14623,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 400,
+   "end_line": 396,
    "kind": "function",
    "path": "repo_idea_miner/architecture_atlas.py",
    "related_tests": [
@@ -14605,7 +14633,7 @@
     "orchestrator"
    ],
    "signature": "def write_atlas(root: Path) -> dict",
-   "start_line": 389,
+   "start_line": 385,
    "symbol_id": "repo_idea_miner.architecture_atlas.write_atlas"
   },
   {
@@ -14613,16 +14641,17 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 278,
+   "end_line": 282,
    "kind": "function",
    "path": "repo_idea_miner/architecture_context.py",
    "related_tests": [
+    "test_ai_task_fixtures",
     "test_architecture_context"
    ],
    "roles": [
     "orchestrator"
    ],
-   "signature": "def build_context(root: Path, selectors: dict, impact: bool=False, depth: int=DEFAULT_DEPTH, max_primary: int=DEFAULT_MAX_PRIMARY, max_secondary: int=DEFAULT_MAX_SECONDARY) -> dict",
+   "signature": "def build_context(root: Path, selectors: dict, impact: bool=False, depth: int=DEFAULT_DEPTH, max_primary: int=DEFAULT_MAX_PRIMARY, max_secondary: int=DEFAULT_MAX_SECONDARY, live_fingerprint: str | None=None) -> dict",
    "start_line": 53,
    "symbol_id": "repo_idea_miner.architecture_context.build_context"
   },
@@ -14757,7 +14786,7 @@
     "CANON-12"
    ],
    "component_id": "cli",
-   "end_line": 863,
+   "end_line": 872,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -14769,7 +14798,7 @@
     "entrypoint"
    ],
    "signature": "def _cmd_architecture_check(args) -> int",
-   "start_line": 853,
+   "start_line": 859,
    "symbol_id": "repo_idea_miner.cli_handlers._cmd_architecture_check"
   },
   {
@@ -14777,7 +14806,7 @@
     "CANON-12"
    ],
    "component_id": "cli",
-   "end_line": 850,
+   "end_line": 856,
    "kind": "function",
    "path": "repo_idea_miner/cli_handlers.py",
    "related_tests": [
@@ -16037,6 +16066,9 @@
  "tests": {
   "conftest": [
    "workers"
+  ],
+  "test_ai_task_fixtures": [
+   "architecture_context"
   ],
   "test_architecture_atlas": [
    "architecture_atlas",

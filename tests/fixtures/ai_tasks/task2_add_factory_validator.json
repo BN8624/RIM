@@ -1,0 +1,11 @@
+{
+ "task": "Factory validator 추가 (MARKER_VALIDATORS registry)",
+ "query": {"module": ["factory_validate"]},
+ "required_canon_ids": ["CANON-10"],
+ "required_primary_files": ["repo_idea_miner/factory_validate.py"],
+ "required_symbols": ["repo_idea_miner.factory_validate.run_marker_validators",
+                      "repo_idea_miner.factory_validate.validate_product_run_dir"],
+ "required_invariants": ["INV-FRESH-VERIFICATION"],
+ "required_tests": ["test_factory_validate"],
+ "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
+}

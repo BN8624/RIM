@@ -836,10 +836,16 @@ def _cmd_architecture_context(args) -> int:
               "(--canon/--component/--route/--module/--symbol/--cli/--artifact/--changed)",
               file=sys.stderr)
         return 1
+    live_fp = None
+    if args.changed and args.impact:  # 현재 트리 재스캔 지문 — context 모듈은 builder를 import하지 않음
+        from repo_idea_miner.architecture_atlas import build_atlas
+
+        live_fp = build_atlas(Path.cwd())["repository"]["structural_fingerprint"]
     try:
         ctx = build_context(
             Path.cwd(), selectors, impact=args.impact, depth=args.depth,
-            max_primary=args.max_primary_files, max_secondary=args.max_secondary_files)
+            max_primary=args.max_primary_files, max_secondary=args.max_secondary_files,
+            live_fingerprint=live_fp)
     except FileNotFoundError as exc:
         print(f"오류: {exc}", file=sys.stderr)
         return 1
@@ -854,7 +860,10 @@ def _cmd_architecture_check(args) -> int:
     from repo_idea_miner.architecture_atlas import run_architecture_check
 
     settings = load_settings()
-    problems = run_architecture_check(Path.cwd(), settings.secret_values())
+    warnings: list[str] = []
+    problems = run_architecture_check(Path.cwd(), settings.secret_values(), warnings=warnings)
+    for w in warnings:
+        print(f"WARN: {w}")
     if not problems:
         print("ARCHITECTURE CHECK PASS")
         return 0

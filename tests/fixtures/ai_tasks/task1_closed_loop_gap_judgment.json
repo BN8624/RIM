@@ -1,0 +1,10 @@
+{
+ "task": "Closed-loop gap 판정(hard blocker ladder) 수정",
+ "query": {"symbol": ["apply_hard_blockers"]},
+ "required_canon_ids": ["CANON-07"],
+ "required_primary_files": ["repo_idea_miner/factory_product_loop.py"],
+ "required_symbols": ["repo_idea_miner.factory_product_loop.apply_hard_blockers"],
+ "required_invariants": ["INV-HARD-RUNG-DETERMINISTIC", "INV-BASE-RUN-IMMUTABLE"],
+ "required_tests": ["test_factory_product_loop_2d0"],
+ "forbidden_files": ["repo_idea_miner/challenge_dashboard.py", "repo_idea_miner/pipeline.py"]
+}

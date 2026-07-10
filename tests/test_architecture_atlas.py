@@ -108,7 +108,9 @@ def test_health_targets():
 # ---------------------------------------------------------------- 문서/거버넌스
 
 def test_architecture_check_passes():
-    assert run_architecture_check(REPO_ROOT) == []
+    warnings: list[str] = []
+    assert run_architecture_check(REPO_ROOT, warnings=warnings) == []
+    assert all(isinstance(w, str) for w in warnings)  # §17.2 경고는 비차단 채널로만
 
 
 def test_canon_index_ids_match():
