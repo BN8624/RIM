@@ -13,9 +13,11 @@ from repo_idea_miner.architecture_scanner import (
     MANIFEST_NAME,
     PACKAGE,
     build_baseline,
+    collect_workspace_changes,
     extract_cli_details,
     load_manifest,
     resolve_symbols,
+    workspace_markdown_problems,
 )
 
 ATLAS_SCHEMA = "atlas.schema.json"
@@ -432,8 +434,11 @@ def _last_commit_files(root: Path) -> set[str]:
 
 README_REQUIRED_SECTIONS = ("## READ ORDER", "## REPOSITORY RULES", "## CONTEXT COMMAND",
                             "## VALIDATION COMMANDS", "## DO NOT")
-REENTRY_REQUIRED_SECTIONS = ("HEAD:", "SYSTEM_STATUS:", "RECENT_SEMANTIC_CHANGES:",
+REENTRY_REQUIRED_SECTIONS = ("HEAD_SOURCE:", "SYSTEM_STATUS:", "RECENT_SEMANTIC_CHANGES:",
                              "OPEN_BLOCKERS:", "NEXT_ACTIONS:", "DO_NOT_REPEAT:", "VERIFY:")
+REENTRY_REQUIRED_COMMANDS = ("git rev-parse HEAD", "git status --porcelain=v1")
+# 현재 HEAD를 정의하는 정적 필드 금지 (§6.3) — 과거 evidence 속 hash는 금지하지 않는다.
+_REENTRY_STATIC_HEAD_RE = re.compile(r"^\s*-?\s*commit:", re.M)
 FORBIDDEN_HUMAN_ATLAS_TOKENS = ("architecture/index.html", "architecture-serve",
                                 "architecture-summary", "모바일 Atlas")
 DOC_SIZE_LIMITS = {"README.md": 4096, "AI_INDEX.md": 6144,
@@ -657,6 +662,13 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None,
         if sec not in reentry:
             problems.append(f"REENTRY 필수 섹션 누락: {sec}")
 
+    # 22b. REENTRY HEAD 자기참조 금지 (A7 §6.3): Git이 현재 HEAD의 유일한 정본
+    for cmd in REENTRY_REQUIRED_COMMANDS:
+        if cmd not in reentry:
+            problems.append(f"REENTRY HEAD_SOURCE에 명령 누락: {cmd}")
+    if _REENTRY_STATIC_HEAD_RE.search(reentry):
+        problems.append("REENTRY에 정적 현재-HEAD 필드(commit:) 존재 — Git output이 정본 (§6.3)")
+
     # 23. architecture-serve/summary CLI 부재 (§17.1-9/10)
     for gone in ("architecture-serve", "architecture-summary"):
         if gone in known_cmds:
@@ -699,6 +711,28 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None,
     # 27. 같은 입력에서 비결정 atlas (§17.1-20) — 두 번 빌드해 비교
     if build_atlas(root) != atlas:
         problems.append("비결정 atlas: 같은 입력에서 두 빌드 결과가 다름")
+
+    # 28. workspace AI 문맥 오염 (A7 §5.2): untracked 루트/소스 Markdown = hard failure.
+    #     porcelain 기반이라 ignored(.env/runs/DB)는 아예 나오지 않고 출력에도 포함하지 않는다.
+    ws_changes = collect_workspace_changes(root)
+    problems.extend(workspace_markdown_problems(ws_changes))
+
+    # 29. --changed 정합 (A7 §17.1-4/-11): clean이면 changed_files 비어야 하고,
+    #     untracked production py는 changed_files에서 누락되면 안 된다 (end-to-end 배선 검증).
+    from repo_idea_miner.architecture_context import build_context
+
+    try:
+        ctx = build_context(root, {"changed": True}, impact=True)
+        ctx_paths = {c["path"] for c in
+                     ctx["direct_static_impact"]["changed"]["changed_files"]}
+        if not ws_changes and ctx_paths:
+            problems.append(f"clean workspace인데 context changed_files가 비어 있지 않음: {sorted(ctx_paths)}")
+        for c in ws_changes:
+            if c["status"] == "UNTRACKED" and c["is_python"] and not c["is_test"] \
+                    and c["path"].startswith(PACKAGE + "/") and c["path"] not in ctx_paths:
+                problems.append(f"--changed가 untracked production 파일 누락: {c['path']}")
+    except FileNotFoundError:
+        pass  # atlas 부재는 15번 검사가 이미 FAIL 처리
 
     # §17.12 문서 정책: 구조 fingerprint가 바뀌었는데 마지막 commit에 PROJECT_CANON.md가 없으면 FAIL
     if committed.is_file():
@@ -784,4 +818,19 @@ def _collect_warnings(root: Path, atlas: dict) -> list[str]:
         size = (root / name).stat().st_size if (root / name).is_file() else 0
         if size > limit:
             out.append(f"문서 크기 초과: {name} {size}B > {limit}B")
+
+    # 8. committed Atlas에 아직 없는 새 production 모듈 (A7 §17.2-7 — rebuild 전 상태 안내)
+    #    라이브 빌드는 untracked 파일도 스캔하므로, 기준은 커밋된 atlas.json이다.
+    committed_path = root / ATLAS_DIR / ATLAS_JSON
+    if committed_path.is_file():
+        try:
+            known_paths = {m["path"] for m in
+                           json.loads(committed_path.read_text(encoding="utf-8"))["modules"]}
+        except (json.JSONDecodeError, KeyError):
+            known_paths = None
+        if known_paths is not None:
+            for c in collect_workspace_changes(root):
+                if c["is_python"] and not c["is_test"] and c["path"].startswith(PACKAGE + "/") \
+                        and c["status"] != "DELETED" and c["path"] not in known_paths:
+                    out.append(f"UNKNOWN_PENDING_BUILD: {c['path']} — architecture-build 필요")
     return out

@@ -45,10 +45,11 @@ def _classify_xy(x: str, y: str) -> str:
 def collect_workspace_changes(root: Path) -> list[dict]:
     """`git status --porcelain=v1 -z`를 파싱해 ChangedFile 목록을 돌려준다.
     NUL 구분이라 공백·한글·특수문자 path에 안전하고, ignored 파일은 아예 나오지 않는다.
+    -uall: untracked 디렉터리를 `dir/` 하나로 접지 않고 안의 파일을 개별 나열한다.
     rename/copy 항목은 `XY new\\0old` 두 토큰을 소비한다."""
     try:
-        r = subprocess.run(["git", "status", "--porcelain=v1", "-z"], cwd=root,
-                           capture_output=True, timeout=30)
+        r = subprocess.run(["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+                           cwd=root, capture_output=True, timeout=30)
     except OSError:
         return []
     if r.returncode != 0:

@@ -113,6 +113,60 @@ def test_architecture_check_passes():
     assert all(isinstance(w, str) for w in warnings)  # §17.2 경고는 비차단 채널로만
 
 
+def _cf(path: str, status: str = "UNTRACKED") -> dict:
+    return {"path": path, "old_path": None, "status": status,
+            "tracked": status != "UNTRACKED",
+            "is_python": path.endswith(".py"),
+            "is_test": path.startswith("tests/") and path.endswith(".py"),
+            "is_markdown": path.endswith(".md")}
+
+
+def test_check_fails_on_untracked_markdown_and_missed_production_py(monkeypatch):
+    """A7 §5.2/§17.1: untracked 루트 md = hard fail, --changed가 untracked production py를
+    누락하면 hard fail. atlas 쪽 collect만 fake로 바꿔 실제 workspace와 무관하게 검증한다."""
+    import repo_idea_miner.architecture_atlas as aa
+    import repo_idea_miner.architecture_context as ac
+
+    fake = [_cf("NEW_ORDER.md"), _cf("repo_idea_miner/new_validator.py")]
+    monkeypatch.setattr(aa, "collect_workspace_changes", lambda root: fake)
+    monkeypatch.setattr(ac, "collect_workspace_changes", lambda root: [])
+    problems = run_architecture_check(REPO_ROOT)
+    assert any("untracked root markdown: NEW_ORDER.md" in p for p in problems)
+    assert any("untracked production 파일 누락: repo_idea_miner/new_validator.py" in p
+               for p in problems)
+
+
+def test_check_fails_when_clean_workspace_has_changed_files(monkeypatch):
+    """A7 §17.1-11: porcelain이 clean인데 context changed_files가 비어 있지 않으면 hard fail."""
+    import repo_idea_miner.architecture_atlas as aa
+    import repo_idea_miner.architecture_context as ac
+
+    monkeypatch.setattr(aa, "collect_workspace_changes", lambda root: [])
+    monkeypatch.setattr(ac, "collect_workspace_changes",
+                        lambda root: [_cf("repo_idea_miner/ghost.py", "MODIFIED")])
+    problems = run_architecture_check(REPO_ROOT)
+    assert any("clean workspace인데" in p for p in problems)
+
+
+def test_reentry_head_source_policy():
+    """A7 §6: REENTRY는 Git 명령이 정본, 정적 현재-HEAD 필드(commit:) 금지."""
+    from repo_idea_miner.architecture_atlas import (
+        _REENTRY_STATIC_HEAD_RE,
+        REENTRY_REQUIRED_COMMANDS,
+        REENTRY_REQUIRED_SECTIONS,
+    )
+
+    reentry = (REPO_ROOT / "REENTRY.md").read_text(encoding="utf-8")
+    assert "HEAD_SOURCE:" in REENTRY_REQUIRED_SECTIONS
+    for cmd in REENTRY_REQUIRED_COMMANDS:
+        assert cmd in reentry
+    assert not _REENTRY_STATIC_HEAD_RE.search(reentry)
+    # regex 자체: 현재-HEAD 필드는 잡고, 과거 evidence 속 hash 언급은 잡지 않는다
+    assert _REENTRY_STATIC_HEAD_RE.search("HEAD:\n- commit: 98cd9ad (A7)\n")
+    assert _REENTRY_STATIC_HEAD_RE.search("commit: abcdef1234567890\n")
+    assert not _REENTRY_STATIC_HEAD_RE.search("- evidence: run at commit 98cd9ad\n")
+
+
 def test_canon_index_ids_match():
     canon, index = _canon_ids(REPO_ROOT)
     assert canon == index

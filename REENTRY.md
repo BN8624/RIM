@@ -1,9 +1,14 @@
 # REENTRY
 
-HEAD:
-- commit: A7 workspace-change 커밋 (AI-Only Atlas Reset A0~A7 완료)
+HEAD_SOURCE:
+- command: git rev-parse HEAD
+- origin_command: git rev-parse origin/main
+- status_command: git status --porcelain=v1
+- rule: Git output is authoritative; this file does not store a self-referential HEAD hash.
+
+STATE_SNAPSHOT:
+- reflects architecture and behavior as of this document's parent state
 - branch: main
-- clean: true (untracked order docs only — never commit them)
 
 SYSTEM_STATUS:
 - tests: full suite PASS at A7; architecture-build 연속 2회 byte-identical;
@@ -13,7 +18,6 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
-- AI-Only Atlas reset in progress (order doc: root `RIM AI-Only Architecture Atlas & Do.md`)
 - A1 done: no Atlas HTML/renderer, no architecture-serve/summary CLI
 - A2 done: root markdown = 4 (checklist.md deleted, git history only), docs rewritten AI-only
 - A3 done: atlas.json schema V2 — repository block(head/snapshot/fingerprint/diff),
@@ -62,7 +66,8 @@ NEXT_ACTIONS:
    escalation 설계, literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
-- do not commit the two untracked root order docs
+- do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
+- do not put a static current-HEAD hash back into this file (HEAD_SOURCE rule)
 - do not re-add human documentation, checklist, or Atlas HTML/serve/summary
 - do not touch #47/#54 base runs on disk (tmp copies only)
 - escalation (lane failure → next iteration judge) is a known deferred design, not a bug
