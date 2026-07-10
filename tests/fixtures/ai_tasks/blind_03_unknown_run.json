@@ -1,0 +1,32 @@
+{
+ "task": "BLIND-03 factory-validate UNKNOWN run layout 계약 (A7 blind 검증 ground truth)",
+ "query": {
+  "route": [
+   "factory_validate"
+  ]
+ },
+ "required_canon_ids": [
+  "CANON-10",
+  "CANON-08"
+ ],
+ "required_primary_files": [
+  "repo_idea_miner/factory_validate.py",
+  "repo_idea_miner/factory_run_layout.py"
+ ],
+ "required_symbols": [
+  "repo_idea_miner.factory_validate.validate_product_run_dir",
+  "repo_idea_miner.factory_validate.run_marker_validators"
+ ],
+ "required_invariants": [
+  "INV-FRESH-VERIFICATION"
+ ],
+ "required_tests": [
+  "tests/test_factory_validate.py",
+  "tests/test_factory_run_layout.py"
+ ],
+ "forbidden_files": [
+  "repo_idea_miner/pipeline.py",
+  "repo_idea_miner/challenge_dashboard.py",
+  "repo_idea_miner/challenge_daemon.py"
+ ]
+}

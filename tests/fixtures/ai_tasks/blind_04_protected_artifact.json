@@ -1,0 +1,32 @@
+{
+ "task": "BLIND-04 closed-loop 신규 protected artifact 추가 범위 (A7 blind 검증 ground truth)",
+ "query": {
+  "route": [
+   "factory_closed_loop"
+  ]
+ },
+ "required_canon_ids": [
+  "CANON-07",
+  "CANON-11"
+ ],
+ "required_primary_files": [
+  "repo_idea_miner/factory_product_loop.py",
+  "repo_idea_miner/factory_loop_executor.py",
+  "repo_idea_miner/factory_lane_executors.py"
+ ],
+ "required_symbols": [
+  "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
+ ],
+ "required_invariants": [
+  "INV-PROTECTED-HASH",
+  "INV-BASE-RUN-IMMUTABLE"
+ ],
+ "required_tests": [
+  "tests/test_factory_phase2d1_loop.py"
+ ],
+ "forbidden_files": [
+  "repo_idea_miner/pipeline.py",
+  "repo_idea_miner/challenge_dashboard.py",
+  "repo_idea_miner/factory_core_prompts.py"
+ ]
+}

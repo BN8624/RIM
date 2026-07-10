@@ -1,0 +1,34 @@
+{
+ "task": "BLIND-02 Dashboard closed-loop 상태 필드 출처 (A7 blind 검증 ground truth)",
+ "query": {
+  "component": [
+   "dashboard"
+  ]
+ },
+ "required_canon_ids": [
+  "CANON-09"
+ ],
+ "required_primary_files": [
+  "repo_idea_miner/challenge_dashboard.py",
+  "repo_idea_miner/challenge_dashboard_data.py"
+ ],
+ "required_symbols": [
+  "repo_idea_miner.challenge_dashboard_data.load_phase2d1_details",
+  "repo_idea_miner.challenge_dashboard.render_detail"
+ ],
+ "required_contracts": [
+  "closed_loop_summary"
+ ],
+ "required_invariants": [
+  "INV-PRESENTATION-NO-JUDGMENT"
+ ],
+ "required_tests": [
+  "tests/test_factory_phase2d1_cli_dashboard.py",
+  "tests/test_challenge_dashboard.py"
+ ],
+ "forbidden_files": [
+  "repo_idea_miner/pipeline.py",
+  "repo_idea_miner/factory_core_gates.py",
+  "repo_idea_miner/challenge_daemon.py"
+ ]
+}

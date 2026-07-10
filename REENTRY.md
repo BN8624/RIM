@@ -50,6 +50,17 @@ RECENT_SEMANTIC_CHANGES:
   tests_to_run/changed_tests/related_canon_ids, atlas_rebuild_required=pending∨deleted∨fp,
   document_update_required=governance∨fp); _changed_py_stems 삭제
 
+- A7 후반 done (Independent AI Utility Validation): full module/symbol ID 정본 +
+  AMBIGUOUS_*_SELECTOR 결정론 오류, 실제 test path(atlas test_paths), blind 검증 5종 —
+  round1 01/05 PASS → generic repair(RC1 read_if_needed tier 랭킹: primary 직접 import >
+  역 import > hub, primary 랭킹 순서; RC2 factory_closed_loop/factory_validate route steps 보강;
+  RC3 INV-PROTECTED-HASH applies_to·tests 확장; scanner from-pkg 모듈 import 승격) →
+  round2 새 agent 재검증: 03/04 PASS 추가, 최종 4/5 PASS.
+  남은 한계(§15.2): BLIND-02 agent가 ctx tests_to_run에 있는
+  tests/test_factory_phase2d1_cli_dashboard.py 를 2회 모두 선별 누락 — ctx 결함 아님(agent
+  test-selection), task hardcode 수정 금지 원칙에 따라 미수정. blind fixture 5종 승격
+  (tests/fixtures/ai_tasks/blind_*, 총 13종) — ctx 수준 recall은 5종 전부 회귀 고정 green.
+
 OPEN_BLOCKERS:
 - id: hold_54
   state: waiting_human
@@ -61,13 +72,8 @@ OPEN_BLOCKERS:
   next_action: human final review/release decision; rerun loop if a fresh record is wanted
 
 NEXT_ACTIONS:
-1. A7 Independent AI Utility Validation 진행 중 — 체크포인트/재개 절차는
-   runs/_ai_atlas_validation/state.json (P0/P1 커밋 완료, blind round1 평가 완료:
-   01/05 PASS, 02/03/04 FAIL. 다음: generic repair(RC1 ranking/RC2 route/RC3 invariant)
-   → atlas rebuild → FAIL 3개 새 blind agent 재검증 → fixture 승격 13개 → §18 문서
-   → §19 전체 회귀(pytest×3) → 커밋/push → §23 보고)
-2. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
-3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+1. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
+2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    escalation 설계, literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
 
 DO_NOT_REPEAT:

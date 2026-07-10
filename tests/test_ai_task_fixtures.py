@@ -8,11 +8,12 @@ from repo_idea_miner.architecture_context import build_context
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "ai_tasks"
-FIXTURES = sorted(FIXTURE_DIR.glob("task*.json"))
+FIXTURES = sorted(FIXTURE_DIR.glob("task*.json")) + sorted(FIXTURE_DIR.glob("blind_*.json"))
 
 
-def test_eight_representative_tasks_exist():
-    assert len(FIXTURES) == 8
+def test_thirteen_representative_tasks_exist():
+    # 대표 task 8종 + A7 blind 검증 ground truth 승격 5종
+    assert len(FIXTURES) == 13
 
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)

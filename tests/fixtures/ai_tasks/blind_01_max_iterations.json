@@ -1,0 +1,31 @@
+{
+ "task": "BLIND-01 max-iterations 기본값 전달 경로 (A7 blind 검증 ground truth)",
+ "query": {
+  "route": [
+   "factory_closed_loop"
+  ]
+ },
+ "required_canon_ids": [
+  "CANON-07"
+ ],
+ "required_primary_files": [
+  "repo_idea_miner/cli_handlers.py",
+  "repo_idea_miner/factory_loop_executor.py"
+ ],
+ "required_symbols": [
+  "repo_idea_miner.cli_handlers._cmd_factory_product_loop",
+  "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
+ ],
+ "required_invariants": [
+  "INV-BASE-RUN-IMMUTABLE"
+ ],
+ "required_tests": [
+  "tests/test_factory_product_loop_2d0.py",
+  "tests/test_factory_phase2d1_loop.py"
+ ],
+ "forbidden_files": [
+  "repo_idea_miner/pipeline.py",
+  "repo_idea_miner/challenge_dashboard.py",
+  "repo_idea_miner/challenge_daemon.py"
+ ]
+}

@@ -1,0 +1,32 @@
+{
+ "task": "BLIND-05 validation component context 품질 (A7 blind 검증 ground truth)",
+ "query": {
+  "component": [
+   "validation"
+  ]
+ },
+ "required_canon_ids": [
+  "CANON-10"
+ ],
+ "required_primary_files": [
+  "repo_idea_miner/factory_validate.py"
+ ],
+ "required_symbols": [
+  "repo_idea_miner.factory_validate.validate_product_run_dir",
+  "repo_idea_miner.factory_validate.run_marker_validators",
+  "repo_idea_miner.factory_validate.validate_core_run_dir",
+  "repo_idea_miner.factory_validate.validate_continuation_run_dir"
+ ],
+ "required_invariants": [
+  "INV-FRESH-VERIFICATION"
+ ],
+ "required_tests": [
+  "tests/test_factory_validate.py"
+ ],
+ "forbidden_files": [
+  "repo_idea_miner/pipeline.py",
+  "repo_idea_miner/search_pipeline.py",
+  "repo_idea_miner/challenge_dashboard.py",
+  "repo_idea_miner/challenge_daemon.py"
+ ]
+}

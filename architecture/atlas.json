@@ -8251,7 +8251,7 @@
      ]
     }
    ],
-   "loc": 479,
+   "loc": 482,
    "module": "repo_idea_miner.architecture_context",
    "path": "repo_idea_miner/architecture_context.py",
    "private_symbols": [
@@ -14413,8 +14413,8 @@
   }
  ],
  "repository": {
-  "head": "a355cf7e947c9a66c60a666173cfae7b5f8a74d6",
-  "structural_diff": true,
+  "head": "d48eeb9c7a6ff149038ba72f0d28458e17e31be7",
+  "structural_diff": false,
   "structural_fingerprint": "94255da00cb5e10244b93da8332e575ec0318f4b03b113fb93df44987041dd88",
   "structure_snapshot": "845ec77d9279f203662b1daa9486bea74aa7e982344d2f924f18da229ee9906d"
  },
@@ -14666,7 +14666,7 @@
     "CANON-12"
    ],
    "component_id": "atlas",
-   "end_line": 332,
+   "end_line": 335,
    "kind": "function",
    "path": "repo_idea_miner/architecture_context.py",
    "related_tests": [

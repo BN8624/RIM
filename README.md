@@ -31,6 +31,8 @@ python -m repo_idea_miner architecture-context --changed --impact
 ```
 selectors: `--canon/--component/--route/--module/--symbol/--cli/--artifact/--changed`
 (복수 허용, `--compact`=line format, 출력은 결정론적 JSON)
+`--changed`는 `git status --porcelain -uall` 정본 — untracked 파일 포함
+(Atlas에 없는 새 production py는 UNKNOWN_PENDING_BUILD로 표시)
 
 ## VALIDATION COMMANDS
 ```bash
