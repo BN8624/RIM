@@ -61,8 +61,13 @@ OPEN_BLOCKERS:
   next_action: human final review/release decision; rerun loop if a fresh record is wanted
 
 NEXT_ACTIONS:
-1. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조) — AI 측 남은 자동 작업 없음
-2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+1. A7 Independent AI Utility Validation 진행 중 — 체크포인트/재개 절차는
+   runs/_ai_atlas_validation/state.json (P0/P1 커밋 완료, blind round1 평가 완료:
+   01/05 PASS, 02/03/04 FAIL. 다음: generic repair(RC1 ranking/RC2 route/RC3 invariant)
+   → atlas rebuild → FAIL 3개 새 blind agent 재검증 → fixture 승격 13개 → §18 문서
+   → §19 전체 회귀(pytest×3) → 커밋/push → §23 보고)
+2. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
+3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    escalation 설계, literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
