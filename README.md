@@ -286,6 +286,6 @@ URL 파싱, preflight, collector 필터, issue sampler/signal tag, bike-shedding
 - Dockerfile/docker-compose 존재만으로 risk를 과장하지 않는다 (evidence origin 기록, 판단은 Judge).
 - API key와 GitHub token은 어떤 산출물에도 노출하지 않는다 (redaction + 최종 스캔).
 
-## 구현 범위 / 미구현 범위
+## 구현 범위 / 현행 정본
 
-샘플 산출물은 `samples/`에 있습니다. 구현/제외 범위는 [SCOPE.md](SCOPE.md)를 참고하세요.
+샘플 산출물은 `samples/`에 있습니다. 현행 아키텍처 정본은 [PROJECT_CANON.md](PROJECT_CANON.md)(섹션 인덱스: [AI_INDEX.md](AI_INDEX.md))를 참고하세요.
