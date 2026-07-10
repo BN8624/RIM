@@ -47,7 +47,7 @@
 - **Gate 7종**: core_contract / runner / scenario_replay / golden_output(exact·partial·invariant) / state_invariant(invariant DSL: `x >= 0`, `exists:x`, length/entity 최소 해석) / determinism(역순 재실행) / anti_hardcode(L1 + 변형 fixture L2, **product layer 생성 후에도 재실행** — post_product_anti_hardcode).
 - Verdict 사다리: DROP < NEEDS_MORE_GEMMA_LOOP < SPEC_REPAIR_REQUIRED < RUNS_BUT_WEAK < REVIEW_READY < PROMOTE_TO_CODEX. **green_base** = 전 gate PASS + product layer PASS + hardcode low/medium. continuation_base = core_contract+runner 통과+patchable.
 - **표현 계약**: core_contract에 `output_representation`(event 형태/키/kinds, summary 형식) 필수(신규 run). `lint_golden_representation`이 구현 전 golden↔계약 표현을 기계 검사, harness_schema_version≥2는 strict(미선언 FAIL). summary는 하네스 표준상 **항상 문자열**.
-- runner stdout은 **ASCII-safe JSON** (Windows cp949 파이프). mock fallback은 정적 검출기(detect_mock_fallback)가 잡는다 — product 데모 데이터에 mock/fallback 금지.
+- runner stdout은 **ASCII-safe JSON** (Windows cp949 파이프). mock fallback은 정적 검출기(detect_mock_fallback)가 잡는다 — demo/mock/fallback 데이터를 실제 실행 결과처럼 표시하면 실패. fallback이 꼭 필요하면 `DEMO_ONLY`/`NOT_EXECUTED`/`RUNNER_UNAVAILABLE` 상태로만 표시하고, 이 상태로는 PRODUCT_CANDIDATE 불가.
 
 ## CANON-05 Continuation / Queue / 단일 run 수리
 
@@ -72,10 +72,15 @@
 - **Stage 7종**(사다리): CORE_GREEN → REVIEWABLE_ARTIFACT → POLISHABLE_PROTOTYPE → INTERACTION_CANDIDATE → EXECUTION_CANDIDATE → PRODUCT_CANDIDATE (+ARCHIVE). **gap 10종 → lane 9종** 고정 매핑(GAP_TO_LANE). lane risk policy: SPEC_REPAIR/CORE_PATCH=high, 전 lane auto_execute_allowed=false(원본 apply 기준 — child run 실행은 §13으로 허용).
 - **2D-0 judge desks**(sequential/unified): 프롬프트에 challenge_id/title/기대정답 절대 미포함, evidence_refs는 카탈로그 verbatim(날조 차단), strict schema+repair 1회(의미 변경=INVALID), hard blocker는 judge가 넘을 수 없는 상한.
 - **evidence ladder enforcement (§7 관측이 서술을 이긴다)**: boolean fact에서 직접 유도되는 **hard rung 5종**(EVIDENCE_INSUFFICIENT/ARCHIVE_RECOMMENDED/SPEC_REPAIR_REQUIRED/CORE_PATCH_REQUIRED/RUNNER_PATCH_REQUIRED)은 deterministic ladder가 live desk 판정을 override(`gap_override` 기록)하고 live lane desk를 생략한다. soft rung(viewer/interaction/UX)은 Gemma 판정 존중.
-- **2D-1 closed loop**(`--execute`): verify(gate를 **항상 temp copy에서 재실행** — stale report 불신, fresh gate가 evidence_sufficient의 gate 문맥도 충족) → fresh probe(성공 2·실패 1·revise 재실행 변화) → judge → lane executor가 **child run**에서 실행 → 재검증. **원본 base run은 절대 불변(§13)** — base hash before/after/check, apply류 옵션 자체가 없음.
-- 예산(§10): iteration 4 / lane별 2 / high-risk lane 합계 1 / 연속 무진전 2 / infra 재시도 2. 소진·사람 결정 필요 시 **HOLD_FOR_HUMAN packet**(단일 질문+선택지, §11)을 남기고 정지 — 중간에 사람에게 묻지 않는다.
-- acceptance 14검사(코어 gate 전부, validate, anti-hardcode, mock fallback 0, coverage, loop closed 등)가 PRODUCT_CANDIDATE 과대평가를 차단. 산출물: `runs/<base>/review/phase2d1/loop_*/`.
-- 알려진 한계: lane 실패로 발견된 정보(예: requires_spec_repair)는 다음 iteration judge에 전달되지 않음(escalation은 계획 밖 — 도입하려면 주문서부터).
+- **2D-1 closed loop**(`--execute`) 절대 원칙: 원본 base run 직접 수정 금지(매 iteration은 별도 child run, apply류 옵션 자체가 없음, base hash before/after/check). Gemma가 자유 형식으로 임의 파일을 수정하게 하지 않는다 — strict schema packet만, lane executor가 allowed/protected scope 검증 후 적용. golden/fixture/contract 의미를 약화해 gate를 통과시키지 않는다. 수정 후 기존 report 값 재사용 금지 — fresh 재검증(gate는 **항상 temp copy에서 재실행**, fresh gate가 evidence_sufficient의 gate 문맥도 충족). 사람은 중간 iteration에서 질문받지 않는다.
+- **Fresh probe 10종**(iteration 전후): runner 실제 실행 / success scenario 2개 / failure scenario 1개 / 입력 수정 후 재실행+결과 차이 / viewer가 실제 result artifact 표시 / mock·fallback 검사 / core↔product 필드 정합 / critical flow handler 연결. probe에는 명령·exit code·입출력 hash·경로를 기록.
+- **검증 순서**(apply 후 고정): targeted lane test → syntax → core gate 7종 → product layer check → post-product anti-hardcode → acceptance → factory-validate → fresh probe → rejudge. 한 단계라도 실패하면 green/PRODUCT_CANDIDATE 기록 금지.
+- **Acceptance 14검사**(PRODUCT_CANDIDATE 요건): core gate 전부 / factory-validate / post-product anti-hardcode / mock_fallback 0 / protected hash / critical requirement coverage 1.0 / difficulty anchor coverage 1.0 / forbidden simplification 0 / product_loop_closed / success 2 / failure 1 / revise 재실행 변화 / 첫 화면 CTA / 성공·실패 feedback 실제 표시. critical requirement 하나라도 미구현이면 stage 상한 EXECUTION_CANDIDATE/POLISHABLE로 제한(과대평가 차단).
+- **Progress 판정**: metric vector(stage_rank/gates/acceptance/hard blocker/coverage/loop parts/scenario/mock/regression) 전후 비교. 의미 있는 개선(사다리 상승·blocker 감소·coverage 증가 등) + regression 0 + protected hash PASS여야 child가 다음 parent로 승격 — 아니면 NO_MEANINGFUL_PROGRESS로 기록하고 미승격(실패 child는 기록만 남는다). 의미 없는 UI 문구 변경은 progress가 아니다.
+- **Lane executor 공통 결과**: status(APPLIED/BLOCKED/FAILED/NO_CHANGE) + child_run_dir + changed_files + scope/hash check + failure_signature. 예산: iteration 4 / lane별 2 / high-risk(SPEC_REPAIR·CORE_PATCH) 합계 1 / 연속 무진전 2 / infra 재시도 2. 중단: 엄격 PRODUCT_CANDIDATE 도달·ARCHIVE·protected 변경·같은 failure signature 2회·예산 초과·evidence 부족·사람 결정 필요. 같은 primary gap이라도 signature가 다르고 metric이 개선되면 계속한다.
+- 자동 진행 불가 시 **HOLD_FOR_HUMAN packet**(현재 최고 candidate/stage/blocking gap/시도 lane·diff·signature/보호 결과/자동 결정 못 한 이유/**사람이 결정할 단 하나의 질문**/추천 선택지)을 남기고 정지. 산출물: `runs/<base>/review/phase2d1/loop_*/`.
+- 2026-07-10 완료 기준 충족: #47(graph)·#54(file_operation) 두 도메인이 같은 orchestrator를 통과(둘 다 정직 HOLD) — **다수 run batch 자동화의 선행 조건이 풀렸다**(아직 미착수).
+- 알려진 한계: lane 실패로 발견된 정보(예: requires_spec_repair)는 다음 iteration judge에 전달되지 않음(escalation 미설계 — 도입하려면 이 섹션 규칙 갱신부터).
 
 ## CANON-08 DB & 산출물 레이아웃
 

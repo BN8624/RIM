@@ -1,6 +1,10 @@
 # Repo Idea Miner 납품 체크리스트
 
-RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
+phase별 납품 로그. 각 phase의 주문서(RIM_FANAL.md 등)는 납품 후 삭제됨 — git 이력에만 존재.
+현행 아키텍처 정본은 PROJECT_CANON.md, 세션 상태는 REENTRY.md.
+이 로그에 상세 미기재 phase: 1.5 대시보드(b6f2f5b)·한국어화(23b844f)·1.6b live검증(3e6bb46)·1.7 continuation(75b1621+3551e4e) — git log 참조.
+
+v1.0 (RIM_FANAL.md §35/§37 기준) 2026-07-08 완료.
 
 ## 검수 (§35)
 - [x] 35.1 단일 레포 mock 검수 — `runs/20260708_062637` (validate PASS)
@@ -101,7 +105,7 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] factory-validate 072220(base+phase2a 산출물) PASS / 100043(legacy continuation) inferred SPEC_REPAIR PASS
 - [x] spec-repair --execute, --execute --limit 2 거부 확인
 - [x] pytest 578 passed (기존 533 + Phase 2A 신규 45) / secret scan 통과
-- [ ] Phase 2B = Spec Repair Apply / golden 갱신 자동화 / limit≥3 (미착수)
+- [x] Phase 2B = Spec Repair Apply → 2B-1(a48c980)·2B-1b(fb63fa2)로 완료 (limit≥3·다수 run 자동화는 여전히 미착수)
 
 # Phase 1.7b Continuation Run Validation Routing Fix — 2026-07-09
 
@@ -115,7 +119,7 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] 실제 #47 continuation run(100043) validate — CONTINUATION_RUN, SPEC_REPAIR_REQUIRED 정직 PASS (patch_diff_summary 미생성은 있으면-검사로 처리)
 - [x] mock core build validate — CORE_FACTORY_RUN PASS / legacy run validate — LEGACY_FACTORY_RUN PASS / live-validation run(072220) — CORE_FACTORY_RUN PASS (계속 유지)
 - [x] pytest 533 passed (기존 508개 + Phase 1.7b 신규 25개) / secret scan 통과
-- [ ] Phase 2 = 여러 run/challenge continuation 일반화 (미착수)
+- [x] Phase 2 = 여러 run/challenge continuation 일반화 → Phase 2A queue routing(00ef8db)으로 완료
 
 # Phase 2C-0 Review Package + Product Fitness Recommendation — 2026-07-09
 
@@ -145,7 +149,7 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] **#47 polish 후 recommended_fitness=NEEDS_PRODUCT_POLISH 유지**(field mapping은 고쳐졌으나 저작 조작 없는 결과 뷰어 중심 → order §17 case B). green_base/REVIEW_READY 유지.
 - [x] factory-validate 072220 PASS (2C-0 + 2C-1 marker 모두 인식). 폴리시된 viewer는 edge.from/ev.type/node.x 리터럴 0개, source_id/target_id/node_id/.event 읽음.
 - [x] pytest — 기존 673 + 2C-1 신규 29 (test_factory_product_polish_2c1.py) = 702. 2C-0 E2E는 on-disk polish 무관하게 mismatch viewer로 리셋해 결정적.
-- [ ] Phase 2C 잔여 = 다수 run 검수/polish 자동화, 조작 가능한 product experience(node editor)는 별도 큰 작업
+- [x] 조작 가능한 product experience(node editor) → 2C-2(86a8007)로 완료. 다수 run 자동화는 여전히 미착수
 
 # Phase 2C-2 #47 Minimal Interactive Node Draft Editor — 2026-07-10
 
@@ -162,7 +166,7 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] **#47 editor 후 recommended_fitness=PRODUCT_CANDIDATE (draft editor candidate)** — order §29 case A. authoring(노드/엣지 편집 UI) 감지로 조작 가능한 첫 경험 확보. limitation "runner-backed execution not included" 명시, 실제 graph 실행 후보는 Phase 2C-3 이후.
 - [x] factory-validate 072220 PASS (2C-0+2C-1+2C-2 marker 모두 인식). green_base/REVIEW_READY 유지, 원본 replay/golden/contract/core/runner 미변경.
 - [x] pytest — 기존 704 + 2C-2 신규 60 (test_factory_product_editor_2c2.py) = 764. secret scan은 validate 경로 통과.
-- [ ] Phase 2C-3 = Runner-backed Draft Execution(exported draft를 실제 runner에 투입) — 별도 단계. 그 전까지 #47은 draft editor candidate.
+- [x] Phase 2C-3 = Runner-backed Draft Execution → 완료(b44931a, 아래 섹션).
 
 # Phase 2D-0 Gemma Productization Autopilot — 2026-07-10
 
@@ -180,4 +184,42 @@ RIM_FANAL.md §35/§37 기준. 2026-07-08 완료.
 - [x] factory-validate 072220 PASS (2C-0+2C-1+2C-2+2D-0 marker 모두 인식).
 - [x] hardcode 방지 — 소스에 Mini-Comfy/==47/072220 없음(테스트), 동일 evidence 다른 ID/title fixture에서 동일 stage/gap/lane, 프롬프트에 title/challenge_id 미포함.
 - [x] pytest — 기존 764 + 2D-0 신규 69(test_factory_product_loop_2d0.py, live acceptance 2 포함) = 833 전부 통과. secret scan은 validate 경로 통과.
-- [ ] Phase 2C-3 = Runner-backed Draft Execution — 이번에 생성된 auto_order.md/repair_blueprint가 그 주문서의 보조 자료. 사람 승인 후 착수.
+- [x] Phase 2C-3 = Runner-backed Draft Execution — 사람 승인 후 완료(b44931a, 아래 섹션).
+
+# Phase 2B-1 #47 Spec Repair Apply — 2026-07-09 (a48c980)
+
+- [x] factory_spec_repair.py + **factory-spec-repair-apply --dry-run(기본)|--apply**(단일 run 한정, APPROVE_FOR_PHASE2B 필수). §8 보호: 기존 golden 기대값 훼손/field 삭제/contract 밖 field 추가/comparison_mode 완화 전부 차단. pre_apply_snapshot/rollback + frozen hash(범위 밖 변경=자동 rollback) + apply 후 7 gate 재실행.
+- [x] #47 실제 apply — golden schema/state_invariant 수리 성공(6/7), anti_hardcode가 runner summary "Completed" 하드코딩을 잡아 green 승격 정직 거부(의도된 결과). pytest 613.
+
+# Phase 2B-1b #47 Anti-Hardcode Patch — 2026-07-09 (fb63fa2)
+
+- [x] factory_anti_hardcode.py + **factory-anti-hardcode-patch --dry-run(기본)|--apply**. classify_summary_source(hardcoded vs state_derived 구분, 오탐만 제거), runner summary를 summarize_execution(state 파생 helper)으로 교체, frozen hash에서 fixtures/_variants/ 제외(잠복 버그 수정).
+- [x] #47 실제 patch — summary state_derived → **7/7 gate PASS → green_base 승격, verdict REVIEW_READY**. pytest 641.
+
+# Phase 2C-3 #47 Runner-backed Draft Execution — 2026-07-10 (b44931a)
+
+- [x] factory_draft_execution.py + **factory-draft-execution --dry-run(기본)|--apply**. draft→시나리오 어댑터(src/adapters/draft_to_runner_input.py, 순수 변환·from/to 등 거부), 브리지 서버(product/draft_server.py, POST /api/execute-draft→runner subprocess), viewer 실행 패널(PHASE2C3 마커, 금지 리터럴 0).
+- [x] run_execution_smoke — temp copy에서 편집→검증→변환→실행(추가 노드 COMPLETED 반영)→revise(입력 10→20, 출력 변화)→브리지 실기동+HTTP 실행→replay 불변.
+- [x] #47 apply — 6파일 기록, 보호 hash PASS, **product_loop_closed=true, PRODUCT_CANDIDATE(runner_backed_execution_included=true)**, validate marker 5종 PASS. 실서버 8799 검증. pytest 871.
+
+# Phase 2D-1 Evidence-Driven Closed Productization Loop — 2026-07-10 (796096f~bfea041, 9커밋)
+
+## 구현
+- [x] P0 선행수정(796096f) — anti-hardcode 스캔 시점 통일(build도 product 생성 후 재실행), detect_mock_fallback(DEMO_ONLY/NOT_EXECUTED/RUNNER_UNAVAILABLE 상태 강제), harness_schema_version=2 golden representation strict lint.
+- [x] factory_product_capabilities.py(1fbd04b) — 도메인 중립 capability profile(ID/title 분기 금지) + fresh probe(runner/성공 2/실패 1/revise 재실행 변화/mock·fallback/필드 정합/flow handler).
+- [x] factory_lane_executors.py + factory_loop_executor.py + factory_product_acceptance.py(87b0f20) — lane 9종 registry(기존 2A/2B-1/2C-1/2C-2/2C-3 경로 재사용), child run 격리 closed loop(base run 불변), acceptance 14검사, progress vector/의미 있는 개선 판정, 예산(iter 4/lane 2/high-risk 1/무진전 2/infra 2), HOLD_FOR_HUMAN packet(단일 질문).
+- [x] CLI --execute/--output-dir + 대시보드 closed loop 카드/패널 + validate _check_phase2d1(5633226~efda1bb). judge desk 경량화 include_order=False(311ff8b). gate 항상 temp copy 재실행(c0be4f5).
+- [x] **evidence ladder enforcement**(ddb9431) — live 오분류 실측 후: hard fact rung 5종은 deterministic ladder가 live gap 판정 override(gap_override 기록), hard rung lane은 live desk 생략. fresh gate rerun의 evidence_sufficient 충족(bfea041).
+
+## 검수 (완료 기준 Case A/B live)
+- [x] Case A #47 — acceptance 14/14·probe 전항목·mock fallback 0인데 judge가 INTERACTION_CANDIDATE 정직 판정, 추천 lane(RUNNER_BACKED_DRAFT_EXECUTION)은 사람 승인 필수 → **HOLD_FOR_HUMAN**(loop_20260710_134033), base hash 101파일 불변, capability를 특례 ID 없이 graph로 추출.
+- [x] Case B #54 — gap_override(INTERACTION_UI→CORE_PATCH_REQUIRED), CORE_PATCH lane이 child(052415)에서 continuation 실행 → 정직 FAILED(requires_spec_repair) → 예산 소진 → **HOLD_FOR_HUMAN**(loop_20260710_141947), base hash PASS, capability를 file_operation으로 추출(graph 분기 없음).
+- [x] 두 도메인이 같은 orchestrator 통과 → 다수 run batch 자동화 선행 조건 충족.
+- [x] pytest 962 × 3회 — 1회 전부 통과, 2회는 기존 flaky 2종만(patch_attempts=2, 격리에서도 간헐 재현=2D-1 무관, 원인 조사 별도).
+
+# 현재 오픈 이슈 (2026-07-10 기준, 상세는 REENTRY.md)
+
+- [ ] #47 hold packet 응답 — RUNNER_BACKED_DRAFT_EXECUTION lane 사람 승인 여부.
+- [ ] #54 hold packet 응답 — spec repair(golden root_node/target_id, §8이 막는 부류) + viewer mock fallback 제거 후 loop 재실행.
+- [ ] lane 실패 정보의 다음 iteration 전달(escalation) 미설계 — 도입하려면 CANON-07 갱신부터.
+- [ ] UX_POLISH lane stub / 다수 run batch 자동화 / flaky 근본 원인(patch_attempts=2) / queue의 run 5 stale 분류.
