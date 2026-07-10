@@ -29,7 +29,7 @@
   - `factory_review.py`(2C-0) / `factory_product_polish.py`(2C-1) / `factory_product_editor.py`(2C-2) / `factory_draft_execution.py`(2C-3) — 제품화 체인 (CANON-06).
   - `factory_autopilot_schemas/desks.py` + `factory_product_loop.py`(2D-0 judge) — Gemma autopilot (CANON-07).
   - `factory_product_capabilities.py`(capability profile+fresh probe) + `factory_lane_executors.py`(lane registry) + `factory_loop_executor.py`(closed loop) + `factory_product_acceptance.py`(acceptance 14검사) — 2D-1 (CANON-07).
-  - `factory_validate.py` — run kind별 artifact 검증+phase별 marker 검증 (CANON-10), `factory_labels.py` — 대시보드 한국어 라벨, `factory_summary.py` — summary 3종.
+  - `factory_validate.py` — run kind별 artifact 검증 + marker validator registry(MARKER_VALIDATORS, CANON-10), `factory_labels.py` — 대시보드 한국어 라벨, `factory_summary.py` — summary 3종.
   - `factory_run_layout.py` — run directory 해석의 정본: resolve_artifact_root/RunLayout + resolve_run_target(--run-dir/--run-id → run_dir, CLI 명령 공통) + run kind 감지(detect_run_kind, RUN_KIND_CONTINUATION/CORE/LEGACY/UNKNOWN — continuation→core→legacy 순). artifact root 선택·run 대상 해석·run kind 감지를 다른 모듈이 반복 구현하지 않는다.
   - `architecture_scanner.py` — AST 기반 구조 추출(baseline/Atlas 코어): module/LOC/import cycle/private cross-import/CLI/validator.
 - `redaction.py` — secret 마스킹 (AQ. prefix 포함).
@@ -50,6 +50,7 @@
 - Verdict 사다리: DROP < NEEDS_MORE_GEMMA_LOOP < SPEC_REPAIR_REQUIRED < RUNS_BUT_WEAK < REVIEW_READY < PROMOTE_TO_CODEX. **green_base** = 전 gate PASS + product layer PASS + hardcode low/medium. continuation_base = core_contract+runner 통과+patchable.
 - **표현 계약**: core_contract에 `output_representation`(event 형태/키/kinds, summary 형식) 필수(신규 run). `lint_golden_representation`이 구현 전 golden↔계약 표현을 기계 검사, harness_schema_version≥2는 strict(미선언 FAIL). summary는 하네스 표준상 **항상 문자열**.
 - runner stdout은 **ASCII-safe JSON** (Windows cp949 파이프). mock fallback은 정적 검출기(detect_mock_fallback)가 잡는다 — demo/mock/fallback 데이터를 실제 실행 결과처럼 표시하면 실패. fallback이 꼭 필요하면 `DEMO_ONLY`/`NOT_EXECUTED`/`RUNNER_UNAVAILABLE` 상태로만 표시하고, 이 상태로는 PRODUCT_CANDIDATE 불가.
+- **gate 실행과 artifact 검증은 분리**: gate는 factory_core_gates가 실제 재실행하고, factory_validate(CANON-10)는 기록된 산출물의 정합성만 검사한다 — 기록된 gate report를 재실행 결과처럼 신뢰하지 않는다.
 
 ## CANON-05 Continuation / Queue / 단일 run 수리
 
@@ -57,7 +58,7 @@
 - `factory-continue-queue` lane 4종: PATCH_CONTINUATION / SPEC_REPAIR / EXCLUDED / REVIEW_ONLY. execute는 patch lane 한정 limit 1. spec repair는 proposal만 생성.
 - `factory-spec-repair-apply` **§8 보호(우회 자동화 금지)**: 기존 golden 기대값 훼손·field 삭제·contract 밖 field 추가·comparison_mode 완화 전부 차단. snapshot/rollback + frozen hash before/after/check(범위 밖 변경=자동 rollback) + gate 재실행.
 - `factory-anti-hardcode-patch`: runner summary 하드코딩을 state 파생 helper로 교체. `classify_summary_source`가 hardcoded/state_derived 구분.
-- **frozen hash guard**: golden/fixtures/contract sha256 — 사후 조작 탐지. anti_hardcode scratch인 `fixtures/_variants/`는 제외.
+- **frozen hash guard**: golden/fixtures/contract sha256 — 사후 조작 탐지. anti_hardcode scratch인 `fixtures/_variants/`는 제외. 사후 정합성 검증은 CANON-10 registry의 frozen_hash_guard validator가 수행.
 
 ## CANON-06 제품화 체인 (2C-0 → 2C-3)
 
@@ -99,8 +100,9 @@
 
 ## CANON-10 검증 & 테스트
 
-- `factory-validate <run_dir>`: run type 자동 감지(CONTINUATION/CORE/LEGACY) + phase marker별 검사(2C-0~2D-1, marker 없으면 no-op — 구 run 무영향). verdict 정합(gate fail+REVIEW_READY 차단 등), frozen/보호 hash, PRODUCT_CANDIDATE 엄격 조건.
-- `python -m pytest -q` — 약 4분. 알려진 flaky 2종: `test_patch_repair_fixes_broken_build` / `test_build_review_recomputed_after_patch` (patch_attempts=2 시그니처, 비결정 — 원인 조사 미완).
+- `factory-validate <run_dir>`: run kind 자동 감지(`factory_run_layout.detect_run_kind` — CONTINUATION/CORE/LEGACY/UNKNOWN, CANON-02) 후 kind별 검증으로 라우팅. phase marker 검사(frozen hash·spec repair·anti-hardcode patch·2C-0~2C-3·2D-0·2D-1)는 `factory_validate.MARKER_VALIDATORS` **registry 하나**를 core·continuation이 공유한다(선언 순서 = 검사 순서, marker 없으면 no-op — 구 run 무영향, LEGACY/UNKNOWN은 SKIP).
+- validator는 `ValidatorSpec`(validator_id/run_kinds/markers/inputs/severity/related_tests)로 선언하고 내부 결과는 `CheckResult`(check_id/status/severity/problems). 외부 계약(problems 문자열 목록, CLI 출력)은 `render_problems`가 호환 유지. verdict 정합(gate fail+REVIEW_READY 차단 등), frozen/보호 hash, PRODUCT_CANDIDATE 엄격 조건은 기존 의미 그대로.
+- `python -m pytest -q` — 약 4분 반. 과거 flaky 2종(`test_patch_repair_fixes_broken_build` / `test_build_review_recomputed_after_patch`)은 R0에서 근본 수정됨(.pyc stale bytecode — sandbox 로컬 env·docker에 PYTHONDONTWRITEBYTECODE=1 주입). 현재 known flaky 0.
 - 재검증 E2E는 **반드시 tmp 복사에서** — #47/#54 base run on-disk 상태를 직접 건드리지 않는다.
 
 ## CANON-11 Secret / 불변 규칙

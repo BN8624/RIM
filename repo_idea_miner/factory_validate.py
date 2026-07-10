@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_idea_miner.factory_pipeline import FINAL_ARTIFACT_REQUIRED_FILES
 from repo_idea_miner.factory_run_layout import (
     RUN_KIND_CONTINUATION,
+    RUN_KIND_CORE,
     detect_continuation_run,
     detect_core_run,
 )
@@ -18,6 +21,36 @@ MIN_SRC_FILES = 2
 
 # 확장자 뒤 경계 요구: scenario_001.json 의 .js 부분을 스크립트로 오인하지 않는다
 _SCRIPT_TOKEN_RE = re.compile(r"(\S+\.(?:py|js|mjs))(?![\w.])")
+
+# ---------------------------------------------------------------- Validation Kernel 공통 결과 (§12.2)
+
+@dataclass(frozen=True)
+class CheckResult:
+    """validator 하나의 실행 결과 — 내부 공통 결과. 기존 외부 계약(problems 문자열 목록)은
+    render_problems가 호환 렌더링한다."""
+    check_id: str
+    status: str  # PASS | FAIL | SKIP
+    severity: str
+    problems: tuple[str, ...] = ()
+    evidence: dict | None = None
+    metadata: dict | None = None
+
+
+@dataclass(frozen=True)
+class ValidatorSpec:
+    """marker 기반 validator 선언 — phase별 append 체인 대신 registry로 적용한다 (§12.3).
+
+    markers/inputs는 선언 메타데이터(Atlas·문서용)다. 활성 여부는 check 함수가 자체
+    marker 감지로 판단하며(marker 없으면 no-op — 구 run 무영향), runner는 run_kinds만 거른다.
+    """
+    validator_id: str
+    run_kinds: tuple[str, ...]
+    check: Callable[[Path], list[str]]
+    markers: tuple[str, ...] = ()
+    inputs: tuple[str, ...] = ()
+    severity: str = "FAIL"
+    related_tests: tuple[str, ...] = ()
+
 
 CODEX_EXPORT_REQUIRED = (
     "source_workspace",
@@ -234,21 +267,9 @@ def validate_core_run_dir(run_dir: Path, secrets: list[str]) -> tuple[bool, list
                 f"golden representation lint FAIL인데 verdict={dsum.get('verdict')} "
                 f"(정답지가 표현 계약 위반: {(rep_lint.get('problems') or [])[:3]})")
 
-    # Phase 2A/2B-1: base run에 spec repair proposal/apply 산출물이 있으면 함께 검증
-    problems += _check_frozen_hash_guard(run_dir)
-    problems += _check_spec_repair_outputs(run_dir)
-    problems += _check_spec_repair_apply(run_dir)
-    problems += _check_anti_hardcode_patch(run_dir)
-    problems += _check_phase2c0(run_dir)
-    problems += _check_phase2c1(run_dir)
-    problems += _check_phase2c2(run_dir)
-    problems += _check_phase2c3(run_dir)
-    problems += _check_phase2d0(run_dir)
-    problems += _check_phase2d1(run_dir)
-
-    leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
-    if leaked:
-        problems.append(f"secret 노출 파일: {leaked}")
+    # Phase 2A~2D-1 marker validator는 continuation과 같은 registry로 검사한다 (§12.3)
+    problems += render_problems(run_marker_validators(run_dir, RUN_KIND_CORE))
+    problems += _scan_run_secrets(run_dir, secrets)
     return (not problems), problems
 
 
@@ -1192,6 +1213,88 @@ def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     return p
 
 
+# ---------------------------------------------------------------- Validator registry (§12.3)
+#
+# 순서가 곧 artifact validation plan(§12.4)이다: frozen hash → spec repair → anti-hardcode
+# → 제품화 체인(2C-0→2C-3) → autopilot(2D-0) → closed loop(2D-1). core와 continuation이
+# 같은 registry를 사용한다 — 같은 check의 의미와 구현은 하나다.
+
+_MARKER_RUN_KINDS = (RUN_KIND_CONTINUATION, RUN_KIND_CORE)
+
+MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
+    ValidatorSpec("frozen_hash_guard", _MARKER_RUN_KINDS, _check_frozen_hash_guard,
+                  inputs=("frozen_hash_before.json", "frozen_hash_after.json",
+                          "frozen_hash_check.json", "frozen_hash_after_apply.json"),
+                  related_tests=("tests/test_factory_queue_2a.py",
+                                 "tests/test_factory_spec_repair_2b1.py")),
+    ValidatorSpec("spec_repair_outputs", _MARKER_RUN_KINDS, _check_spec_repair_outputs,
+                  inputs=("spec_repair_proposal.json", "spec_repair_review.json",
+                          "spec_repair_apply.json"),
+                  related_tests=("tests/test_factory_queue_2a.py",)),
+    ValidatorSpec("spec_repair_apply", _MARKER_RUN_KINDS, _check_spec_repair_apply,
+                  markers=("spec_repair_apply_report.json",),
+                  inputs=SPEC_REPAIR_APPLY_REQUIRED
+                  + ("gate_rerun_after_spec_repair.json",
+                     "green_base_promotion_after_spec_repair.json"),
+                  related_tests=("tests/test_factory_spec_repair_2b1.py",)),
+    ValidatorSpec("anti_hardcode_patch", _MARKER_RUN_KINDS, _check_anti_hardcode_patch,
+                  markers=("anti_hardcode_patch_report.json",),
+                  inputs=ANTI_HARDCODE_PATCH_REQUIRED,
+                  related_tests=("tests/test_factory_anti_hardcode_2b1b.py",)),
+    ValidatorSpec("phase2c0", _MARKER_RUN_KINDS, _check_phase2c0,
+                  markers=tuple(f"{PHASE2C0_SUBDIR}/{m}" for m in PHASE2C0_MARKERS),
+                  inputs=tuple(f"{PHASE2C0_SUBDIR}/{r}" for r in PHASE2C0_REQUIRED),
+                  related_tests=("tests/test_factory_review_2c0.py",)),
+    ValidatorSpec("phase2c1", _MARKER_RUN_KINDS, _check_phase2c1,
+                  markers=tuple(f"{PHASE2C1_SUBDIR}/{m}" for m in PHASE2C1_MARKERS),
+                  inputs=tuple(f"{PHASE2C1_SUBDIR}/{r}" for r in PHASE2C1_REQUIRED),
+                  related_tests=("tests/test_factory_product_polish_2c1.py",)),
+    ValidatorSpec("phase2c2", _MARKER_RUN_KINDS, _check_phase2c2,
+                  markers=tuple(f"{PHASE2C2_SUBDIR}/{m}" for m in PHASE2C2_MARKERS),
+                  inputs=tuple(f"{PHASE2C2_SUBDIR}/{r}" for r in PHASE2C2_REQUIRED),
+                  related_tests=("tests/test_factory_product_editor_2c2.py",)),
+    ValidatorSpec("phase2c3", _MARKER_RUN_KINDS, _check_phase2c3,
+                  markers=tuple(f"{PHASE2C3_SUBDIR}/{m}" for m in PHASE2C3_MARKERS),
+                  inputs=tuple(f"{PHASE2C3_SUBDIR}/{r}" for r in PHASE2C3_REQUIRED),
+                  related_tests=("tests/test_factory_draft_execution_2c3.py",)),
+    ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
+                  markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
+                  inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"
+                               for r in PHASE2D0_REQUIRED_BASE + PHASE2D0_REQUIRED_ORDER),
+                  related_tests=("tests/test_factory_product_loop_2d0.py",)),
+    ValidatorSpec("phase2d1", _MARKER_RUN_KINDS, _check_phase2d1,
+                  markers=(PHASE2D1_SUBDIR,),
+                  inputs=(f"{PHASE2D1_SUBDIR}/loop_*/loop_summary.json",
+                          f"{PHASE2D1_SUBDIR}/loop_*/lineage.json",
+                          f"{PHASE2D1_SUBDIR}/loop_*/base_hash_check.json",
+                          f"{PHASE2D1_SUBDIR}/loop_*/phase2d1_dashboard_summary.json"),
+                  related_tests=("tests/test_factory_phase2d1_cli_dashboard.py",)),
+)
+
+
+def run_marker_validators(run_dir: Path, run_kind: str) -> list[CheckResult]:
+    """registry의 validator를 선언 순서(§12.4)대로 실행한다. run kind가 다르면 SKIP."""
+    results: list[CheckResult] = []
+    for spec in MARKER_VALIDATORS:
+        if run_kind not in spec.run_kinds:
+            results.append(CheckResult(spec.validator_id, "SKIP", spec.severity))
+            continue
+        problems = spec.check(run_dir)
+        results.append(CheckResult(spec.validator_id, "FAIL" if problems else "PASS",
+                                   spec.severity, tuple(problems)))
+    return results
+
+
+def render_problems(results: list[CheckResult]) -> list[str]:
+    """CheckResult 목록을 기존 외부 계약(problems 문자열 목록)으로 평탄화한다."""
+    return [p for r in results for p in r.problems]
+
+
+def _scan_run_secrets(run_dir: Path, secrets: list[str]) -> list[str]:
+    leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
+    return [f"secret 노출 파일: {leaked}"] if leaked else []
+
+
 def _all_gates_pass(gates: dict) -> bool:
     return bool(gates) and all(gates.values())
 
@@ -1438,22 +1541,10 @@ def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tu
     problems += _check_green_promotion(promo, gate_rerun)
     problems += _check_dashboard_summary(dashboard)
     problems += _check_verdict_consistency(summary, promo, dashboard, gate_rerun, plan)
-    # Phase 2A/2B-1: lane / frozen hash guard / spec repair proposal·apply 정합성 (§10, §17)
+    # Phase 2A lane은 continuation 전용 — 이후 marker validator는 core와 같은 registry (§12.3)
     problems += _check_lane(run_dir, summary, plan, promo, info)
-    problems += _check_frozen_hash_guard(run_dir)
-    problems += _check_spec_repair_outputs(run_dir)
-    problems += _check_spec_repair_apply(run_dir)
-    problems += _check_anti_hardcode_patch(run_dir)
-    problems += _check_phase2c0(run_dir)
-    problems += _check_phase2c1(run_dir)
-    problems += _check_phase2c2(run_dir)
-    problems += _check_phase2c3(run_dir)
-    problems += _check_phase2d0(run_dir)
-    problems += _check_phase2d1(run_dir)
-
-    leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
-    if leaked:
-        problems.append(f"secret 노출 파일: {leaked}")
+    problems += render_problems(run_marker_validators(run_dir, RUN_KIND_CONTINUATION))
+    problems += _scan_run_secrets(run_dir, secrets)
     return (not problems), problems, info
 
 
@@ -1488,7 +1579,5 @@ def validate_product_run_dir(run_dir: str | Path, secrets: list[str]) -> tuple[b
     if export_dir.is_dir():
         problems += validate_codex_export(export_dir)
 
-    leaked = scan_files_for_secrets([p for p in run_dir.rglob("*") if p.is_file()], secrets)
-    if leaked:
-        problems.append(f"secret 노출 파일: {leaked}")
+    problems += _scan_run_secrets(run_dir, secrets)
     return (not problems), problems

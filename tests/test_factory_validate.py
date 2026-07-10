@@ -83,3 +83,23 @@ def test_secret_in_artifact_fails(valid_run, tmp_path, fake_env):
     ok, problems = validate_product_run_dir(copy, list(fake_env.values()))
     assert not ok
     assert any("secret" in p for p in problems)
+
+
+def test_marker_validator_registry_is_single_source(tmp_path):
+    """§12.3: core와 continuation이 같은 registry를 쓰고, 순서·선언이 고정돼 있다."""
+    from repo_idea_miner.factory_run_layout import RUN_KIND_CONTINUATION, RUN_KIND_CORE, RUN_KIND_LEGACY
+    from repo_idea_miner.factory_validate import MARKER_VALIDATORS, run_marker_validators
+
+    ids = [s.validator_id for s in MARKER_VALIDATORS]
+    assert ids == ["frozen_hash_guard", "spec_repair_outputs", "spec_repair_apply",
+                   "anti_hardcode_patch", "phase2c0", "phase2c1", "phase2c2", "phase2c3",
+                   "phase2d0", "phase2d1"]
+    for spec in MARKER_VALIDATORS:
+        assert set(spec.run_kinds) == {RUN_KIND_CONTINUATION, RUN_KIND_CORE}, spec.validator_id
+        assert spec.related_tests, spec.validator_id
+
+    # marker 없는 빈 run: 전 validator PASS(no-op), legacy kind면 전부 SKIP
+    results = run_marker_validators(tmp_path, RUN_KIND_CORE)
+    assert [r.check_id for r in results] == ids
+    assert all(r.status == "PASS" and not r.problems for r in results)
+    assert all(r.status == "SKIP" for r in run_marker_validators(tmp_path, RUN_KIND_LEGACY))
