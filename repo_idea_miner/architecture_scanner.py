@@ -166,10 +166,20 @@ def scan_module(root: Path, path: Path) -> dict:
                         io_calls[key] = node.lineno
         if isinstance(node, ast.ImportFrom) and node.module \
                 and node.module.split(".")[0] == PACKAGE:
-            info["imports"].append({
-                "from": node.module,
-                "names": sorted(a.name for a in node.names),
-            })
+            # from <pkg> import <name>에서 <name>이 모듈 파일이면 심볼이 아니라 모듈 edge다 —
+            # full module import로 승격해야 import graph에서 의존이 사라지지 않는다.
+            symbol_names: list[str] = []
+            for a in node.names:
+                if (root / Path(*node.module.split(".")) / f"{a.name}.py").is_file():
+                    info["imports"].append(
+                        {"from": f"{node.module}.{a.name}", "names": []})
+                else:
+                    symbol_names.append(a.name)
+            if symbol_names:
+                info["imports"].append({
+                    "from": node.module,
+                    "names": sorted(symbol_names),
+                })
         elif isinstance(node, ast.Import):
             for a in node.names:
                 if a.name.split(".")[0] == PACKAGE:
