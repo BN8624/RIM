@@ -58,6 +58,7 @@
 - `factory-continue`: 실패 분류(10 failure type) → repair plan(frozen 보호) → delta patch(allowed_touch_files만) → gate 재실행 → green 승격 판단. golden/contract 수정 필요는 **SPEC_REPAIR_REQUIRED로 분리**(continuation이 직접 수정 금지).
 - `factory-continue-queue` lane 4종: PATCH_CONTINUATION / SPEC_REPAIR / EXCLUDED / REVIEW_ONLY. execute는 patch lane 한정 limit 1. spec repair는 proposal만 생성.
 - **failure patch-safety 정본은 factory_continue**(assess_failure_patch_safety: patch|spec|unclear, PATCH_SAFE/CONDITIONAL/NEVER 상수, build_spec_repair_proposal/review) — queue와 2B 모듈이 import하며 재구현하지 않는다. continue↔queue import cycle 없음.
+- **stale verdict는 read 시 canonical 계산**(§14.5): 2B가 base run을 in-place green 승격하면 DB/이력 verdict가 낡는다 — queue classify가 run_dir의 승격 기록(read_gate_context)을 읽어 성공 verdict로 재계산한다(REVIEW_ONLY). 승격 기록이 없으면 verdict를 고쳐 쓰지 않는다. 별도 reconcile command는 없다.
 - `factory-spec-repair-apply` **§8 보호(우회 자동화 금지)**: 기존 golden 기대값 훼손·field 삭제·contract 밖 field 추가·comparison_mode 완화 전부 차단. snapshot/rollback + frozen hash before/after/check(범위 밖 변경=자동 rollback) + gate 재실행.
 - `factory-anti-hardcode-patch`: runner summary 하드코딩을 state 파생 helper로 교체. `classify_summary_source`가 hardcoded/state_derived 구분.
 - **frozen hash guard**: golden/fixtures/contract sha256 — 사후 조작 탐지. anti_hardcode scratch인 `fixtures/_variants/`는 제외. 사후 정합성 검증은 CANON-10 registry의 frozen_hash_guard validator가 수행.

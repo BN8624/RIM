@@ -679,3 +679,31 @@ def test_dashboard_lane_line():
     assert _lane_line(None, {}) == ""
     assert format_lane_label("EXCLUDED") == "제외"
     assert format_lane_label("PATCH_CONTINUATION") == "Patch Continuation"
+
+
+# ---------------------------------------------------------------- §14.5(R4): stale queue 상태 재현
+
+def test_stale_spec_repair_candidate_reconciled_on_read(tmp_path):
+    """base run이 2B에서 green 승격됐는데 DB verdict가 SPEC_REPAIR_REQUIRED로 남은 stale 상태 —
+    read 시 canonical 상태로 계산되어 REVIEW_ONLY lane이 된다 (§14.5)."""
+    run = tmp_path / "factory_stale"
+    run.mkdir()
+    (run / "green_base.json").write_text(json.dumps({
+        "base_type": "green_base", "verdict": "REVIEW_READY", "next_goal": "검수"}),
+        encoding="utf-8")
+    cand = {"run_id": 5, "challenge_id": 47, "verdict": "SPEC_REPAIR_REQUIRED",
+            "status": "done", "run_dir": run, "source": "db"}
+    entry = classify_candidate(cand, {})
+    assert entry["current_verdict"] == "REVIEW_READY"
+    assert entry["recommended_lane"] == "REVIEW_ONLY"
+
+
+def test_unpromoted_candidate_verdict_not_rewritten(tmp_path):
+    """green 승격 기록이 없으면 verdict를 고쳐 쓰지 않는다 — 정직한 실패는 그대로 남는다."""
+    run = tmp_path / "factory_not_green"
+    run.mkdir()
+    cand = {"run_id": 6, "challenge_id": 54, "verdict": "SPEC_REPAIR_REQUIRED",
+            "status": "done", "run_dir": run, "source": "db"}
+    entry = classify_candidate(cand, {})
+    assert entry["current_verdict"] == "SPEC_REPAIR_REQUIRED"
+    assert entry["recommended_lane"] != "REVIEW_ONLY"

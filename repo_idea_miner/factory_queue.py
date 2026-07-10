@@ -20,6 +20,7 @@ from repo_idea_miner.factory_continue import (
 )
 from repo_idea_miner.factory_db import list_product_runs, open_factory_db
 from repo_idea_miner.factory_frozen import compute_frozen_hashes, write_frozen_hash_guard
+from repo_idea_miner.factory_product_evidence import read_gate_context
 
 # ---------------------------------------------------------------- 정책 상수 (주문서 §4.1, §5.1)
 
@@ -242,6 +243,14 @@ def classify_candidate(cand: dict, history: dict) -> dict:
     hist = sorted(history.get(cand.get("run_id")) or [], key=lambda h: str(h["run_dir"]))
     latest = hist[-1] if hist else None
     current_verdict = ((latest or {}).get("summary") or {}).get("verdict") or cand.get("verdict")
+
+    # §14.5(R4): 단일 run 수리(2B)가 base run을 in-place green 승격하면 DB/이력 verdict가
+    # stale로 남는다(#47이 green인데 SPEC_REPAIR 잔존). reconcile command 대신
+    # read 시 canonical 상태를 계산한다 — 승격 기록이 있으면 그 verdict가 현재 상태다.
+    if run_dir is not None and Path(run_dir).is_dir():
+        gate_ctx = read_gate_context(Path(run_dir))
+        if gate_ctx["green_base"] and gate_ctx["verdict"] in REVIEW_ONLY_VERDICTS:
+            current_verdict = gate_ctx["verdict"]
 
     failures: list[dict] = []
     if latest is not None:
