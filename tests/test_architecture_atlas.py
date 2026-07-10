@@ -123,7 +123,7 @@ def test_manifest_covers_all_modules():
 
 def test_root_markdown_whitelist_constant():
     assert set(ROOT_MD_WHITELIST) == {
-        "AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md", "checklist.md"}
+        "AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md"}
 
 
 # ---------------------------------------------------------------- AI-only 계약 (HTML 없음)

@@ -19,10 +19,10 @@ MANIFEST_NAME = "manifest.toml"
 ATLAS_JSON = "atlas.json"
 ATLAS_SCHEMA = "atlas.schema.json"
 
-ROOT_MD_WHITELIST = ("AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md", "checklist.md")
+ROOT_MD_WHITELIST = ("AI_INDEX.md", "PROJECT_CANON.md", "README.md", "REENTRY.md")
 
 _CANON_ID_RE = re.compile(r"^## (CANON-\d{2})\b", re.M)
-_INDEX_ID_RE = re.compile(r"\*\*(CANON-\d{2})\b")
+_INDEX_ID_RE = re.compile(r"\b(CANON-\d{2})\b")
 _MD_LINK_RE = re.compile(r"\]\(([^)#`\s]+\.md)\)")
 
 
@@ -175,9 +175,8 @@ def build_atlas(root: Path) -> dict:
             "test_count": base["test_count"],
         },
         "documents": {
-            "README.md": "USER GUIDE", "AI_INDEX.md": "CANON ROUTER",
-            "PROJECT_CANON.md": "CURRENT ARCHITECTURE", "REENTRY.md": "SESSION STATE",
-            "checklist.md": "DELIVERY HISTORY",
+            "README.md": "AI BOOTSTRAP", "AI_INDEX.md": "ROUTING TABLE",
+            "PROJECT_CANON.md": "SEMANTIC CONTRACTS", "REENTRY.md": "STATE PACKET",
         },
     }
     atlas["fingerprint"] = compute_fingerprint(atlas)
@@ -224,13 +223,14 @@ def write_atlas(root: Path) -> dict:
 
 # ---------------------------------------------------------------- architecture-check (§17.11)
 
-def _tracked_root_md(root: Path) -> set[str] | None:
+def _tracked_md(root: Path) -> list[str] | None:
+    """git tracked *.md 전체 (repo-relative posix path). git 없으면 None."""
     try:
         r = subprocess.run(["git", "ls-files", "*.md"], cwd=root,
                            capture_output=True, text=True, timeout=30)
     except OSError:
         return None
-    return {Path(x).name for x in r.stdout.splitlines() if "/" not in x.replace("\\", "/")}
+    return sorted(x.replace("\\", "/") for x in r.stdout.splitlines() if x.strip())
 
 
 def _canon_ids(root: Path) -> tuple[set[str], set[str]]:
@@ -255,10 +255,19 @@ def run_architecture_check(root: Path, secrets: list[str] | None = None) -> list
     manifest = atlas["manifest"]
     h = atlas["health"]
 
-    # 1. root Markdown 정확히 5개 (git tracked 기준 — untracked 주문서와 충돌 방지)
-    tracked = _tracked_root_md(root)
+    # 1. root Markdown 정확히 4개 (git tracked 기준 — untracked 주문서와 충돌 방지)
+    tracked_all = _tracked_md(root)
+    tracked = {Path(x).name for x in tracked_all if "/" not in x} if tracked_all is not None else None
     if tracked is not None and tracked != set(ROOT_MD_WHITELIST):
         problems.append(f"root markdown whitelist 위반: {sorted(tracked)}")
+
+    # 1b. 전체 tracked md는 root AI 문서 또는 manifest 선언 fixture여야 한다 (§5.3)
+    declared = set(manifest.get("documents", {}).get("fixtures", []))
+    if tracked_all is not None:
+        for p in tracked_all:
+            if ("/" not in p and p in ROOT_MD_WHITELIST) or p in declared:
+                continue
+            problems.append(f"선언되지 않은 tracked markdown: {p} (root AI 문서/선언 fixture만 허용)")
 
     # 2. AI_INDEX CANON-ID == PROJECT_CANON CANON-ID
     canon, index = _canon_ids(root)

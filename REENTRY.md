@@ -1,44 +1,49 @@
-# REENTRY — 다음 세션 재진입 요약
+# REENTRY
 
-작성: 2026-07-10. **RIM Structural Reset & Architecture Atlas 완료(R0~R8 전부).**
-현행 아키텍처 정본은 `PROJECT_CANON.md`(CANON-01~12, 인덱스 `AI_INDEX.md`),
-Architecture Atlas는 `architecture/`(빌드·검사는 CANON-12).
+HEAD:
+- commit: 6b7599f (+A2 doc reset commit)
+- branch: main
+- clean: true (untracked order docs only — never commit them)
 
-## 1. 최종 상태
+SYSTEM_STATUS:
+- tests: full suite PASS at d84c052 (1000+); A1 targeted 23 PASS
+- architecture_check: PASS
+- known_flaky: []
 
-- BASE `3363bb6` → R7 코드 최종 `a1da6c1` → 이 문서 커밋(직전 HEAD `a1da6c1`, 문서·atlas 재빌드만 포함)이 최종 HEAD.
-- 워킹트리 clean, 전부 push됨. 주문서(`RIM Structural Reset & Architecture.md`)는 untracked 유지 — 작업 완료로 더 이상 필요 없음, 삭제는 사용자 판단.
-- **pytest 3회 연속: 1000 passed × 3 (270s/251s/252s), flaky 0** (R0에서 patch_attempts flaky 근본 수정 후 재발 없음).
-- **Architecture Atlas**: fingerprint `46890aca885fdb79`, 연속 빌드 byte-identical(결정론),
-  architecture-check 20항목 PASS. modules 74 / components 12 / CLI 30 / import cycle 0 /
-  allowlist 외 private import 0 / orphan 0 / unknown component 0. atlas.json 내장 commit은
-  빌드 시점 HEAD(`a1da6c1`) — check는 structural fingerprint 기준이라 문서 커밋 후에도 stale 아님.
-- **#47/#54 회귀**: characterization 8 PASS — 둘 다 base hash PASS, 정직 HOLD_FOR_HUMAN 유지,
-  #47 제품화 artifact 판독 보존, #54 requires_spec_repair/viewer mock fallback/HOLD 이유 은폐 없음.
-- CLI smoke 전 명령 OK(validate/challenge/dashboard/factory 계열/architecture 4종),
-  run 유형별(legacy factory/core/continuation/2C/2D-1) 판독 회귀 정상.
-- 보안: .env/challenge.db/runs 내용/raw prompt 미커밋, Atlas secret 0, 외부 CDN 0, serve traversal 차단.
+RECENT_SEMANTIC_CHANGES:
+- AI-Only Atlas reset in progress (order doc: root `RIM AI-Only Architecture Atlas & Do.md`)
+- A1 done: no Atlas HTML/renderer, no architecture-serve/summary CLI
+- A2 done: root markdown = 4 (checklist.md deleted, git history only), docs rewritten AI-only
+- d84c052: 2D-1 evidence now reads phase2c3 execution report (stale #47 hold gap fixed)
 
-## 2. 남은 실제 한계
+OPEN_BLOCKERS:
+- id: ai_only_atlas_A3_A6
+  state: pending
+  evidence: runs/_ai_only_atlas/state.json (plan + baseline)
+  next_action: A3 Atlas schema v2 → A4 architecture-context CLI → A5 check 22항목+8 fixtures → A6 regression
+- id: hold_54
+  state: waiting_human
+  evidence: runs/factory_20260710_021635/review/phase2d1/loop_20260710_141947/hold_for_human_packet.json
+  next_action: human decides spec repair (golden root_node/target_id) + viewer mock fallback removal
+- id: hold_47
+  state: waiting_human
+  evidence: re-derived evidence = PRODUCT_CANDIDATE, no gap (post d84c052)
+  next_action: human final review/release decision; rerun loop if a fresh record is wanted
 
-- miner 3건 cross-module private import는 §5.1 무변경 보존 우선의 **의도적 예외**(CANON-11,
-  architecture manifest allowlist). "private import 0" 목표는 이 예외와 함께 달성으로 간주.
-- 500 LOC 초과 23개 / 800 LOC 초과 12개 module 잔존 — 총 LOC 감소는 필수 목표가 아니었음.
-- 제품 쪽 오픈 이슈(checklist 참조): #47/#54 hold packet 응답 대기, lane 실패 escalation 미설계,
-  UX_POLISH lane stub, 다수 run batch 자동화 미착수. (queue run 5 stale 분류는 R4 수정으로 해소 확인.)
+NEXT_ACTIONS:
+1. A3: atlas.json schema v2 (symbols/routes/artifacts role+provenance/contracts/invariants/document_routes)
+2. A4: architecture-context CLI (selectors, --impact, --changed, JSON deterministic)
+3. A5: architecture-check 22 hard failures + warnings + 8 representative AI task fixtures
+4. A6: build×2 byte-identical, full pytest, runtime UI regression, final report (response only)
 
-## 3. 다음 권장 작업
+DO_NOT_REPEAT:
+- do not commit the two untracked root order docs
+- do not re-add human documentation, checklist, or Atlas HTML/serve/summary
+- do not touch #47/#54 base runs on disk (tmp copies only)
+- escalation (lane failure → next iteration judge) is a known deferred design, not a bug
 
-1. #47 최종 검수/출시 결정 — hold의 blocking gap은 stale evidence였음이 확인·수정됨(2026-07-10,
-   extract_artifact_evidence가 2C-3 실행 실증을 읽도록 보강). 수정 후 evidence 재파생은
-   stage=PRODUCT_CANDIDATE·gap 없음. 새 판정 기록이 필요하면 loop 재실행.
-2. #54 hold packet 응답 처리 — spec repair(golden root_node/target_id) + viewer mock fallback 제거 후 loop 재실행.
-3. escalation(lane 실패 정보의 다음 iteration 전달) 설계 — 착수 시 CANON-07 갱신부터.
-4. 구조 변경 커밋 시 `architecture-build` 재실행 + `architecture-check` PASS 유지(CANON-12 규칙).
-
-## 4. 재진입 명령
-
-- `python -m pytest tests/test_structural_reset_characterization.py -q` — #47/#54 의미 보존 확인(8건).
-- `python -m pytest -q` — 전체(약 4분 15초, 1000건).
-- `python -m repo_idea_miner architecture-check` — 구조·문서 거버넌스 검사.
-- `python -m repo_idea_miner architecture-build` — atlas 재생성(결정론, 2회 빌드 diff 0이어야 정상).
+VERIFY:
+- python -m repo_idea_miner architecture-check
+- python -m repo_idea_miner architecture-build   # rerun twice → zero diff expected
+- python -m pytest tests/test_architecture_atlas.py tests/test_structural_reset_characterization.py -q
+- python -m pytest -q

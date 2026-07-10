@@ -24,7 +24,7 @@ EXPECTED_CLI = {
 }
 
 ROOT_MD_WHITELIST = {"AI_INDEX.md", "PROJECT_CANON.md", "README.md",
-                     "REENTRY.md", "checklist.md"}
+                     "REENTRY.md"}
 
 
 def _load(p: Path) -> dict:

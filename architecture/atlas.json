@@ -11,7 +11,6 @@
    "VERIFICATION.md",
    "atlas.json",
    "atlas.schema.json",
-   "checklist.md",
    "index.html",
    "manifest.toml"
   ],
@@ -1169,7 +1168,7 @@
    "source": "repo_idea_miner.cli_handlers"
   }
  ],
- "commit": "d84c0522aee622628f4a2b92f9ec6a434cccb7fe",
+ "commit": "6b7599fe751d9159cbcf72cb2d836940d6a2437a",
  "components": {
   "atlas": {
    "canon_id": "CANON-12",
@@ -1330,13 +1329,12 @@
   }
  },
  "documents": {
-  "AI_INDEX.md": "CANON ROUTER",
-  "PROJECT_CANON.md": "CURRENT ARCHITECTURE",
-  "README.md": "USER GUIDE",
-  "REENTRY.md": "SESSION STATE",
-  "checklist.md": "DELIVERY HISTORY"
+  "AI_INDEX.md": "ROUTING TABLE",
+  "PROJECT_CANON.md": "SEMANTIC CONTRACTS",
+  "README.md": "AI BOOTSTRAP",
+  "REENTRY.md": "STATE PACKET"
  },
- "fingerprint": "cb5570433b886e58e2ec0fb3040d55186bee55ee79703c22ad14546da998e127",
+ "fingerprint": "fb268d61960ac1ec5e75e212fd4ac922e6c45aec580c47277bd7f3bce3195434",
  "health": {
   "import_cycles": [],
   "module_count": 73,
@@ -1739,7 +1737,6 @@
     "VERIFICATION.md",
     "atlas.json",
     "atlas.schema.json",
-    "checklist.md",
     "index.html",
     "manifest.toml"
    ],
@@ -1757,7 +1754,7 @@
      ]
     }
    ],
-   "loc": 414,
+   "loc": 423,
    "module": "repo_idea_miner.architecture_atlas",
    "path": "repo_idea_miner/architecture_atlas.py",
    "private_symbols": [
@@ -1770,7 +1767,7 @@
     "_git_head",
     "_last_commit_files",
     "_test_mapping",
-    "_tracked_root_md"
+    "_tracked_md"
    ],
    "public_symbols": [
     "ATLAS_DIR",
