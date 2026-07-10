@@ -1,49 +1,43 @@
 # REENTRY — 다음 세션 재진입 요약
 
-작성: 2026-07-10 (Structural Reset 진행 중). 현행 아키텍처 정본은 `PROJECT_CANON.md`(인덱스 `AI_INDEX.md`).
-**진행 중인 큰 작업: RIM Structural Reset & Architecture Atlas** — 주문서는 루트의
-`RIM Structural Reset & Architecture.md`(untracked, 절대 커밋 금지). 재진입 시 이 주문서와
-`runs/_structural_reset/state.json`(gitignored 작업 상태)을 먼저 읽을 것.
+작성: 2026-07-10. **RIM Structural Reset & Architecture Atlas 완료(R0~R8 전부).**
+현행 아키텍처 정본은 `PROJECT_CANON.md`(CANON-01~12, 인덱스 `AI_INDEX.md`),
+Architecture Atlas는 `architecture/`(빌드·검사는 CANON-12).
 
-## 1. 현재 상태
+## 1. 최종 상태
 
-- BASE_HEAD `3363bb6`, **R0~R6 완료** HEAD `bb54552`, 전부 push됨, 워킹트리 clean(주문서 md만 untracked).
-- **R6 완료**: dead 심볼 6건 삭제(전수 참조 스캔 — errors 예외 3종, format_verdict_desc,
-  queue.SPEC_REPAIR_REVIEW_RESULTS, review.FITNESS_GRADES) + 중복 상수 정본 수렴
-  (FROZEN_FILES/PREFIXES→factory_frozen, validate.LANES→continue, validate.MIN_SRC_FILES→gates).
-  의미 다른 동명(2C-2/2C-3 check_*, viewer.detect_run_kind, JSON_RULES 3본)은 보존.
-  **miner 3건 private cross-import는 §5.1 보존 우선 의도적 예외 확정**(CANON-11 기록,
-  R7 architecture-check에서 allowlist). 임시 shim 0, 테스트 삭제 0.
-  **전체 pytest 983 PASS(247s)**. CANON-02·11 갱신.
-- **R5 완료**: CLI/Dashboard 분리 — cli.py는 parser/dispatch만(실행은 cli_handlers HANDLERS),
-  dashboard는 렌더링·HTTP만(read model은 challenge_dashboard_data, QA 종합 판정은
-  factory_summary.overall_qa_status). CANON-02·03·09 갱신.
-- **R4~R0 완료**: failure 의미 정본/cycle 0 · 제품 체인 정본화 · validation registry ·
-  run layout 정본 · flaky 근본 수정.
-- #47/#54 closed loop 상태는 characterization 테스트가 고정(둘 다 HOLD_FOR_HUMAN, base hash PASS).
+- BASE `3363bb6` → R7 코드 최종 `a1da6c1` → 이 문서 커밋(직전 HEAD `a1da6c1`, 문서·atlas 재빌드만 포함)이 최종 HEAD.
+- 워킹트리 clean, 전부 push됨. 주문서(`RIM Structural Reset & Architecture.md`)는 untracked 유지 — 작업 완료로 더 이상 필요 없음, 삭제는 사용자 판단.
+- **pytest 3회 연속: 1000 passed × 3 (270s/251s/252s), flaky 0** (R0에서 patch_attempts flaky 근본 수정 후 재발 없음).
+- **Architecture Atlas**: fingerprint `46890aca885fdb79`, 연속 빌드 byte-identical(결정론),
+  architecture-check 20항목 PASS. modules 74 / components 12 / CLI 30 / import cycle 0 /
+  allowlist 외 private import 0 / orphan 0 / unknown component 0. atlas.json 내장 commit은
+  빌드 시점 HEAD(`a1da6c1`) — check는 structural fingerprint 기준이라 문서 커밋 후에도 stale 아님.
+- **#47/#54 회귀**: characterization 8 PASS — 둘 다 base hash PASS, 정직 HOLD_FOR_HUMAN 유지,
+  #47 제품화 artifact 판독 보존, #54 requires_spec_repair/viewer mock fallback/HOLD 이유 은폐 없음.
+- CLI smoke 전 명령 OK(validate/challenge/dashboard/factory 계열/architecture 4종),
+  run 유형별(legacy factory/core/continuation/2C/2D-1) 판독 회귀 정상.
+- 보안: .env/challenge.db/runs 내용/raw prompt 미커밋, Atlas secret 0, 외부 CDN 0, serve traversal 차단.
 
-## 2. 다음 작업 (R7부터, 주문서 §17~§18 순서)
+## 2. 남은 실제 한계
 
-1. **R7 Architecture Atlas**(주문서 §17) — architecture/(manifest.toml, atlas.schema.json,
-   atlas.json, index.html — 새 md 금지). scanner는 architecture_scanner.py 확장(재작성 금지).
-   CLI: architecture-build/check/summary(+선택 serve, 새 웹 framework 금지). 결정론(§17.9
-   byte-identical), structural fingerprint(§17.10), check 20항목(§17.11 — private import는
-   miner 3건 allowlist, root md whitelist는 git tracked 기준으로 구현해 untracked 주문서와
-   충돌 방지). 모바일 360px/다크모드/외부 CDN 0(§17.8). 테스트 §17.13.
-   완료 시 CANON-12 추가 + AI_INDEX 라우팅 + README Atlas 사용법(같은 commit).
-2. R7 후 R8 최종(§18) — pytest 3회 연속, CLI smoke, 기존 run 회귀, #47/#54, 다섯 문서 전면
-   정합, checklist에 완료 섹션 1개 추가, 최종 보고(응답으로만).
+- miner 3건 cross-module private import는 §5.1 무변경 보존 우선의 **의도적 예외**(CANON-11,
+  architecture manifest allowlist). "private import 0" 목표는 이 예외와 함께 달성으로 간주.
+- 500 LOC 초과 23개 / 800 LOC 초과 12개 module 잔존 — 총 LOC 감소는 필수 목표가 아니었음.
+- 제품 쪽 오픈 이슈(checklist 참조): #47/#54 hold packet 응답 대기, lane 실패 escalation 미설계,
+  UX_POLISH lane stub, 다수 run batch 자동화 미착수, queue의 run 5 stale 분류.
 
-## 3. 규칙 (주문서 요지)
+## 3. 다음 권장 작업
 
-- 루트 md는 정확히 5개 유지, 새 md 금지(작업 상태는 state.json에만).
-- 원본 run 무손상·기존 CLI/DB/run 판독 보존·golden 의미 약화 금지(CANON-11).
-- 구조 커밋마다 관련 CANON 섹션 동커밋 갱신. 테스트 실패 상태 커밋 금지.
-- 전체 pytest는 R8 완료 시점(3회 연속 PASS). 작은 이동마다 반복 금지.
-- 같은 실패 signature 2회면 slice 되돌리고 더 작게 재설계(§21).
+1. #47 hold packet 응답 처리 — RUNNER_BACKED_DRAFT_EXECUTION lane 사람 승인 여부 결정 후 loop 재개.
+2. #54 hold packet 응답 처리 — spec repair(golden root_node/target_id) + viewer mock fallback 제거 후 loop 재실행.
+3. escalation(lane 실패 정보의 다음 iteration 전달) 설계 — 착수 시 CANON-07 갱신부터.
+4. 구조 변경 커밋 시 `architecture-build` 재실행 + `architecture-check` PASS 유지(CANON-12 규칙).
 
-## 4. 검증 명령
+## 4. 재진입 명령
 
-- `python -m pytest tests/test_structural_reset_characterization.py -q` (의미 보존 확인)
-- `python -m pytest -q` (약 4분 17초)
-- baseline 재생성: `python -c "from pathlib import Path; import json; from repo_idea_miner.architecture_scanner import build_baseline; print(json.dumps({k:v for k,v in build_baseline(Path('.')).items() if k not in ('modules','artifact_refs_by_module')}, ensure_ascii=False)[:800])"`
+- `python -m pytest tests/test_structural_reset_characterization.py -q` — #47/#54 의미 보존 확인(8건).
+- `python -m pytest -q` — 전체(약 4분 15초, 1000건).
+- `python -m repo_idea_miner architecture-check` / `architecture-summary` — 구조 검사·지표.
+- `python -m repo_idea_miner architecture-build` — atlas 재생성(결정론, 2회 빌드 diff 0이어야 정상).
+- `python -m repo_idea_miner architecture-serve` — Atlas 로컬 열람(모바일 360px/다크모드 지원).

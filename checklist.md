@@ -217,9 +217,28 @@ v1.0 (RIM_FANAL.md §35/§37 기준) 2026-07-08 완료.
 - [x] 두 도메인이 같은 orchestrator 통과 → 다수 run batch 자동화 선행 조건 충족.
 - [x] pytest 962 × 3회 — 1회 전부 통과, 2회는 기존 flaky 2종만(patch_attempts=2, 격리에서도 간헐 재현=2D-1 무관, 원인 조사 별도).
 
+# Structural Reset & Architecture Atlas — 2026-07-10 (BASE 3363bb6 → R0~R8)
+
+## 구현
+- [x] 정본 Run Resolver (run layout/판독 정본 1개)
+- [x] Validation Registry (validation router 정본 1개)
+- [x] Product Judgment/Closed Loop 통합 (각 정본 1개)
+- [x] CLI/Dashboard 분리 (cli.py는 parser/dispatch만, dashboard는 렌더링만)
+- [x] dead code 정리 (dead 심볼 6건 삭제 + 중복 상수 정본 수렴)
+- [x] Architecture Atlas (architecture/ 산출물 + architecture-build/check/summary/serve, a1da6c1)
+
+## 검수
+- [x] pytest 3회 연속 — 1000 passed × 3, flaky 0 (R0에서 patch_attempts flaky 근본 수정).
+- [x] #47 — characterization PASS: base hash PASS, HOLD_FOR_HUMAN 정직 유지, 제품화 artifact 판독 보존.
+- [x] #54 — characterization PASS: base hash PASS, requires_spec_repair/mock fallback/HOLD 이유 은폐 없음.
+- [x] legacy run — run 유형별(legacy factory/core/continuation/2C/2D-1) 회귀 판독 정상.
+- [x] architecture-check 20항목 PASS (import cycle 0, allowlist 외 private import 0, orphan 0, unknown component 0).
+- [x] deterministic rebuild — 연속 2회 빌드 byte-identical, fingerprint 46890aca885fdb79.
+- [x] root Markdown 정확히 5개, AI_INDEX ↔ PROJECT_CANON CANON-ID 1:1, README broken link 0.
+
 # 현재 오픈 이슈 (2026-07-10 기준, 상세는 REENTRY.md)
 
 - [ ] #47 hold packet 응답 — RUNNER_BACKED_DRAFT_EXECUTION lane 사람 승인 여부.
 - [ ] #54 hold packet 응답 — spec repair(golden root_node/target_id, §8이 막는 부류) + viewer mock fallback 제거 후 loop 재실행.
 - [ ] lane 실패 정보의 다음 iteration 전달(escalation) 미설계 — 도입하려면 CANON-07 갱신부터.
-- [ ] UX_POLISH lane stub / 다수 run batch 자동화 / flaky 근본 원인(patch_attempts=2) / queue의 run 5 stale 분류.
+- [ ] UX_POLISH lane stub / 다수 run batch 자동화 / queue의 run 5 stale 분류.

@@ -1180,7 +1180,7 @@
    "source": "repo_idea_miner.cli_handlers"
   }
  ],
- "commit": "3284dd763399b7d2c4bae524543dce2bd02beb11",
+ "commit": "a1da6c19bf9c531e256c1d1ba9cc5ed819c0d786",
  "components": {
   "atlas": {
    "canon_id": "CANON-12",
