@@ -62,6 +62,14 @@ def test_dashboard_main_routes_exist():
         assert route in src, f"dashboard route 소실: {route}"
 
 
+def test_dashboard_presentation_owns_no_read_model():
+    """R5: presentation(challenge_dashboard)은 SQL 직접 실행·artifact JSON 파싱을 소유하지 않는다 (§15.2).
+    조회는 challenge_dashboard_data, 판정은 factory_* 정본에서 가져와야 한다."""
+    src = (REPO_ROOT / "repo_idea_miner/challenge_dashboard.py").read_text(encoding="utf-8")
+    assert "conn.execute(" not in src, "presentation이 SQL을 직접 실행"
+    assert "json.loads(" not in src, "presentation이 artifact JSON을 직접 파싱"
+
+
 @pytest.mark.skipif(not LOOP_47.is_dir(), reason="#47 closed loop run 없음 (로컬 전용)")
 def test_47_closed_loop_meaning_preserved():
     s = _load(LOOP_47 / "loop_summary.json")

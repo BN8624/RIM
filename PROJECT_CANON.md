@@ -21,7 +21,7 @@
 ## CANON-02 모듈 지도
 
 - Miner core: `pipeline.py` / `search_pipeline.py` / `schemas.py` — **v1.0 이후 무변경 보존이 요구사항**.
-- Challenge Mode: `challenge_*.py` 10개 (dashboard 포함). Challenge 관련 수정은 이 파일들만.
+- Challenge Mode: `challenge_*.py` 11개 (dashboard 포함). Challenge 관련 수정은 이 파일들만. `challenge_dashboard.py`는 HTML 렌더링+HTTP만, 조회·phase 요약 로더·preview 화이트리스트 접근은 `challenge_dashboard_data.py`(대시보드 read model, CANON-09).
 - Product Factory (`factory_*.py`):
   - `factory_core_schemas/prompts/gates/pipeline.py` — 7-Stage core harness (CANON-04).
   - `factory_continue.py` — continuation delta loop + failure 의미 정본(assess_failure_patch_safety, spec repair proposal/review 빌더 — queue·2B가 import), `factory_queue.py` — queue routing/discovery(판단은 continue의 정본 사용), `factory_frozen.py` — frozen hash guard (CANON-05).
@@ -101,6 +101,7 @@ viewer/replay 탐색·field evidence·protected hash·gate context는 전 단계
 ## CANON-09 대시보드
 
 - `dashboard`(포트 8787): Challenge Inbox + Product Runs 검수함. 한국어 라벨(factory_labels, 내부 enum 불변), 기술 원문은 <details> 접힘. phase별 카드/패널/report 탭은 최신 phase 우선(2D-1>2D-0>2C-3>…).
+- 책임 분리: `challenge_dashboard.py`는 HTML 렌더링·route dispatch·POST action만. SQL 조회·phase 요약 로더·report/source preview 화이트리스트와 경로 안전 검사는 `challenge_dashboard_data.py`(read model). 판정은 소유하지 않는다 — stage/gap/lane은 phase별 dashboard summary(정본 service 산출물)에서 읽고, QA 종합 상태는 `factory_summary.overall_qa_status` 하나다(회귀 테스트가 presentation의 SQL/JSON 파싱 부재를 고정).
 - 인증 없음 — 기본 host 127.0.0.1, `0.0.0.0`은 Tailscale 사설망(100.89.73.83)에서만.
 - #47 실행 데모는 정적 서버가 아니라 브리지 서버(`python product/draft_server.py --port 8799`)로 접속해야 동작.
 

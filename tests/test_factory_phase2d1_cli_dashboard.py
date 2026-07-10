@@ -3,10 +3,10 @@ import json
 from pathlib import Path
 
 from repo_idea_miner.challenge_dashboard import (
-    _load_phase2d1,
     _phase2d1_card_lines,
     _phase2d1_panel,
 )
+from repo_idea_miner.challenge_dashboard_data import load_phase2d1
 from repo_idea_miner.cli import main
 from repo_idea_miner.config import Settings
 from repo_idea_miner.factory_core_prompts import mock_core_factory_overrides
@@ -76,7 +76,7 @@ def test_dashboard_card_and_panel_render(tmp_path):
     res = _run_mock(tmp_path)
     base = Path(res["run_dir"])
     _run_loop(tmp_path, base)
-    p2d1 = _load_phase2d1(base)
+    p2d1 = load_phase2d1(base)
     assert p2d1 is not None
     card = _phase2d1_card_lines(p2d1)
     assert "closed loop" in card
@@ -94,14 +94,14 @@ def test_dashboard_latest_loop_wins(tmp_path):
     base = Path(res["run_dir"])
     first = _run_loop(tmp_path, base, execute=False)
     second = _run_loop(tmp_path, base, execute=False)
-    p2d1 = _load_phase2d1(base)
+    p2d1 = load_phase2d1(base)
     assert p2d1["loop_id"] == json.loads(
         (Path(second["loop_dir"]) / "loop_summary.json").read_text("utf-8"))["loop_id"]
     assert first["loop_id"] != second["loop_id"]
 
 
 def test_dashboard_no_loop_is_silent(tmp_path):
-    assert _load_phase2d1(tmp_path) is None
+    assert load_phase2d1(tmp_path) is None
     assert _phase2d1_card_lines(None) == ""
     assert _phase2d1_panel(None, tmp_path) == ""
 

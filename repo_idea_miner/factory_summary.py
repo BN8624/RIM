@@ -395,3 +395,16 @@ def gate_pass_count(gate_summary: dict) -> tuple[int, int]:
     """PASS gate 수와 전체 gate 수 (§8: 'Gate 4/4 PASS')."""
     passed = sum(1 for g in GATE_KEYS if (gate_summary.get(g) or {}).get("status") == "PASS")
     return passed, len(GATE_KEYS)
+
+
+def overall_qa_status(qa_summary: dict) -> str:
+    """qa_summary(anchor/forbidden/core_interaction)의 종합 상태 — 판정 정본은 여기 하나다."""
+    vals = [qa_summary.get("anchor_status"), qa_summary.get("forbidden_status"),
+            qa_summary.get("core_interaction_status")]
+    if "FAIL" in vals:
+        return "FAIL"
+    if "PARTIAL" in vals:
+        return "PARTIAL"
+    if vals and all(v == "PASS" for v in vals):
+        return "PASS"
+    return "UNKNOWN"
