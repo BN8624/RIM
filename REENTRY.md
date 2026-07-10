@@ -11,8 +11,8 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS at A7; architecture-build 연속 2회 byte-identical;
-  dashboard smoke(/, /products 200) PASS at A6
+- tests: full suite PASS (1054) at issue #4 Phase B repair (1b588f0);
+  architecture-build 연속 2회 byte-identical; dashboard smoke(/, /products 200) PASS at A6
 - architecture_check: PASS + WARN 채널 (literal-only artifacts 집계, route 미선언 CLI,
   AI_INDEX component query primary 초과 — 모두 §17.2 비차단)
 - known_flaky: []
@@ -66,19 +66,36 @@ RECENT_SEMANTIC_CHANGES:
   유지 계약) + check 19+30 usage_contract_problems(계약 토큰/key/과장 표현/CLI·옵션 정합)
   + 계약 회귀 테스트 5종. AI 작업 시작 절차 정본은 README와 CANON-12.
 
+- Issue #4 Phase A done: #47 공식 성공 재현 — fresh live loop(072220/review/phase2d1/
+  loop_20260711_023843) iteration 1 PRODUCT_CANDIDATE, gates 7/7, base 불변(독립 snapshot 동일)
+- Issue #4 Phase B done (FACTORY_DEFECT → generic repair, commit 1b588f0): FD-1 continue
+  --run-dir live scheduler 구성, FD-2 copy_run_as_child base 포인터 child 재작성, FD-3 invariant
+  평가기 entity 이름 키 singleton 해석(NOT_EXPOSED 오탐 12건 → patch 노이즈 → §8.1 spec repair
+  차단 데드락 해소), FD-4 spec repair expected_events payload 값 보호 + _event_kind 'type' 키
+  (runner 결함값 target_id 'system'의 golden 복사 봉쇄, 증거 runs/factory_20260710_183137/
+  spec_repair_apply_plan.json) + 회귀 테스트 4건. 수리 후 재검증: child 174740 live closed
+  loop(loop_20260711_034840)에서 invariant gate PASS, 정직한 HOLD_FOR_HUMAN, base 021635
+  불변(보호 37파일 hash PASS). #54 상태 = VALID_HOLD. 절차 기록:
+  runs/_factory_reality_validation/state.json
+
 OPEN_BLOCKERS:
 - id: hold_54
-  state: waiting_human
-  evidence: runs/factory_20260710_021635/review/phase2d1/loop_20260710_141947/hold_for_human_packet.json
-  next_action: human decides spec repair (golden root_node/target_id) + viewer mock fallback removal
+  state: waiting_human (VALID_HOLD — viewer mock 제거·golden 의미 판정·FD-1~4 수리 완료 후 남은 blocker)
+  evidence: runs/factory_20260710_174740/review/phase2d1/loop_20260711_034840/hold_for_human_packet.json
+  next_action: "scenario_003의 golden 결함(root_node)과 core 결함(target_id)이 얽혀 자동 수리
+    순서가 없음 — spec repair apply의 시나리오 단위 부분 적용을 허용할지, 또는 spec repair
+    pending 중 core patch lane을 허용할지 사람이 결정"
 - id: hold_47
   state: waiting_human
-  evidence: re-derived evidence = PRODUCT_CANDIDATE, no gap (post d84c052)
-  next_action: human final review/release decision; rerun loop if a fresh record is wanted
+  evidence: PRODUCT_CANDIDATE 공식 성공 재현 — runs/factory_20260709_072220/review/phase2d1/
+    loop_20260711_023843 (live, iteration 1, gap 없음, gates 7/7, base 불변)
+  next_action: human final review/release decision
 
 NEXT_ACTIONS:
-1. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
-2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+1. Issue #4 Phase C (fresh challenge 3종 blind closed-loop) — 선정 완료(27/17/77),
+   실행 절차는 runs/_factory_reality_validation/state.json
+2. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
+3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    escalation 설계, literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
