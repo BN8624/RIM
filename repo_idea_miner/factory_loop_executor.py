@@ -111,9 +111,14 @@ def _judge(run_dir: Path, probe_report: dict | None, executor, gemma_mode: str,
         from repo_idea_miner.factory_core_schemas import CORE_GATE_ORDER
         evidence["facts"]["gate_fail"] = not all(
             fresh_gate_summary.get(g) for g in CORE_GATE_ORDER)
-        ref = f"artifact_evidence.facts.gate_fail={str(evidence['facts']['gate_fail']).lower()}"
-        evidence["refs"]["facts.gate_fail"] = ref
-        evidence["known_refs"].add(ref)
+        # evidence 충분성의 gate 문맥 조건은 fresh rerun이 충족한다 — 기록 파일 부재로
+        # EVIDENCE_INSUFFICIENT가 되면 방금 잰 gate 실패를 hard rung이 못 잡는다 (§7).
+        evidence["facts"]["evidence_sufficient"] = bool(
+            evidence["facts"].get("viewer_exists") or evidence["facts"].get("has_editor_report"))
+        for key in ("gate_fail", "evidence_sufficient"):
+            ref = f"artifact_evidence.facts.{key}={str(evidence['facts'][key]).lower()}"
+            evidence["refs"][f"facts.{key}"] = ref
+            evidence["known_refs"].add(ref)
     quality = extract_user_facing_quality(evidence)
     hard = apply_hard_blockers(evidence, quality)
     prompts: dict = {}

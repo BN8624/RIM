@@ -165,6 +165,30 @@ def test_acceptance_blocks_on_mock_fallback(tmp_path):
     assert "mock_fallback_zero" in out["failed_checks"]
 
 
+def test_judge_fresh_gates_restore_evidence_sufficiency(tmp_path):
+    """#54류: 기록된 gate 문맥이 없어도 fresh gate rerun이 sufficiency를 충족한다 (§7).
+
+    기록 파일 부재로 EVIDENCE_INSUFFICIENT가 되면 방금 잰 gate 실패를
+    hard rung(CORE_PATCH_REQUIRED)이 잡지 못하고 HOLD로 빠진다.
+    """
+    from repo_idea_miner.factory_loop_executor import _judge
+    from test_factory_review_2c0 import _VIEWER_CLEAN, _build_green_run
+
+    run = _build_green_run(tmp_path, _VIEWER_CLEAN)
+    (run / "green_base.json").unlink()
+    (run / "gate_rerun_after_anti_hardcode_patch.json").unlink()
+    (run / "phase2b1b_dashboard_summary.json").unlink()
+    fresh = {g: True for g in ("core_contract", "runner", "scenario_replay", "golden_output",
+                               "state_invariant", "determinism", "anti_hardcode")}
+    fresh["golden_output"] = False
+    judge = _judge(run, None, None, "sequential", False, fresh_gate_summary=fresh)
+    facts = judge["evidence"]["facts"]
+    assert facts["evidence_sufficient"] is True
+    assert facts["gate_fail"] is True
+    assert judge["desks"]["gap"]["primary_gap"] == "CORE_PATCH_REQUIRED"
+    assert judge["desks"]["lane"]["recommended_next_lane"] == "CORE_PATCH"
+
+
 def test_requirement_coverage_unknown_without_judge(tmp_path):
     (tmp_path / "normalized_challenge.json").write_text(json.dumps({
         "success_conditions": ["A", "B"], "difficulty_anchors": ["C"],
