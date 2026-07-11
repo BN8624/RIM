@@ -168,6 +168,36 @@ input,select{padding:4px;margin:2px}
 const CONTRACT = __CONTRACT_JSON__;
 let queued = [];
 let lastState = CONTRACT["initial_state"];
+let lastEvents = [];
+// 이슈 #9 SC(localStorage 지속): 실제 runner 결과 상태만 저장/복원한다 — 생성 데이터 없음.
+// key는 contract 내용 해시라 같은 origin의 다른 제품과 충돌하지 않는다.
+const STORE_KEY = (() => {
+  let h = 5381;
+  const s = JSON.stringify(CONTRACT);
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; }
+  return "rim_console_state_" + h.toString(16);
+})();
+function persistState() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(
+      {"queued": queued, "lastState": lastState, "lastEvents": lastEvents}));
+  } catch (e) { /* storage 불가 환경 — 지속만 비활성, 다른 동작 불변 */ }
+}
+function restoreState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) { return false; }
+    const saved = JSON.parse(raw);
+    if (!saved || typeof saved !== "object" || !saved["lastState"]) { return false; }
+    queued = Array.isArray(saved["queued"]) ? saved["queued"] : [];
+    lastState = saved["lastState"];
+    lastEvents = Array.isArray(saved["lastEvents"]) ? saved["lastEvents"] : [];
+    renderQueue();
+    renderState(lastState, "RESTORED_SAVED_STATE");
+    renderEvents(lastEvents);
+    return true;
+  } catch (e) { return false; }
+}
 
 function renderState(state, label) {
   document.getElementById("state-view").textContent = JSON.stringify(state, null, 2);
@@ -223,6 +253,9 @@ document.getElementById("queue-add").addEventListener("click", () => {
 });
 document.getElementById("reset-actions").addEventListener("click", () => {
   queued = [];
+  lastState = CONTRACT["initial_state"];
+  lastEvents = [];
+  try { localStorage.removeItem(STORE_KEY); } catch (e) { /* storage 불가 환경 */ }
   renderQueue();
   renderState(CONTRACT["initial_state"], "INITIAL");
   renderEvents([]);
@@ -242,8 +275,10 @@ document.getElementById("run-actions").addEventListener("click", async () => {
       return;
     }
     lastState = data["final_state"];
+    lastEvents = data["events"] || [];
     renderState(data["final_state"], "AFTER_ACTIONS");
     renderEvents(data["events"]);
+    persistState();
     if (data["errors"] && data["errors"].length) {
       showError("action 오류 (상태는 runner 결과 그대로 표시):\\n" + data["errors"].join("\\n"));
     }
@@ -254,8 +289,10 @@ document.getElementById("run-actions").addEventListener("click", async () => {
   }
 });
 renderActionSelect();
-renderState(CONTRACT["initial_state"], "INITIAL");
-renderEvents([]);
+if (!restoreState()) {
+  renderState(CONTRACT["initial_state"], "INITIAL");
+  renderEvents([]);
+}
 </script></body></html>
 """
     return head + script.replace("__CONTRACT_JSON__", contract_json)
