@@ -220,6 +220,30 @@ NOTES:
   `interaction_ui_report.json` are written by the executor's runner-backed smoke; the
   loop accepts them as authoring/loop evidence only when applied=true (priority after
   the 2C-3 execution report), and the validator blocks smoke_pass overclaims
+- generic runner-backed draft execution (`factory_runner_backed_execution`): draft
+  (interaction contract) → canonical execution contract (execution_id/draft_ref/
+  runner_ref/execution_kind/input_payload/initial_state/allowed_actions/expected_outputs/
+  side_effect_policy/timeout_policy/validation_rules/evidence_requirements — reuses
+  existing structures, no invented fields) → temp-copy runner execution via
+  `run_scenario_once` → side effect manifest → validation → fresh evidence. The graph
+  domain routes to the legacy 2C-3 adapter at the lane router by artifact shape;
+  domain meaning never lives in the executor
+- execution status semantics: pre-execution states (READY_TO_EXECUTE/INVALID_DRAFT/
+  MISSING_RUNNER/UNSUPPORTED_EXECUTION_KIND/MISSING_INPUT/UNSAFE_SIDE_EFFECT/
+  MISSING_VALIDATION_CONTRACT) are never success; EXECUTED only means the runner
+  finished — `runner_backed_execution_included=true` requires EXECUTED + validation PASS
+- execution side effect boundary: execution happens only in an artifact temp copy;
+  undeclared created paths or protected-path (golden/replay/src/contract) changes are
+  UNSAFE; stdout/stderr is stored as bounded summaries only
+- execution evidence ownership: `review/draft_execution/*` (contract/result/manifest/
+  evidence/report + dashboard summary) is written by the executor; loop evidence
+  canonical priority is 2c3(graph) → generic draft execution → interaction → editor
+  record, accepted only when applied+included; the validator blocks included overclaim,
+  mock exchanges, and stale (non-fresh) provenance
+- RUNNER_BACKED_EXECUTION_REQUIRED gap removal: only an execution-family report
+  (applied+included) closes it — with an interaction report present but no execution
+  report, the ladder rung and the hard blocker (EXECUTION_CANDIDATE cap) enforce the
+  gap; probe fixture-scenario success is not draft-execution proof
 
 QUERY:
 - architecture-context --canon CANON-06
@@ -250,14 +274,19 @@ FORBIDDEN:
 - prompts containing challenge_id/title/expected answers (evidence refs verbatim only)
 - judge exceeding hard blockers; free-form file edits by the LLM (strict schema packets only)
 - re-demanding a gap already closed by proven evidence (execution-family loop evidence
-  canonical source = phase2c3 execution report, applied+included only; else editor record)
+  canonical source = phase2c3 execution report or generic draft_execution report,
+  applied+included only; else editor record)
 - asking the human mid-iteration (stop only via HOLD_FOR_HUMAN packet with single question)
 
 COMPATIBILITY:
 - historical loop records are preserved as-is (characterization reads stored artifacts)
 
 NOTES:
-- evidence sources: latest phase first (2c3 → 2c2 → 2c1 → 2c0)
+- evidence sources: latest phase first (2c3 → 2c2 → 2c1 → 2c0); execution-family loop
+  evidence priority = 2c3(graph) → generic draft_execution → interaction → editor record
+- product UI surface recognition (probe/static facts) reads all product/ html surfaces —
+  a first-index.html-only read misses multi-surface products (interaction console +
+  replay viewer); replay reads/mismatch judgments follow the surface that reads replay
 - hard rungs (EVIDENCE_INSUFFICIENT/ARCHIVE/SPEC_REPAIR/CORE_PATCH/RUNNER_PATCH): deterministic
   ladder overrides live judgment (`gap_override` recorded), live lane desk skipped
 - CORE_PATCH rung fires on gate_fail only — green_base absence alone is not a core-defect

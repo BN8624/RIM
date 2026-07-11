@@ -333,17 +333,22 @@ def run_fresh_probe(
         if changed is not True:
             report["problems"].append("입력 수정 전후 결과가 달라지지 않음 (revise-and-rerun 실패)")
 
-        # 7. viewer가 result artifact를 표시하는지 — 정적 분석 한계 명시
+        # 7. viewer가 result artifact를 표시하는지 — 정적 분석 한계 명시.
+        # 제품 표면은 product/ 전체다 — interaction console처럼 UI 표면이 복수일 때
+        # 첫 index.html 디렉토리만 보면 나머지 표면의 result 표시 근거를 놓친다
+        # (도메인/파일 이름 분기 없음 — 이슈 #6 도메인 중립화).
         viewer_rel = find_viewer_entrypoint(tmp_ws)
-        viewer_dir = (tmp_ws / viewer_rel).parent if viewer_rel else None
+        product_dir = tmp_ws / "product"
         viewer_srcs: dict[str, str] = {}
-        if viewer_dir and viewer_dir.is_dir():
-            for p in sorted(viewer_dir.rglob("*")):
+        if product_dir.is_dir():
+            for p in sorted(product_dir.rglob("*")):
                 if p.suffix.lower() in (".html", ".js") and p.is_file():
                     viewer_srcs[str(p.relative_to(tmp_ws).as_posix())] = \
                         p.read_text(encoding="utf-8", errors="replace")
         viewer_blob = "\n".join(viewer_srcs.values())
-        reads_replay = bool(re.search(r"replay/", viewer_blob)) and "fetch" in viewer_blob
+        # replay 읽기는 같은 파일 안에서 fetch까지 있어야 인정한다 (blob 결합 과대 인정 방지)
+        reads_replay = any(("replay/" in src and "fetch" in src)
+                           for src in viewer_srcs.values())
         displays_fields = sum(1 for f in ("final_state", "events", "summary") if f in viewer_blob)
         viewer_ok = bool(viewer_srcs) and reads_replay and displays_fields >= 2
         report["viewer_static_ok"] = viewer_ok

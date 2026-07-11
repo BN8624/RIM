@@ -146,7 +146,11 @@ def _latest_fitness(run_dir: Path) -> dict:
 
 
 def _static_viewer_facts(run_dir: Path) -> dict:
-    """review 산출물이 없어도 artifact에서 직접 확인 가능한 viewer 사실 (fixture/mock loop용)."""
+    """review 산출물이 없어도 artifact에서 직접 확인 가능한 viewer 사실 (fixture/mock loop용).
+
+    제품 UI 표면이 복수(replay viewer + interaction console 등)일 때 첫 html 하나만 보면
+    replay 읽기/조작 근거를 놓친다 — product/ 전체 html을 집계한다 (이슈 #6 도메인 중립화).
+    replay 판정(reads/mismatch)은 replay를 실제로 읽는 표면 기준이다."""
     final_dir = resolve_artifact_root(run_dir)
     viewer = find_product_viewer(final_dir) if final_dir.is_dir() else None
     _f, replay = first_replay_file(final_dir) if final_dir.is_dir() else (None, None)
@@ -161,13 +165,21 @@ def _static_viewer_facts(run_dir: Path) -> dict:
         "validation_ui": False,
         "replay_count": len(idx.get("replays") or []),
     }
-    if viewer is not None:
-        src = viewer.read_text(encoding="utf-8", errors="replace")
-        facts["viewer_source"] = src
-        facts["viewer_reads_replay"] = len(viewer_reads_replay_evidence(src, replay)) >= 2
-        facts["mismatches"] = viewer_field_mismatches(replay, src)
-        facts["authoring_ui"] = bool(_AUTHORING_RE.search(src))
-        facts["validation_ui"] = bool(_VALIDATION_UI_RE.search(src))
+    if viewer is None:
+        return facts
+    surfaces: list[tuple[Path, str]] = [
+        (p, p.read_text(encoding="utf-8", errors="replace"))
+        for p in sorted((final_dir / "product").rglob("*.html")) if p.is_file()]
+    replay_surface = next(
+        ((p, src) for p, src in surfaces
+         if len(viewer_reads_replay_evidence(src, replay)) >= 2), None)
+    primary = replay_surface or (viewer, viewer.read_text(encoding="utf-8", errors="replace"))
+    facts["viewer_source"] = primary[1]
+    facts["viewer_path"] = str(primary[0].relative_to(run_dir).as_posix())
+    facts["viewer_reads_replay"] = replay_surface is not None
+    facts["mismatches"] = viewer_field_mismatches(replay, primary[1])
+    facts["authoring_ui"] = any(_AUTHORING_RE.search(src) for _p, src in surfaces)
+    facts["validation_ui"] = any(_VALIDATION_UI_RE.search(src) for _p, src in surfaces)
     return facts
 
 
@@ -190,6 +202,9 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         _load_json(run_dir / "review/phase2c3/execution_smoke.json") or {}
     interaction_report = _load_json(run_dir / "review/interaction_ui/interaction_ui_report.json") or {}
     interaction_smoke = interaction_report.get("interaction_smoke") or {}
+    draft_exec_report = _load_json(
+        run_dir / "review/draft_execution/draft_execution_report.json") or {}
+    draft_exec_evidence = draft_exec_report.get("execution_evidence") or {}
     static = _static_viewer_facts(run_dir)
 
     has_editor = bool(editor_smoke)
@@ -198,6 +213,10 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     # 2C-3 실행 evidence는 apply 완료 + smoke 실증(included=true)일 때만 인정한다 — dry-run/실패 run 오탐 방지
     has_execution = bool(exec_smoke) and exec_report.get("applied") is True \
         and exec_report.get("runner_backed_execution_included") is True
+    # generic runner-backed execution evidence(이슈 #6)도 같은 기준 — apply + validation 실증(included)만
+    has_generic_execution = bool(draft_exec_evidence) \
+        and draft_exec_report.get("applied") is True \
+        and draft_exec_report.get("runner_backed_execution_included") is True
     facts: dict = {
         "viewer_exists": bool(smoke.get("product_viewer_exists", static["viewer_exists"])),
         "viewer_path": smoke.get("product_viewer_path") or static["viewer_path"],
@@ -221,8 +240,8 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         "critical_red_flags": fitness.get("critical_red_flags") or [],
         "limitations": fitness.get("limitations") or [],
         "has_editor_report": has_editor,
-        "has_execution_report": has_execution,
-        "runner_backed_execution_included": True if has_execution
+        "has_execution_report": has_execution or has_generic_execution,
+        "runner_backed_execution_included": True if (has_execution or has_generic_execution)
         else (editor_smoke.get("runner_backed_execution_included") if has_editor else None),
         "draft_export_supported": editor_smoke.get("draft_export_supported") if has_editor else None,
         "graph_validation_supported": editor_smoke.get("graph_validation_supported")
@@ -251,6 +270,18 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         # 실패 이해: draft validation 피드백(2C-2)이 실행 경로와 함께 있으면 근거로 인정
         can_understand_failure = bool(editor_smoke.get("graph_validation_supported")) and can_execute
         can_revise = bool(exec_smoke.get("revise_cycle_changes_result")) and can_execute
+    elif has_generic_execution:
+        # 실행 계열 정본 우선순위: 2c3(graph) → generic execution → interaction → editor 기록.
+        # 저작(create/validate) 근거는 interaction smoke가 있으면 그것을 유지한다.
+        if has_interaction:
+            can_create = bool(interaction_smoke.get("can_create_or_modify_input"))
+            can_validate = bool(interaction_smoke.get("invalid_action_rejected"))
+        can_execute = bool(draft_exec_evidence.get("can_execute_input"))
+        can_see_result = bool(draft_exec_evidence.get("state_change_observed")) \
+            and bool(draft_exec_evidence.get("result_visible_in_ui")) and can_execute
+        can_understand_failure = bool(draft_exec_evidence.get("invalid_action_rejected")) \
+            and can_execute
+        can_revise = bool(draft_exec_evidence.get("revise_changes_result")) and can_execute
     elif has_interaction:
         can_create = bool(interaction_smoke.get("can_create_or_modify_input"))
         can_validate = bool(interaction_smoke.get("invalid_action_rejected"))
@@ -319,6 +350,13 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
                     "result_reflects_edit", "revise_cycle_changes_result",
                     "original_replay_unchanged"):
             refs[f"execution.{key}"] = f"phase2c3_execution_smoke.{key}={_b(exec_smoke.get(key))}"
+    if has_generic_execution:
+        refs.setdefault("execution.runner_backed_execution_included",
+                        "draft_execution_report.runner_backed_execution_included=true")
+        for key in ("can_execute_input", "result_visible_in_ui", "state_change_observed",
+                    "invalid_action_rejected", "revise_changes_result"):
+            refs[f"draft_execution.{key}"] = \
+                f"draft_execution_evidence.{key}={_b(draft_exec_evidence.get(key))}"
     if facts["js_syntax_status"]:
         refs["check.js_syntax"] = f"viewer_js_syntax_check.status={facts['js_syntax_status']}"
     if facts["handler_binding_status"]:
@@ -344,9 +382,13 @@ def extract_user_facing_quality(evidence: dict) -> dict:
     facts = evidence["facts"]
     loop = evidence["product_loop"]
     viewer_src = facts.get("viewer_source") or ""
+    # 성공 피드백 근거: graph viewer idiom(regex)만이 아니라 runner 실증 기반
+    # can_understand_success(실행 계열/interaction evidence에서 파생)도 인정한다 —
+    # generic interaction console은 state/events 렌더로 성공을 표시하므로 (이슈 #6 도메인 중립화)
     success_visible = bool(
         facts.get("runner_viewer_consistent") is True or
-        re.search(r"data\.summary|node\.status", viewer_src))
+        re.search(r"data\.summary|node\.status", viewer_src) or
+        loop.get("can_understand_success"))
     fields = {
         "first_screen_understandable": bool(
             facts.get("viewer_exists") and facts.get("viewer_reads_replay")
@@ -408,6 +450,12 @@ def apply_hard_blockers(evidence: dict, quality: dict) -> dict:
     block("조작 UI는 있으나 실행 없음 → EXECUTION_CANDIDATE 이상 금지",
           facts.get("authoring_ui") and not loop["can_execute_primary_action"],
           ("facts.authoring_ui", "loop.can_execute_primary_action"), cap="INTERACTION_CANDIDATE")
+    # 이슈 #6 §10: interaction 기반 제품은 draft 실행 evidence(실행 계열 report)가 있어야
+    # EXECUTION_CANDIDATE 이상이 된다 — probe의 fixture 실행 성공만으로는 draft 실행이
+    # 실증된 것이 아니다 (위 blocker의 interaction-경로 대칭, 강화이지 약화가 아님).
+    block("interaction UI만 있고 draft 실행 evidence 없음 → EXECUTION_CANDIDATE 이상 금지",
+          bool(facts.get("has_interaction_report")) and not facts.get("has_execution_report"),
+          ("loop.can_execute_primary_action",), cap="INTERACTION_CANDIDATE")
     block("success_feedback_visible=false → EXECUTION_CANDIDATE 이상 제한",
           not q["success_feedback_visible"], ("quality.success_feedback_visible",),
           cap="INTERACTION_CANDIDATE")

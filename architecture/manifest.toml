@@ -47,7 +47,8 @@ status = "canonical"
 canon_ids = ["CANON-06"]
 modules = [
   "factory_review", "factory_product_polish", "factory_product_editor",
-  "factory_interaction_ui", "factory_draft_execution", "factory_product_evidence",
+  "factory_interaction_ui", "factory_draft_execution",
+  "factory_runner_backed_execution", "factory_product_evidence",
 ]
 
 [components.autopilot]
@@ -131,6 +132,7 @@ entries = [
 "phase2c1_dashboard_summary.json" = ["factory_product_polish"]
 "phase2c2_dashboard_summary.json" = ["factory_product_editor"]
 "phase2c3_dashboard_summary.json" = ["factory_draft_execution"]
+"draft_execution_dashboard_summary.json" = ["factory_runner_backed_execution"]
 "phase2d1_dashboard_summary.json" = ["factory_loop_executor"]
 "product_loop_dashboard_summary.json" = ["factory_product_loop"]
 
@@ -229,6 +231,7 @@ steps = [
   "repo_idea_miner.factory_product_polish.run_product_polish",
   "repo_idea_miner.factory_product_editor.run_product_editor",
   "repo_idea_miner.factory_draft_execution.run_draft_execution",
+  "repo_idea_miner.factory_runner_backed_execution.run_runner_backed_execution",
 ]
 
 [[routes]]

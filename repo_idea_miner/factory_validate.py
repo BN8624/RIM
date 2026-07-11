@@ -408,11 +408,25 @@ def _check_spec_repair_apply(run_dir: Path) -> list[str]:
         p.append(f"spec repair apply: 단일 대상이 아님: target_count={report.get('target_count')}")
     resolved = report.get("resolved_run_dir")
     if resolved and Path(str(resolved).replace("\\", "/")).name != run_dir.name:
-        # child copy는 parent의 apply report를 계보로 승계한다 — origin이 resolved와
-        # 일치하면 정합 (불일치만 위조/오배치로 본다)
-        origin = _load_json(run_dir / "child_run_origin.json") or {}
-        origin_name = Path(str(origin.get("parent_run_dir") or "").replace("\\", "/")).name
-        if origin_name != Path(str(resolved).replace("\\", "/")).name:
+        # child copy는 parent의 apply report를 계보로 승계한다 — child_run_origin 체인의
+        # 조상 중 하나가 resolved와 일치하면 정합 (child-of-child 다중 hop 포함,
+        # 불일치만 위조/오배치로 본다)
+        resolved_name = Path(str(resolved).replace("\\", "/")).name
+        cur = run_dir
+        matched = False
+        for _hop in range(10):
+            origin = _load_json(cur / "child_run_origin.json") or {}
+            parent_raw = str(origin.get("parent_run_dir") or "").replace("\\", "/")
+            if not parent_raw:
+                break
+            if Path(parent_raw).name == resolved_name:
+                matched = True
+                break
+            parent_path = Path(parent_raw)
+            if not parent_path.is_dir():
+                break
+            cur = parent_path
+        if not matched:
             p.append(f"spec repair apply: resolved_run_dir 불일치: {resolved}")
 
     check = _load_json(run_dir / "frozen_hash_apply_check.json") or {}
@@ -1273,6 +1287,64 @@ def _check_interaction_ui(run_dir: Path) -> list[str]:
     return p
 
 
+DRAFT_EXECUTION_LANE_REQUIRED = (
+    "review/draft_execution/draft_execution_report.json",
+    "review/draft_execution/execution_contract.json",
+    "review/draft_execution/execution_result.json",
+    "review/draft_execution/side_effect_manifest.json",
+    "review/draft_execution/execution_evidence.json",
+)
+
+
+def _check_draft_execution_lane(run_dir: Path) -> list[str]:
+    """generic RUNNER_BACKED_DRAFT_EXECUTION 산출물 정합 (이슈 #6 §7~§9).
+
+    상태 enum 밖 표기, 실행·검증 실증 없는 included 과장, mock/재사용 evidence를 차단한다."""
+    from repo_idea_miner.factory_runner_backed_execution import (
+        EXECUTION_STATUSES,
+        PRE_EXECUTION_STATUSES,
+    )
+
+    report = _load_json(run_dir / "review/draft_execution/draft_execution_report.json")
+    if report is None:
+        return []
+    p: list[str] = []
+    status = report.get("execution_status") or report.get("pre_execution_status")
+    if status not in EXECUTION_STATUSES + PRE_EXECUTION_STATUSES:
+        p.append(f"draft execution: 알 수 없는 상태 표기: {status}")
+    included = report.get("runner_backed_execution_included") is True
+    if not report.get("applied"):
+        if included:
+            p.append("draft execution: applied=false인데 runner_backed_execution_included=true (과장)")
+        return p
+    for rel in DRAFT_EXECUTION_LANE_REQUIRED:
+        if not (run_dir / rel).is_file():
+            p.append(f"draft execution: 필수 산출물 없음: {rel}")
+    result = _load_json(run_dir / "review/draft_execution/execution_result.json") or {}
+    evidence = _load_json(run_dir / "review/draft_execution/execution_evidence.json") or {}
+    manifest = _load_json(run_dir / "review/draft_execution/side_effect_manifest.json") or {}
+    if result.get("status") != "EXECUTED":
+        p.append(f"draft execution: applied=true인데 execution_result.status={result.get('status')}")
+    if manifest and manifest.get("protected_paths_unchanged") is not True:
+        p.append("draft execution: 보호 경로 변경 후에도 applied=true")
+    if included:
+        validation = evidence.get("validation") or {}
+        if validation.get("pass") is not True:
+            p.append("draft execution: validation PASS 없이 included=true (과장)")
+        exchanges = evidence.get("exchanges") or []
+        valid = next((e for e in exchanges if e.get("exchange") == "valid_action"), None)
+        if not (valid and valid.get("exit_code") == 0 and valid.get("parsed")):
+            p.append("draft execution: 실제 runner exchange 실증 없이 included=true (mock 의심)")
+        if not evidence.get("state_change_observed"):
+            p.append("draft execution: state 변화 실증 없이 included=true")
+        if not evidence.get("invalid_action_rejected"):
+            p.append("draft execution: invalid action 거부 실증 없이 included=true")
+        prov = evidence.get("execution_provenance") or {}
+        if prov.get("fresh") is not True or not prov.get("started_at"):
+            p.append("draft execution: fresh provenance 없는 evidence (과거 결과 재사용 의심)")
+    return p
+
+
 # ---------------------------------------------------------------- Validator registry (§12.3)
 #
 # 순서가 곧 artifact validation plan(§12.4)이다: frozen hash → spec repair → anti-hardcode
@@ -1321,6 +1393,10 @@ MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
                   markers=("review/interaction_ui/interaction_ui_report.json",),
                   inputs=INTERACTION_UI_REQUIRED,
                   related_tests=("tests/test_factory_interaction_ui.py",)),
+    ValidatorSpec("draft_execution_lane", _MARKER_RUN_KINDS, _check_draft_execution_lane,
+                  markers=("review/draft_execution/draft_execution_report.json",),
+                  inputs=DRAFT_EXECUTION_LANE_REQUIRED,
+                  related_tests=("tests/test_factory_runner_backed_execution.py",)),
     ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
                   markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
                   inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"

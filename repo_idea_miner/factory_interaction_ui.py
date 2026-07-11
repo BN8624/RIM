@@ -49,7 +49,7 @@ def detect_interaction_kind(artifact_root: Path) -> str | None:
     return None
 
 
-def _first_fixture(artifact_root: Path) -> dict | None:
+def first_fixture(artifact_root: Path) -> dict | None:
     for p in sorted((artifact_root / "fixtures").glob("scenario_*.json")):
         data = _load_json(p)
         if data and isinstance(data.get("initial_state"), dict):
@@ -65,7 +65,7 @@ def build_interaction_contract(artifact_root: Path) -> dict:
     action_contract = _load_json(artifact_root / "action_contract.json")
     state_contract = _load_json(artifact_root / "state_contract.json")
     runner_contract = _load_json(artifact_root / "runner_contract.json")
-    fixture = _first_fixture(artifact_root)
+    fixture = first_fixture(artifact_root)
     if action_contract is None:
         missing.append("action_contract.json")
     if state_contract is None:
@@ -361,7 +361,7 @@ def _run_runner(artifact_root: Path, scenario: dict, timeout: float) -> tuple[in
             pass
 
 
-def _has_error_signal(parsed: dict | None) -> bool:
+def has_error_signal(parsed: dict | None) -> bool:
     if not parsed:
         return True
     if parsed.get("errors"):
@@ -379,7 +379,7 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
 
     1) fixture의 실제 action → state 변경, 2) 필수 input이 빠진 action → 명시적 거부,
     3) action 목록 수정 → 결과 변화. 실증 못 하면 false로 남긴다 — 과장 금지."""
-    fixture = _first_fixture(artifact_root) or {}
+    fixture = first_fixture(artifact_root) or {}
     fixture_actions = [a for a in (fixture.get("actions") or [])
                        if isinstance(a, dict) and a.get("type")]
     initial = contract["initial_state"]
@@ -392,7 +392,7 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
         code, parsed, stderr = _run_runner(artifact_root, scenario, timeout)
         entry = {"exchange": name, "actions": [a.get("type") for a in actions],
                  "exit_code": code, "parsed": parsed is not None,
-                 "error_signal": _has_error_signal(parsed)}
+                 "error_signal": has_error_signal(parsed)}
         if parsed is None:
             problems.append(f"{name}: runner 출력이 JSON이 아님 ({stderr[:200]})")
         exchanges.append(entry)
@@ -409,7 +409,7 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
         if valid is not None:
             first_final = valid.get("final_state")
             state_changed = bool(first_final is not None and first_final != initial
-                                 and not _has_error_signal(valid))
+                                 and not has_error_signal(valid))
             if not state_changed:
                 problems.append("valid action이 state를 바꾸지 못함")
         # 수정 후 재실행: action 목록을 바꿔 결과가 달라지는지
@@ -428,7 +428,7 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
         invalid = exchange("invalid_action_missing_input",
                            [{"type": with_input["name"], "payload": {}}])
         if invalid is not None:
-            invalid_rejected = _has_error_signal(invalid)
+            invalid_rejected = has_error_signal(invalid)
             if not invalid_rejected:
                 problems.append("필수 input이 빠진 action이 거부되지 않음")
 

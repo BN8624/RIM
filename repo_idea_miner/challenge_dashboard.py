@@ -16,6 +16,7 @@ from repo_idea_miner.challenge_dashboard_data import (
     final_tree,
     get_challenge_brief,
     get_challenge_detail,
+    load_draft_execution,
     load_phase2c0,
     load_phase2c1,
     load_phase2c2,
@@ -740,6 +741,25 @@ def _phase2c3_panel(p2c3: dict | None) -> str:
 </section>"""
 
 
+def _draft_execution_panel(de: dict | None) -> str:
+    """generic runner-backed draft execution 패널 — 실행 상태를 정직하게 표시한다 (이슈 #6 §14).
+
+    실패/timeout/unsupported/unsafe를 completed나 empty로 감추지 않는다."""
+    if not de:
+        return ""
+    status = de.get("execution_status") or de.get("pre_execution_status") or "-"
+    problems = de.get("validation_problems") or de.get("problems") or []
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Runner-backed Draft Execution (generic — 도메인 중립 실행 lane)</h2>
+  <p class="meta">실행 상태: <b>{_e(status)}</b>
+    · runner-backed execution included: {_e(str(de.get('runner_backed_execution_included')))}
+    · validation: {_e('PASS' if de.get('validation_pass') else 'FAIL')}</p>
+  <p class="meta">execution id: {_e(de.get('execution_id') or '-')}</p>
+  <div class="field"><span class="k">문제</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in problems) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 def _phase2d0_card_lines(p2d0: dict | None) -> str:
     """목록 카드에 추가하는 autopilot 줄: prior fitness/stage/next lane/status (§29)."""
     if not p2d0:
@@ -1268,6 +1288,7 @@ def render_product_detail(
         + _phase2c1_panel(load_phase2c1(run_root))
         + _phase2c2_panel(load_phase2c2(run_root))
         + _phase2c3_panel(load_phase2c3(run_root))
+        + _draft_execution_panel(load_draft_execution(run_root))
         + _phase2d0_panel(load_phase2d0(run_root), run_root)
         + _phase2d1_panel(load_phase2d1(run_root), run_root)
         + gate_html + qa_html + issues_html

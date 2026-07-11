@@ -106,6 +106,12 @@ PRODUCT_REPORT_TABS = [
     ("fitness_after_execution", ("run", "review/phase2c3/product_fitness_report_after_execution.md", "실행 후 제품성")),
     ("phase2c3_hash_check", ("run", "review/phase2c3/phase2c3_hash_check.json", "실행 hash 검사")),
     ("phase2c3_dashboard_summary", ("run", "review/phase2c3/phase2c3_dashboard_summary.json", "phase2c3_dashboard_summary")),
+    # generic runner-backed draft execution (review/draft_execution/ — 상세 페이지 전용)
+    ("draft_execution_report", ("run", "review/draft_execution/draft_execution_report.json", "draft 실행 리포트")),
+    ("draft_execution_contract", ("run", "review/draft_execution/execution_contract.json", "실행 계약")),
+    ("draft_execution_result", ("run", "review/draft_execution/execution_result.json", "실행 결과")),
+    ("draft_execution_manifest", ("run", "review/draft_execution/side_effect_manifest.json", "side effect manifest")),
+    ("draft_execution_evidence", ("run", "review/draft_execution/execution_evidence.json", "실행 evidence")),
     # Phase 2D-0 autopilot (review/phase2d0/ — 상세 페이지 전용)
     ("product_stage_label", ("run", "review/phase2d0/product_stage_label.md", "autopilot stage")),
     ("product_gap_classification", ("run", "review/phase2d0/product_gap_classification.md", "gap 분류")),
@@ -281,6 +287,11 @@ def load_phase2c2(run_root: Path | None) -> dict | None:
 def load_phase2c3(run_root: Path | None) -> dict | None:
     """Phase 2C-3 runner-backed execution 요약(review/phase2c3/)을 읽는다. 없으면 None."""
     return _load_summary_json(run_root, "review/phase2c3/phase2c3_dashboard_summary.json")
+
+
+def load_draft_execution(run_root: Path | None) -> dict | None:
+    """generic runner-backed draft execution 요약(review/draft_execution/)을 읽는다. 없으면 None."""
+    return _load_summary_json(run_root, "review/draft_execution/draft_execution_dashboard_summary.json")
 
 
 def load_phase2d0(run_root: Path | None) -> dict | None:

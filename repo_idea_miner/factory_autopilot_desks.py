@@ -393,6 +393,11 @@ def derive_primary_gap(evidence: dict, quality: dict, stage_label: dict) -> str 
         return "INTERACTION_UI_REQUIRED"
     if not loop.get("can_execute_primary_action"):
         return "RUNNER_BACKED_EXECUTION_REQUIRED"
+    # 이슈 #6 §10.2: interaction UI(draft)는 있는데 실행 계열 report(2c3/generic draft execution)가
+    # 없으면 draft 실행이 아직 lane으로 실증되지 않은 것 — probe의 fixture 실행만으로는 이 gap을
+    # 닫지 않는다. editor 기록 기반 graph 경로는 불변이다 (CANON-07 재요구 금지).
+    if facts.get("has_interaction_report") and not facts.get("has_execution_report"):
+        return "RUNNER_BACKED_EXECUTION_REQUIRED"
     if not loop.get("product_loop_closed") or not q.get("user_can_understand_value_in_60s"):
         return "UX_POLISH_REQUIRED"
     return "UX_POLISH_REQUIRED"

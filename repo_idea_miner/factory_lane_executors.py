@@ -21,7 +21,8 @@ LANE_EXECUTOR_ROUTES = {
                       "legacy adapter=2C-2 factory_product_editor.run_product_editor, "
                       "child copy에 apply)",
     "RUNNER_BACKED_DRAFT_EXECUTION":
-        "Phase 2C-3 factory_draft_execution.run_draft_execution (child copy에 apply)",
+        "generic factory_runner_backed_execution.run_runner_backed_execution (graph 도메인만 "
+        "legacy adapter=2C-3 factory_draft_execution.run_draft_execution, child copy에 apply)",
     "UX_POLISH": "미구현 stub — 정직한 BLOCKED (승인된 수정안: live 수요 확인 전 구현 연기)",
     "ARCHIVE": "apply 없음 — archive report 생성",
     "HOLD_FOR_HUMAN": "apply 없음 — human decision packet 생성 (§11)",
@@ -232,8 +233,20 @@ def _exec_interaction_ui(ctx: dict) -> dict:
 
 
 def _exec_draft_execution(ctx: dict) -> dict:
-    from repo_idea_miner.factory_draft_execution import run_draft_execution
-    return _exec_apply_tool("RUNNER_BACKED_DRAFT_EXECUTION", ctx, run_draft_execution)
+    # 도메인 어댑터 경계 (이슈 #6 §4.3): graph 도메인은 legacy 2C-3 adapter(run_draft_execution),
+    # 그 외는 generic runner-backed executor. challenge/run/fixture 분기 없음 — artifact 모양만 본다.
+    from repo_idea_miner.factory_interaction_ui import (
+        KIND_GRAPH_EDITOR,
+        detect_interaction_kind,
+    )
+    from repo_idea_miner.factory_run_layout import resolve_artifact_root
+
+    root = resolve_artifact_root(Path(ctx["parent_run_dir"]))
+    if root is not None and detect_interaction_kind(Path(root)) == KIND_GRAPH_EDITOR:
+        from repo_idea_miner.factory_draft_execution import run_draft_execution
+        return _exec_apply_tool("RUNNER_BACKED_DRAFT_EXECUTION", ctx, run_draft_execution)
+    from repo_idea_miner.factory_runner_backed_execution import run_runner_backed_execution
+    return _exec_apply_tool("RUNNER_BACKED_DRAFT_EXECUTION", ctx, run_runner_backed_execution)
 
 
 def _exec_ux_polish_stub(ctx: dict) -> dict:
