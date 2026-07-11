@@ -112,6 +112,24 @@ RECENT_SEMANTIC_CHANGES:
   남은 gap은 실행과 무관한 진짜 viewer 결함(VIEWER_POLISH_REQUIRED)으로 정직 HOLD.
   base 3종+parent 3종 hash 불변, invalid/mock success 0
 
+- Issue #8 done (UX_POLISH 도메인 중립화, 커밋 17aae15/68e7bdf):
+  executor = factory_ux_polish.run_ux_polish — canonical UX contract(기존
+  interaction/viewer/runner contract 재사용) → 결정론적 진단 15종(정적
+  DOM/CSS/JS, LLM 감상 금지) → 제한된 operation catalog 12종(data-ux-op
+  marker block만, 자유 형식 patch 금지, 예산 op 5·surface 3) → 재진단
+  validation+rollback → machine-checkable evidence(viewport 1280x800/375x812,
+  keyboard focusability, runtime은 기존 runner-backed evidence 참조).
+  도메인/graph 분기 없음. probe07 detector 수리: canonical viewer의
+  contract-매개 replay 읽기를 sha256 일치로 인정(raw substring 규칙의 영구
+  오탐 데드락 해소). derive_primary_gap UX rung: UX 실증(report included)
+  없으면 gap 유지, 있으면 None. 검증: SRS 27 UX child 062013 = ops 2종
+  APPLIED → INTERACTION_CANDIDATE→EXECUTION_CANDIDATE 승격(acceptance
+  10/14→12/14), Table 17 UX child 062015 = 동일 APPLIED, UX gap 소멸
+  (gap=None, EXECUTION_CANDIDATE 정직 HOLD). 잔여 acceptance 실패는 양쪽
+  모두 요구사항 coverage 2종(PRODUCT_REQUIREMENT — UX로 덮지 않음).
+  #47/#54 회귀 없음(validate PASS, UX 진단 dry-run UX_READY 수리 대상 0),
+  base 6종 hash 불변, invalid/mock success 0
+
 - Issue #7 done (VIEWER_POLISH 도메인 중립화, 커밋 3f218cb/687e53a):
   executor = factory_viewer_polish.run_viewer_polish — replay discovery(명시적
   replay/index.json ref 우선, compatibility는 단일 후보만, MISSING/AMBIGUOUS/
@@ -144,13 +162,13 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 자동 가능 후보(단일): UX_POLISH lane의 실행 경로 결정 — fresh 2종(27 SRS·
-   17 table)의 남은 공통 blocker가 UX_POLISH_REQUIRED(현재 executor는 설계상
-   stub=BLOCKED→HOLD)로 수렴. live 수요가 실측으로 확인됐으므로 generic UX
-   executor 구현 또는 사람 검수 종결 중 하나를 사람이 결정(자유 형식 수정 위험이
-   가장 큰 lane이라 승인 필요)
+1. 다음 후보(단일, 사람 결정): fresh 2종 UX child(062013 SRS·062015 table)의
+   EXECUTION_CANDIDATE HOLD packet 응답 — 남은 blocker는 UX가 아니라 acceptance
+   요구사항 coverage 2종(critical_requirement_coverage_full/
+   difficulty_anchor_coverage_full). 현재 상태로 검수·종결하거나, requirement
+   coverage 보강(core 기능 추가 — 자동 lane 없음)을 별도 주문으로 지시
 2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
-   literal-only artifact 185개의 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
+   literal-only artifact 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
    은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
@@ -161,6 +179,10 @@ DO_NOT_REPEAT:
 - lane-result escalation (SPEC_REPAIR 분류 → 다음 iteration 승급)은 구현됨(CANON-07) —
   high-risk 예산 1로 같은 loop 내 실행까지는 안 되는 것이 설계 한도이지 버그가 아님
 - LITERAL_REFERENCE artifacts stay non-promoted (§13) — do not upgrade them without AST/manifest proof
+- UX_POLISH lane의 UX_READY(진단만, patch 0)는 loop에서 NO_CHANGE로 집계되어 child가
+  승격되지 않는 것이 설계 한도다 — report가 필요한 run은 execute_lane 직접 실행으로 남긴다
+- UX patch는 data-ux-op marker block 주입만 — 기존 product 마크업/스크립트를 재작성하는
+  operation을 추가하지 않는다 (자유 형식 수정 금지, CANON-06)
 
 VERIFY:
 - python -m repo_idea_miner architecture-check

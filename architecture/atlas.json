@@ -5108,7 +5108,7 @@
    "path_pattern": "review/draft_execution/draft_execution_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 861,
+   "source_line": 881,
    "source_path": "repo_idea_miner/factory_ux_polish.py",
    "symbol_id": "repo_idea_miner.factory_ux_polish"
   },
@@ -5225,7 +5225,7 @@
    "path_pattern": "review/interaction_ui/interaction_ui_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 871,
+   "source_line": 891,
    "source_path": "repo_idea_miner/factory_ux_polish.py",
    "symbol_id": "repo_idea_miner.factory_ux_polish"
   },
@@ -8749,7 +8749,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1079,
+  "test_count": 1129,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -10892,6 +10892,7 @@
    "tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ]
   },
@@ -10969,7 +10970,8 @@
    "tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
-    "test_factory_runner_backed_execution"
+    "test_factory_runner_backed_execution",
+    "test_factory_ux_polish"
    ]
   },
   {
@@ -12345,6 +12347,7 @@
     "test_factory_interaction_ui",
     "test_factory_phase2d1_loop",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ]
   },
@@ -12843,7 +12846,8 @@
    ],
    "tests": [
     "test_factory_phase2d1_capabilities",
-    "test_factory_run_layout"
+    "test_factory_run_layout",
+    "test_factory_ux_polish"
    ]
   },
   {
@@ -13216,6 +13220,7 @@
    "tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ]
   },
@@ -14147,7 +14152,7 @@
      ]
     }
    ],
-   "loc": 1175,
+   "loc": 1195,
    "module": "repo_idea_miner.factory_ux_polish",
    "path": "repo_idea_miner/factory_ux_polish.py",
    "private_symbols": [
@@ -14223,7 +14228,9 @@
     "diagnose_surface",
     "run_ux_polish"
    ],
-   "tests": []
+   "tests": [
+    "test_factory_ux_polish"
+   ]
   },
   {
    "artifact_refs": [
@@ -14604,6 +14611,7 @@
     "test_factory_review_2c0",
     "test_factory_runner_backed_execution",
     "test_factory_spec_repair_2b1",
+    "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
     "test_golden_representation_lint"
@@ -15681,9 +15689,9 @@
   }
  ],
  "repository": {
-  "head": "340721eace66b261b1de8ac15b2a21a6bd60f54b",
+  "head": "68e7bdf424760abd4e873666b44168af4a275fd3",
   "structural_diff": true,
-  "structural_fingerprint": "0f7006fc7ff49e729df14d34a2ab824f83ca80de3100a9e1f08f4c1cff755170",
+  "structural_fingerprint": "49c067d4082e1001a48b4d72f6aad95a59eb1c80c0ebb014ffba948aebde5482",
   "structure_snapshot": "861c8c33bb34e07fca7610323d4259906873edc6a42ac1a4bb04a732451e0dfe"
  },
  "routes": [
@@ -16692,7 +16700,8 @@
    "related_tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
-    "test_factory_runner_backed_execution"
+    "test_factory_runner_backed_execution",
+    "test_factory_ux_polish"
    ],
    "roles": [
     "contract_owner"
@@ -16712,7 +16721,8 @@
    "related_tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
-    "test_factory_runner_backed_execution"
+    "test_factory_runner_backed_execution",
+    "test_factory_ux_polish"
    ],
    "roles": [
     "contract_owner"
@@ -16732,7 +16742,8 @@
    "related_tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
-    "test_factory_runner_backed_execution"
+    "test_factory_runner_backed_execution",
+    "test_factory_ux_polish"
    ],
    "roles": [
     "validator"
@@ -16959,6 +16970,7 @@
     "test_factory_interaction_ui",
     "test_factory_phase2d1_loop",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ],
    "roles": [
@@ -17101,6 +17113,7 @@
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ],
    "roles": [
@@ -17124,6 +17137,7 @@
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ],
    "roles": [
@@ -17146,6 +17160,7 @@
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ],
    "roles": [
@@ -17167,6 +17182,7 @@
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
+    "test_factory_ux_polish",
     "test_factory_viewer_polish"
    ],
    "roles": [
@@ -17306,15 +17322,17 @@
     "CANON-11"
    ],
    "component_id": "productization",
-   "end_line": 1121,
+   "end_line": 1141,
    "kind": "function",
    "path": "repo_idea_miner/factory_ux_polish.py",
-   "related_tests": [],
+   "related_tests": [
+    "test_factory_ux_polish"
+   ],
    "roles": [
     "orchestrator"
    ],
    "signature": "def run_ux_polish(run_dir=None, run_id=None, apply: bool=False, db_conn=None, timeout: float=60.0) -> dict",
-   "start_line": 890,
+   "start_line": 910,
    "symbol_id": "repo_idea_miner.factory_ux_polish.run_ux_polish"
   },
   {
@@ -17342,6 +17360,7 @@
     "test_factory_review_2c0",
     "test_factory_runner_backed_execution",
     "test_factory_spec_repair_2b1",
+    "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
     "test_golden_representation_lint"
@@ -17377,6 +17396,7 @@
     "test_factory_review_2c0",
     "test_factory_runner_backed_execution",
     "test_factory_spec_repair_2b1",
+    "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
     "test_golden_representation_lint"
@@ -17412,6 +17432,7 @@
     "test_factory_review_2c0",
     "test_factory_runner_backed_execution",
     "test_factory_spec_repair_2b1",
+    "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
     "test_golden_representation_lint"
@@ -17447,6 +17468,7 @@
     "test_factory_review_2c0",
     "test_factory_runner_backed_execution",
     "test_factory_spec_repair_2b1",
+    "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
     "test_golden_representation_lint"
@@ -17586,6 +17608,7 @@
   "test_factory_sandbox": "tests/test_factory_sandbox.py",
   "test_factory_schemas": "tests/test_factory_schemas.py",
   "test_factory_spec_repair_2b1": "tests/test_factory_spec_repair_2b1.py",
+  "test_factory_ux_polish": "tests/test_factory_ux_polish.py",
   "test_factory_validate": "tests/test_factory_validate.py",
   "test_factory_viewer_polish": "tests/test_factory_viewer_polish.py",
   "test_followup": "tests/test_followup.py",
@@ -17921,6 +17944,15 @@
    "factory_spec_repair",
    "factory_validate",
    "llm_client"
+  ],
+  "test_factory_ux_polish": [
+   "factory_autopilot_desks",
+   "factory_autopilot_schemas",
+   "factory_lane_executors",
+   "factory_product_capabilities",
+   "factory_product_loop",
+   "factory_ux_polish",
+   "factory_validate"
   ],
   "test_factory_validate": [
    "config",
