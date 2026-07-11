@@ -353,6 +353,7 @@ INVARIANTS:
 - INV-FRESH-VERIFICATION
 - INV-HARD-RUNG-DETERMINISTIC
 - INV-PROTECTED-HASH
+- INV-HUMAN-DECISION-NORMALIZED
 
 CONTRACTS:
 - product_evidence
@@ -387,6 +388,22 @@ NOTES:
   recorded on the iteration; budgets unchanged — the hold packet then names the true gap)
 - budgets: iterations 4 / per-lane 2 / high-risk total 1 / no-progress 2 / infra retries 2
 - promotion requires meaningful progress + zero regression + protected hash PASS
+- human decision contract (issue #12): human_decision_required means an unresolved semantic
+  choice only (HOLD_FOR_HUMAN lane or EVIDENCE_INSUFFICIENT/SCOPE_CREEP_RISK gap);
+  requires_human_approval_before_apply (apply gate) and auto_execute_allowed (execution
+  policy) are independent meanings and must never be copied into it (INV-4/INV-5)
+- raw live desk human_decision_required is never trusted: after schema parse it is
+  deterministically normalized (normalize_human_decision) from lane + gap, with
+  raw/normalized/reason_code evidence recorded (human_decision_normalization);
+  post-normalization INV-1~3 violations are rejected fail-closed
+  (validate_human_decision_consistency → AUTOPILOT_INVALID_OUTPUT)
+- live/mock must agree on semantic decision fields (recommended_next_lane,
+  human_decision_required, requires_human_approval_before_apply, auto_execute_allowed);
+  byte parity of reasoning prose is not required
+- hold packets carry hold_reason_class (SEMANTIC_HOLD | EXECUTION_BLOCKED | BUDGET_EXHAUSTED);
+  executable-lane iterations record execution_policy handling (AUTO_EXECUTE |
+  APPLY_APPROVAL_PENDING) — an approval-gated executable lane is never converted into a
+  semantic HOLD
 
 QUERY:
 - architecture-context --canon CANON-07

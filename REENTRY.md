@@ -11,7 +11,10 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1254개 (flaky 0) at issue #11 마감 (코드 변경 0 배치);
+- tests: full suite PASS ×2 연속 (flaky 0) at issue #12 마감 (신규 human decision 계약
+  테스트 21개 포함); smoke = dashboard(/, /products, /product/36 200, HOLD 패널
+  hold_reason_class 표시) + Fresh-C fresh child live loop 실증
+- (이전 기록) full suite PASS ×2 연속 1254개 (flaky 0) at issue #11 마감 (코드 변경 0 배치);
   smoke = dashboard(/, /products 200) + Fresh-C interaction 콘솔 실조작
   (runner-backed action→state 변화, invalid 명시 거부) + Fresh-B replay viewer 실렌더 PASS
 - (이전 기록) full suite PASS ×2 연속 1254개 (flaky 0) at issue #10 마감; smoke =
@@ -27,6 +30,27 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #12 done (Live Desk Human Decision Contract Alignment, 커밋 0d0a725/47ba0e1/68040a8):
+  결함 판정 = 복합(PROMPT_DEFECT: lane prompt에 human_decision_required 의미 정의 부재 +
+  NORMALIZATION_MISSING: raw 값이 loop 정지에 직행 + VALIDATOR_MISSING: consistency 검증
+  누락) — #47 live loop 2회·Fresh-C에서 동일 실측. canonical contract(CANON-07
+  INV-HUMAN-DECISION-NORMALIZED) = human_decision_required는 semantic hold(HOLD_FOR_HUMAN
+  lane 또는 EVIDENCE_INSUFFICIENT/SCOPE_CREEP_RISK gap)일 때만 true;
+  requires_human_approval_before_apply(apply gate)·auto_execute_allowed(policy)와 독립.
+  구현 = normalize_human_decision(결정론 교정 + raw/normalized/reason_code evidence) +
+  validate_human_decision_consistency(INV-1~3 fail-closed) + prompt/schema 정렬 +
+  loop 의미 분리(hold_reason_class SEMANTIC_HOLD|EXECUTION_BLOCKED|BUDGET_EXHAUSTED,
+  실행 lane iteration에 execution_policy AUTO_EXECUTE|APPLY_APPROVAL_PENDING 기록,
+  dashboard HOLD 패널 class 표시). 테스트 21종(계약 단위 10+parity 9 lane+loop 분리).
+  Fresh-C 재검증 = parent 144636 fresh child live loop(loop_20260712_014718):
+  live raw human_decision_required=false(정렬된 prompt가 첫 실사용에서 정정),
+  normalization RAW_CONSISTENT, RUNNER_BACKED_DRAFT_EXECUTION 실제 진입 APPLIED —
+  child 165952 EXECUTED(state_change_observed, invalid 거부, revise 반영), gates 7/7,
+  coverage critical 1.0/anchor 1.0, acceptance 12/14→14/14, INTERACTION_CANDIDATE→
+  PRODUCT_CANDIDATE(strict, 정본 계산). base 142713/parent 144636 hash 불변,
+  live 500/503/504 transient는 전부 자체 재시도 회복(mock 대체 0), invalid/mock success 0.
+  Fresh-A VALID_HOLD·Fresh-B PRODUCT_CORE_GAP 유지(base 불변), #47/#54/SRS27/Table17
+  base hash 4종 불변. object input(generic 콘솔)은 Fresh-C 완주를 막지 않아 deferred 유지
 - A1 done: no Atlas HTML/renderer, no architecture-serve/summary CLI
 - A2 done: root markdown = 4 (checklist.md deleted, git history only), docs rewritten AI-only
 - A3 done: atlas.json schema V2 — repository block(head/snapshot/fingerprint/diff),
@@ -229,12 +253,11 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 후보(단일): live desk human_decision_required 계약 정합 별도 주문 —
-   결정론 packet 정본(lane==HOLD_FOR_HUMAN일 때만 true)과 정렬하거나 loop이
-   LANE_POLICY.auto_execute_allowed를 결정론적으로 집행. 이슈 #11 Fresh-C에서
-   실행 가능 lane 앞 부당 정지 실측 (1회 관측이라 #11 repair gate 미충족 — 미수리).
-   (그 외 deferred: generic 콘솔 object 입력 typed 처리, 대형 파일 분해,
-   literal-only artifact 실증 승격, db verdict stale)
+1. 다음 후보(단일): generic 콘솔 object-valued 입력 typed 처리 별도 주문 —
+   이슈 #11 Fresh-C UI 실조작에서 실측(object 필드를 JSON parse 없이 문자열 전송 →
+   engine 오류, UI 단독으로 primary task 완주 불가). 이슈 #12 §12 허용 조건에
+   해당했으나 Fresh-C 완주를 막지 않아 deferred 유지. (그 외 deferred: 대형 파일
+   분해, literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
@@ -243,6 +266,9 @@ DO_NOT_REPEAT:
 - do not touch #47/#54/fresh(190458·193103·194814) base runs on disk (tmp copies only)
 - do not touch blind batch 2 base runs(124224·151426·142713)와 Round 1 loop artifact —
   fresh child로만 진행 (이슈 #11 Round 1 기록은 불변 증거)
+- do not copy requires_human_approval_before_apply into human_decision_required —
+  semantic 결정과 apply 승인은 다른 의미다(CANON-07 INV-HUMAN-DECISION-NORMALIZED);
+  raw live 값은 normalize_human_decision을 거치지 않고 loop 판정에 쓰지 않는다
 - lane-result escalation (SPEC_REPAIR 분류 → 다음 iteration 승급)은 구현됨(CANON-07) —
   high-risk 예산 1로 같은 loop 내 실행까지는 안 되는 것이 설계 한도이지 버그가 아님
 - LITERAL_REFERENCE artifacts stay non-promoted (§13) — do not upgrade them without AST/manifest proof

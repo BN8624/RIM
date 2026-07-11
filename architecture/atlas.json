@@ -338,7 +338,7 @@
    "path_pattern": "artifact_evidence.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1214,
+   "source_line": 1229,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -437,7 +437,7 @@
    "path_pattern": "auto_order.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1341,
+   "source_line": 1371,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -455,7 +455,7 @@
    "path_pattern": "auto_order.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 939,
+   "source_line": 941,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -482,7 +482,7 @@
    "path_pattern": "auto_order_quality_report.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1349,
+   "source_line": 1379,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -491,7 +491,7 @@
    "path_pattern": "base_hash_before.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 361,
+   "source_line": 366,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -509,7 +509,7 @@
    "path_pattern": "base_hash_check.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 575,
+   "source_line": 606,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -1724,7 +1724,7 @@
    "path_pattern": "expected_001.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 808,
+   "source_line": 810,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -1742,7 +1742,7 @@
    "path_pattern": "expected_patch_plan.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1370,
+   "source_line": 1400,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2129,7 +2129,7 @@
    "path_pattern": "gate_rerun_after_anti_hardcode_patch.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 813,
+   "source_line": 815,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2354,7 +2354,7 @@
    "path_pattern": "green_base.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 811,
+   "source_line": 813,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2489,7 +2489,7 @@
    "path_pattern": "hard_blocker_result.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1216,
+   "source_line": 1231,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2507,7 +2507,7 @@
    "path_pattern": "hardcode_guard.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1393,
+   "source_line": 1423,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2579,9 +2579,18 @@
    "path_pattern": "hold_for_human_packet.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 294,
+   "source_line": 299,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
+  },
+  {
+   "artifact_id": "human_decision_normalization_json",
+   "path_pattern": "human_decision_normalization.json",
+   "provenance": "AST_IO_CALL",
+   "role": "PRODUCES",
+   "source_line": 1363,
+   "source_path": "repo_idea_miner/factory_product_loop.py",
+   "symbol_id": "repo_idea_miner.factory_product_loop"
   },
   {
    "artifact_id": "human_review_checklist_md",
@@ -2705,7 +2714,7 @@
    "path_pattern": "index.html",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 810,
+   "source_line": 812,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2723,7 +2732,7 @@
    "path_pattern": "index.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 157,
+   "source_line": 159,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2759,7 +2768,7 @@
    "path_pattern": "index.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 805,
+   "source_line": 807,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2804,7 +2813,7 @@
    "path_pattern": "judge_prompt_trace.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1395,
+   "source_line": 1425,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -2849,7 +2858,7 @@
    "path_pattern": "lane_result.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 477,
+   "source_line": 503,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2876,7 +2885,7 @@
    "path_pattern": "lineage.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 576,
+   "source_line": 607,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -3011,7 +3020,7 @@
    "path_pattern": "loop_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 608,
+   "source_line": 641,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -3092,7 +3101,7 @@
    "path_pattern": "mock_loop_order_following_report.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 925,
+   "source_line": 927,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -3272,7 +3281,7 @@
    "path_pattern": "order_writer_prompt_trace.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1400,
+   "source_line": 1430,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4046,7 +4055,7 @@
    "path_pattern": "phase2d0_hash_after.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1419,
+   "source_line": 1449,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4055,7 +4064,7 @@
    "path_pattern": "phase2d0_hash_before.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1201,
+   "source_line": 1216,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4073,7 +4082,7 @@
    "path_pattern": "phase2d0_hash_check.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1420,
+   "source_line": 1450,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4100,7 +4109,7 @@
    "path_pattern": "phase2d1_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 609,
+   "source_line": 642,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4163,7 +4172,7 @@
    "path_pattern": "product_acceptance.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 258,
+   "source_line": 259,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4352,7 +4361,7 @@
    "path_pattern": "product_gap_classification.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1329,
+   "source_line": 1354,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4370,7 +4379,7 @@
    "path_pattern": "product_gap_classification.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1330,
+   "source_line": 1355,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4460,7 +4469,7 @@
    "path_pattern": "product_loop_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1489,
+   "source_line": 1519,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4487,7 +4496,7 @@
    "path_pattern": "product_loop_iteration_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1466,
+   "source_line": 1496,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4505,7 +4514,7 @@
    "path_pattern": "product_loop_iteration_summary.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1467,
+   "source_line": 1497,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4532,7 +4541,7 @@
    "path_pattern": "product_stage_label.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1325,
+   "source_line": 1350,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4550,7 +4559,7 @@
    "path_pattern": "product_stage_label.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1326,
+   "source_line": 1351,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4667,7 +4676,7 @@
    "path_pattern": "progress_comparison.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 542,
+   "source_line": 571,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4676,7 +4685,7 @@
    "path_pattern": "progress_vector.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 267,
+   "source_line": 268,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4856,7 +4865,7 @@
    "path_pattern": "recommended_next_lane.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1333,
+   "source_line": 1358,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4874,7 +4883,7 @@
    "path_pattern": "recommended_next_lane.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1334,
+   "source_line": 1359,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4910,7 +4919,7 @@
    "path_pattern": "repair_blueprint.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1369,
+   "source_line": 1399,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -4991,7 +5000,7 @@
    "path_pattern": "replay_scenario_001.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 805,
+   "source_line": 807,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5126,7 +5135,7 @@
    "path_pattern": "requirement_coverage.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 250,
+   "source_line": 251,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -5171,7 +5180,7 @@
    "path_pattern": "review/draft_execution/draft_execution_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 205,
+   "source_line": 207,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5288,7 +5297,7 @@
    "path_pattern": "review/interaction_ui/interaction_ui_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 203,
+   "source_line": 205,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5657,7 +5666,7 @@
    "path_pattern": "review/phase2c2/editor_smoke_review.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 197,
+   "source_line": 199,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5702,7 +5711,7 @@
    "path_pattern": "review/phase2c2/phase2c2_editor_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 195,
+   "source_line": 197,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5756,7 +5765,7 @@
    "path_pattern": "review/phase2c2/viewer_handler_binding_check.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 199,
+   "source_line": 201,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5774,7 +5783,7 @@
    "path_pattern": "review/phase2c2/viewer_js_syntax_check.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 198,
+   "source_line": 200,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5828,7 +5837,7 @@
    "path_pattern": "review/phase2c3/execution_smoke.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 202,
+   "source_line": 204,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -5864,7 +5873,7 @@
    "path_pattern": "review/phase2c3/phase2c3_execution_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 200,
+   "source_line": 202,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -6125,7 +6134,7 @@
    "path_pattern": "review/ux_polish/ux_polish_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 210,
+   "source_line": 212,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -6215,7 +6224,7 @@
    "path_pattern": "review/viewer_polish/viewer_polish_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 208,
+   "source_line": 210,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -6251,7 +6260,7 @@
    "path_pattern": "rollback_or_failure_conditions.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1374,
+   "source_line": 1404,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -6710,7 +6719,7 @@
    "path_pattern": "schema_repair_report.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1382,
+   "source_line": 1412,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -6728,7 +6737,7 @@
    "path_pattern": "scope_guard.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1347,
+   "source_line": 1377,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -7430,7 +7439,7 @@
    "path_pattern": "tests_to_run.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1371,
+   "source_line": 1401,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -7493,7 +7502,7 @@
    "path_pattern": "user_facing_quality_evidence.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 1215,
+   "source_line": 1230,
    "source_path": "repo_idea_miner/factory_product_loop.py",
    "symbol_id": "repo_idea_miner.factory_product_loop"
   },
@@ -8832,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1164,
+  "test_count": 1185,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -9398,7 +9407,7 @@
      ]
     }
    ],
-   "loc": 1502,
+   "loc": 1505,
    "module": "repo_idea_miner.challenge_dashboard",
    "path": "repo_idea_miner/challenge_dashboard.py",
    "private_symbols": [
@@ -10937,13 +10946,14 @@
      ]
     }
    ],
-   "loc": 610,
+   "loc": 619,
    "module": "repo_idea_miner.factory_autopilot_desks",
    "path": "repo_idea_miner/factory_autopilot_desks.py",
    "private_symbols": [
     "_EVIDENCE_RULES",
     "_GAP_REASONS",
     "_GAP_REFS",
+    "_HUMAN_DECISION_RULES",
     "_MISSING_PART_BY_FIELD",
     "_OUTPUT_RULES",
     "_STAGE_RULES",
@@ -10976,7 +10986,8 @@
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
     "test_factory_ux_polish",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_human_decision_contract"
    ]
   },
   {
@@ -10997,7 +11008,7 @@
     "repo_idea_miner.factory_validate"
    ],
    "imports": [],
-   "loc": 680,
+   "loc": 745,
    "module": "repo_idea_miner.factory_autopilot_schemas",
    "path": "repo_idea_miner/factory_autopilot_schemas.py",
    "private_symbols": [
@@ -11033,6 +11044,7 @@
     "RepairBlueprint",
     "RequirementCoverageItem",
     "RequirementCoverageJudgment",
+    "SEMANTIC_HOLD_GAPS",
     "SEVERITIES",
     "STAGES",
     "STAGE_LADDER",
@@ -11042,10 +11054,12 @@
     "UnifiedDecisionPacket",
     "UserFacingQualityEvidence",
     "classify_desk_failure",
+    "normalize_human_decision",
     "schema_repair_pass",
     "validate_against_hard_blockers",
     "validate_desk_output",
     "validate_evidence_refs",
+    "validate_human_decision_consistency",
     "validate_judgment_evidence",
     "validate_stage_gap_lane_consistency",
     "write_schema_files"
@@ -11054,7 +11068,8 @@
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
-    "test_factory_ux_polish"
+    "test_factory_ux_polish",
+    "test_human_decision_contract"
    ]
   },
   {
@@ -12637,7 +12652,7 @@
      ]
     }
    ],
-   "loc": 638,
+   "loc": 672,
    "module": "repo_idea_miner.factory_loop_executor",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "private_symbols": [
@@ -12660,7 +12675,8 @@
    "tests": [
     "test_factory_coverage",
     "test_factory_phase2d1_cli_dashboard",
-    "test_factory_phase2d1_loop"
+    "test_factory_phase2d1_loop",
+    "test_human_decision_contract"
    ]
   },
   {
@@ -13190,6 +13206,7 @@
     "green_base.json",
     "hard_blocker_result.json",
     "hardcode_guard.json",
+    "human_decision_normalization.json",
     "index.html",
     "index.json",
     "judge_prompt_trace.json",
@@ -13287,7 +13304,9 @@
       "RepairBlueprint",
       "STAGE_RANK",
       "UnifiedDecisionPacket",
+      "normalize_human_decision",
       "validate_against_hard_blockers",
+      "validate_human_decision_consistency",
       "validate_judgment_evidence",
       "validate_stage_gap_lane_consistency",
       "write_schema_files"
@@ -13326,7 +13345,7 @@
      ]
     }
    ],
-   "loc": 1516,
+   "loc": 1546,
    "module": "repo_idea_miner.factory_product_loop",
    "path": "repo_idea_miner/factory_product_loop.py",
    "private_symbols": [
@@ -13372,7 +13391,8 @@
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
     "test_factory_ux_polish",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_human_decision_contract"
    ]
   },
   {
@@ -15854,9 +15874,9 @@
   }
  ],
  "repository": {
-  "head": "1002979e49dafe729cfd6e6a7d3831004baf46ff",
-  "structural_diff": false,
-  "structural_fingerprint": "9e775ebeb5d054f02bc25176941216ecc13355a09b183489947251ad57492b92",
+  "head": "68040a84eecf6b40c79c2f48695f35264e643c1f",
+  "structural_diff": true,
+  "structural_fingerprint": "22da16948334def629c547aaed8f4000221e00e3c8c034a3d732321541fa7bbd",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
@@ -16172,7 +16192,7 @@
     "CANON-09"
    ],
    "component_id": "dashboard",
-   "end_line": 1502,
+   "end_line": 1505,
    "kind": "function",
    "path": "repo_idea_miner/challenge_dashboard.py",
    "related_tests": [
@@ -16188,7 +16208,7 @@
     "orchestrator"
    ],
    "signature": "def serve_dashboard(db_path: str | Path='challenge.db', host: str='127.0.0.1', port: int=8787, secrets: list[str] | None=None) -> None",
-   "start_line": 1488,
+   "start_line": 1491,
    "symbol_id": "repo_idea_miner.challenge_dashboard.serve_dashboard"
   },
   {
@@ -16859,20 +16879,21 @@
     "CANON-07"
    ],
    "component_id": "autopilot",
-   "end_line": 229,
+   "end_line": 232,
    "kind": "class",
    "path": "repo_idea_miner/factory_autopilot_schemas.py",
    "related_tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
-    "test_factory_ux_polish"
+    "test_factory_ux_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "contract_owner"
    ],
    "signature": "class ProductLoopEvidence(BaseModel)",
-   "start_line": 220,
+   "start_line": 223,
    "symbol_id": "repo_idea_miner.factory_autopilot_schemas.ProductLoopEvidence"
   },
   {
@@ -16880,20 +16901,21 @@
     "CANON-07"
    ],
    "component_id": "autopilot",
-   "end_line": 363,
+   "end_line": 371,
    "kind": "class",
    "path": "repo_idea_miner/factory_autopilot_schemas.py",
    "related_tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
-    "test_factory_ux_polish"
+    "test_factory_ux_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "contract_owner"
    ],
    "signature": "class UnifiedDecisionPacket(BaseModel)",
-   "start_line": 356,
+   "start_line": 364,
    "symbol_id": "repo_idea_miner.factory_autopilot_schemas.UnifiedDecisionPacket"
   },
   {
@@ -16901,20 +16923,21 @@
     "CANON-07"
    ],
    "component_id": "autopilot",
-   "end_line": 428,
+   "end_line": 436,
    "kind": "function",
    "path": "repo_idea_miner/factory_autopilot_schemas.py",
    "related_tests": [
     "test_factory_phase2d1_loop",
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
-    "test_factory_ux_polish"
+    "test_factory_ux_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "validator"
    ],
    "signature": "def validate_desk_output(schema_name: str, raw, model_cls: type[BaseModel]) -> tuple[BaseModel | None, list[str]]",
-   "start_line": 417,
+   "start_line": 425,
    "symbol_id": "repo_idea_miner.factory_autopilot_schemas.validate_desk_output"
   },
   {
@@ -17153,13 +17176,14 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 638,
+   "end_line": 672,
    "kind": "function",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "related_tests": [
     "test_factory_coverage",
     "test_factory_phase2d1_cli_dashboard",
-    "test_factory_phase2d1_loop"
+    "test_factory_phase2d1_loop",
+    "test_human_decision_contract"
    ],
    "roles": [
     "contract_consumer",
@@ -17168,7 +17192,7 @@
     "orchestrator"
    ],
    "signature": "def run_closed_product_loop(run_dir: str | Path | None=None, run_id: int | None=None, mode: str='mock', gemma_mode: str='sequential', execute: bool=False, max_iterations: int | None=None, output_dir: str | Path='runs', db_conn=None, settings=None, factory_settings=None, llm=None, scheduler=None, budgets: dict | None=None) -> dict",
-   "start_line": 300,
+   "start_line": 305,
    "symbol_id": "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
   },
   {
@@ -17178,13 +17202,14 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 275,
+   "end_line": 276,
    "kind": "function",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "related_tests": [
     "test_factory_coverage",
     "test_factory_phase2d1_cli_dashboard",
-    "test_factory_phase2d1_loop"
+    "test_factory_phase2d1_loop",
+    "test_human_decision_contract"
    ],
    "roles": [
     "contract_consumer",
@@ -17274,20 +17299,21 @@
     "CANON-07"
    ],
    "component_id": "autopilot",
-   "end_line": 507,
+   "end_line": 509,
    "kind": "function",
    "path": "repo_idea_miner/factory_product_loop.py",
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
     "test_factory_ux_polish",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "invariant_target"
    ],
    "signature": "def apply_hard_blockers(evidence: dict, quality: dict) -> dict",
-   "start_line": 433,
+   "start_line": 435,
    "symbol_id": "repo_idea_miner.factory_product_loop.apply_hard_blockers"
   },
   {
@@ -17298,21 +17324,22 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 999,
+   "end_line": 1001,
    "kind": "function",
    "path": "repo_idea_miner/factory_product_loop.py",
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
     "test_factory_ux_polish",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "invariant_target",
     "orchestrator"
    ],
    "signature": "def compute_loop_protected_hashes(run_dir: Path) -> dict[str, str]",
-   "start_line": 980,
+   "start_line": 982,
    "symbol_id": "repo_idea_miner.factory_product_loop.compute_loop_protected_hashes"
   },
   {
@@ -17321,20 +17348,21 @@
     "CANON-07"
    ],
    "component_id": "autopilot",
-   "end_line": 392,
+   "end_line": 394,
    "kind": "function",
    "path": "repo_idea_miner/factory_product_loop.py",
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
     "test_factory_ux_polish",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "contract_consumer"
    ],
    "signature": "def extract_artifact_evidence(run_dir: Path) -> dict",
-   "start_line": 186,
+   "start_line": 188,
    "symbol_id": "repo_idea_miner.factory_product_loop.extract_artifact_evidence"
   },
   {
@@ -17343,21 +17371,22 @@
     "CANON-10"
    ],
    "component_id": "autopilot",
-   "end_line": 1490,
+   "end_line": 1520,
    "kind": "function",
    "path": "repo_idea_miner/factory_product_loop.py",
    "related_tests": [
     "test_factory_product_loop_2d0",
     "test_factory_runner_backed_execution",
     "test_factory_ux_polish",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_human_decision_contract"
    ],
    "roles": [
     "contract_consumer",
     "orchestrator"
    ],
    "signature": "def run_product_loop(run_dir: str | Path | None=None, run_id: int | None=None, mode: str='mock', gemma_mode: str='sequential', max_iterations: int=1, db_conn=None, scheduler=None, llm=None, run_mock_proof: bool=True) -> dict",
-   "start_line": 1163,
+   "start_line": 1178,
    "symbol_id": "repo_idea_miner.factory_product_loop.run_product_loop"
   },
   {
@@ -17785,6 +17814,7 @@
   "test_factory_viewer_polish": "tests/test_factory_viewer_polish.py",
   "test_followup": "tests/test_followup.py",
   "test_golden_representation_lint": "tests/test_golden_representation_lint.py",
+  "test_human_decision_contract": "tests/test_human_decision_contract.py",
   "test_json_repair": "tests/test_json_repair.py",
   "test_key_pool": "tests/test_key_pool.py",
   "test_llm_client": "tests/test_llm_client.py",
@@ -18168,6 +18198,12 @@
    "factory_pipeline",
    "factory_validate",
    "llm_client"
+  ],
+  "test_human_decision_contract": [
+   "factory_autopilot_desks",
+   "factory_autopilot_schemas",
+   "factory_loop_executor",
+   "factory_product_loop"
   ],
   "test_json_repair": [
    "jsonutil"
