@@ -467,6 +467,22 @@ NOTES:
 - run kind detection order: continuation → core → legacy
 - known flaky: 0 (R0 root-caused stale .pyc; PYTHONDONTWRITEBYTECODE=1 in sandboxes)
 
+REQUIREMENT_COVERAGE (이슈 #9, factory_coverage):
+- requirement kinds: CRITICAL_REQUIREMENT | DIFFICULTY_ANCHOR | SUPPORTING_REQUIREMENT
+- coverage statuses: COVERED | PARTIALLY_COVERED | NOT_COVERED | AMBIGUOUS | NOT_APPLICABLE
+- failure classes: TRUE_CORE_GAP | EVIDENCE_GAP | VALIDATOR_DEFECT | SPEC_OVERREACH | NONE
+  — enum 밖 값·미분류 FAIL은 matrix 검증이 거부한다
+- evidence 우선순위: 결정론적 runner probe(fresh, artifact fingerprint 일치) >
+  기록물. COVERED는 PASS probe ref 필수, 사람 설명·과거 복사 evidence 불인정
+- evidence와 implementation 분리: matrix는 판정 기록일 뿐 제품을 수정하지 않는다
+- partial 승격 금지: PARTIALLY_COVERED는 coverage 집계에 미산입(judge 매핑 missing)
+- Difficulty Anchor는 축소·재해석하지 않는다 — 의미 모호는 AMBIGUOUS로 남긴다
+- SPEC_OVERREACH·§9.3 초과 TRUE_CORE_GAP은 HOLD·HUMAN_DECISION_REQUIRED
+- generic repair 조건: 2제품 이상 공통 + challenge hardcode 0 + validator 약화 0,
+  repair round 최대 1회
+- loop 소비: 유효한 fresh coverage matrix가 requirement 판정의 정본
+  (desk_status=COVERAGE_MATRIX), 무효 matrix는 problems 기록 후 desk 폴백
+
 QUERY:
 - architecture-context --canon CANON-10
 

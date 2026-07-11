@@ -11,7 +11,7 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 (flaky 0) at issue #7 마감;
+- tests: full suite PASS ×2 연속 1247개 (flaky 0) at issue #9 마감;
   architecture-build 연속 2회 byte-identical; smoke = dashboard(/, /products,
   #47 run5·#54, viewer_polish panel HTTP 렌더) + browser 실동작(SRS/table
   canonical viewer initial→next→prev/reset→COMPLETE, 검증 실패·REPLAY_MISSING
@@ -137,6 +137,24 @@ RECENT_SEMANTIC_CHANGES:
   결함으로 표면화(이슈 #8 무관, VIEWER_POLISH 미적용 산출물 — 사람 결정
   대상). 증거: runs/_issue8_ux_polish/runtime_smoke_and_meta_fix.json
 
+- Issue #9 done (#54 viewer 수리 + requirement coverage adjudication,
+  커밋 3f6c380/13cefc0/(docs)): Phase A = #54 child 080253 viewer를 기존
+  VIEWER_POLISH 계약만으로 수리(코드 변경 0, scenarios.json stale fetch 0,
+  REPLAY_READY, PRODUCT_CANDIDATE 유지, base 불변). Coverage 계약 =
+  factory_coverage(CANON-10 REQUIREMENT_COVERAGE): 결정론적 runner probe +
+  coverage matrix, COVERED는 PASS probe ref 필수, partial 미산입, fingerprint로
+  과거 evidence 복사 거부, loop가 유효 fresh matrix를 정본으로 소비
+  (desk_status=COVERAGE_MATRIX). generic repair = EVIDENCE_GAP(2제품 공통,
+  mock desk 전항목 unknown 강등) 1회. TRUE_CORE_GAP 최소 구현 = generic console
+  localStorage 상태 지속(제품 분기 없음). SRS 27 coverage child 084204 =
+  critical 4/4·anchor 3/3·violation 0 → acceptance 14/14 PRODUCT_CANDIDATE
+  (12/14에서 승격). Table 17 coverage child 084349 = critical 0/3·anchor 1/3·
+  forbidden violated 2·TRUE_CORE_GAP 7 정직 기록 → 11/14 EXECUTION_CANDIDATE
+  HOLD 유지(grid UI+타입별 폼+Boolean core는 §9.3 초과 — 별도 주문 권고,
+  HUMAN_DECISION_REQUIRED). #47/#54 회귀 없음(validate PASS), base/parent 불변,
+  invalid/mock success 0, VALIDATOR_DEFECT 0, SPEC_OVERREACH 0.
+  증거: runs/_issue9_coverage/state.json
+
 - Issue #7 done (VIEWER_POLISH 도메인 중립화, 커밋 3f218cb/687e53a):
   executor = factory_viewer_polish.run_viewer_polish — replay discovery(명시적
   replay/index.json ref 우선, compatibility는 단일 후보만, MISSING/AMBIGUOUS/
@@ -169,16 +187,11 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 후보(단일, 사람 결정): fresh 2종 UX child(062013 SRS·062015 table)의
-   EXECUTION_CANDIDATE HOLD packet 응답 — 남은 blocker는 UX가 아니라 acceptance
-   요구사항 coverage 2종(critical_requirement_coverage_full/
-   difficulty_anchor_coverage_full). 현재 상태로 검수·종결하거나, requirement
-   coverage 보강(core 기능 추가 — 자동 lane 없음)을 별도 주문으로 지시
-2. 사람 결정(비차단): #54 child 030809 viewer가 scenarios.json(부재 파일) fetch로
-   scenario 목록 로드 실패를 정직 표시 — 기존 잠복 결함(이슈 #8 무관, raw fetch
-   리터럴이라 probe07은 통과). VIEWER_POLISH lane 적용을 지시하면 canonical viewer로
-   해소 가능. interaction console·runner-backed 실행 증거는 정상
-3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+1. 다음 후보(단일, 사람 결정): Table 17 coverage child 084349의 EXECUTION_CANDIDATE
+   HOLD packet 응답 — 남은 TRUE_CORE_GAP은 grid UI·타입별 입력 폼·Boolean core
+   지원(§9.3 '기존 구조로 구현 가능' 초과, 새 제품 전용 프론트엔드+core patch 복합).
+   현상 검수로 종결하거나, grid frontend 구현을 별도 주문으로 지시
+2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    literal-only artifact 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
    은 필요 시 별도 주문
 
