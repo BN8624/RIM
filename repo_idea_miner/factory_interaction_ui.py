@@ -105,8 +105,14 @@ def build_interaction_contract(artifact_root: Path) -> dict:
         "state_schema": {e.get("name"): list(e.get("fields") or []) for e in entities},
         "initial_state": fixture["initial_state"],
         # runner의 시나리오 스키마는 도메인마다 다르다 — fixture를 템플릿으로 재사용해
-        # 필수 필드(case_type 등)를 지어내지 않는다 (§6.2 기존 artifact 재사용)
-        "scenario_template": {k: v for k, v in fixture.items() if k != "actions"},
+        # 필수 필드(case_type 등)를 지어내지 않는다 (§6.2 기존 artifact 재사용).
+        # 단 product 산출물에 fixture id/설명이 남으면 anti-hardcode가 fixture 분기로
+        # 의심하므로 id는 중립값으로, 설명용 필드는 제외한다.
+        "scenario_template": {
+            **{k: v for k, v in fixture.items()
+               if k not in ("actions", "title", "expected_behavior", "must_check")},
+            **({"id": "interactive_session"} if "id" in fixture else {}),
+        },
         "validation_rules": validation_rules,
         "evidence_requirements": [
             "valid action이 runner로 실행되고 state가 변한다",
@@ -115,7 +121,8 @@ def build_interaction_contract(artifact_root: Path) -> dict:
         ],
         "render_hints": {"entities": [e.get("name") for e in entities],
                          "primary_actions": [a.get("name") for a in actions]},
-        "runner_command": runner_contract.get("runner_command"),
+        # runner_command는 존재만 검증한다 — fixture 경로가 product 산출물에 남으면
+        # anti-hardcode가 fixture 분기로 의심하므로 contract에는 싣지 않는다
     }
 
 

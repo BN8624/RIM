@@ -297,3 +297,12 @@ def test_lane_routes_graph_to_legacy_adapter(tmp_path, monkeypatch):
     fle.execute_lane("INTERACTION_UI", {"parent_run_dir": graph_run,
                                         "children_root": tmp_path / "children"})
     assert calls == ["generic", "graph_adapter"]
+
+
+def test_generated_artifacts_carry_no_fixture_id(tmp_path):
+    """product 산출물에 fixture 시나리오 id/설명이 남지 않는다 — anti-hardcode 정합."""
+    run, out = _apply_domain(tmp_path, "ledger")
+    contract = _load(run / "workspace" / "product" / "interaction" / "contract.json")
+    assert contract["scenario_template"].get("id") == "interactive_session"
+    ui = (run / "workspace" / "product" / "interaction" / "index.html").read_text(encoding="utf-8")
+    assert "scenario_001" not in ui

@@ -166,6 +166,12 @@ NOTES:
 - failure patch-safety canonical source: `factory_continue.assess_failure_patch_safety`
 - frozen hash guard covers golden/fixtures/contract; `fixtures/_variants/` excluded (gate scratch)
 - out-of-scope changes after apply trigger automatic rollback
+- scenario-level partial spec repair: each scenario gets one decision — APPLIED /
+  DEFERRED_CORE_DEPENDENCY / DEFERRED_AMBIGUOUS / UNCHANGED_VALID (recorded in
+  `spec_repair_scenario_decisions.json`); blocked scenarios are preserved as deferred,
+  and green promotion is forbidden while any deferred scenario remains
+- an empty repair_plan.steps is honest when requires_spec_repair=true (spec-only failures)
+- a child copy inherits the parent's apply report; provenance via `child_run_origin.json`
 
 QUERY:
 - architecture-context --canon CANON-05
@@ -200,6 +206,20 @@ NOTES:
 - 2C-3 closes the loop: edit → validate → execute (bridge server → runner) → observe →
   revise → re-run, all proven by execution smoke; viewer artifacts must pass `node --check`
 - human gate: `review/phase2c1/user_review_decision.md` required before 2C-2
+- generic interaction contract (`factory_interaction_ui`): domain artifact →
+  interaction contract adapter → generic INTERACTION_UI executor → runtime UI →
+  interaction evidence → validator. Domain meaning never lives in the core executor —
+  the graph domain routes to the legacy 2C-2 adapter by artifact shape (state has
+  nodes+edges), everything else gets the action-console executor; no challenge/product
+  branches. The contract reuses existing action/state/runner contracts and the fixture
+  as scenario template (do not invent required fields)
+- interaction runtime fallback policy: valid artifact → real UI; missing/invalid/
+  unsupported → explicit state; mock fixtures only on test/dev paths; production
+  runtime never shows automatic mock success
+- interaction evidence ownership: `review/interaction_ui/interaction_evidence.json` +
+  `interaction_ui_report.json` are written by the executor's runner-backed smoke; the
+  loop accepts them as authoring/loop evidence only when applied=true (priority after
+  the 2C-3 execution report), and the validator blocks smoke_pass overclaims
 
 QUERY:
 - architecture-context --canon CANON-06
