@@ -54,6 +54,8 @@ def test_registry_covers_all_nine_lanes():
     assert "factory_spec_repair" in LANE_EXECUTOR_ROUTES["SPEC_REPAIR"]
     assert "factory_continue" in LANE_EXECUTOR_ROUTES["CORE_PATCH"]
     assert "factory_product_polish" in LANE_EXECUTOR_ROUTES["VIEWER_POLISH"]
+    # 이슈 #5 §6: generic executor가 기본, graph 도메인만 legacy 2C-2 adapter
+    assert "factory_interaction_ui" in LANE_EXECUTOR_ROUTES["INTERACTION_UI"]
     assert "factory_product_editor" in LANE_EXECUTOR_ROUTES["INTERACTION_UI"]
     assert "factory_draft_execution" in LANE_EXECUTOR_ROUTES["RUNNER_BACKED_DRAFT_EXECUTION"]
 

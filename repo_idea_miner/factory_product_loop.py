@@ -188,9 +188,13 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     exec_report = _load_json(run_dir / "review/phase2c3/phase2c3_execution_report.json") or {}
     exec_smoke = exec_report.get("execution_smoke") or \
         _load_json(run_dir / "review/phase2c3/execution_smoke.json") or {}
+    interaction_report = _load_json(run_dir / "review/interaction_ui/interaction_ui_report.json") or {}
+    interaction_smoke = interaction_report.get("interaction_smoke") or {}
     static = _static_viewer_facts(run_dir)
 
     has_editor = bool(editor_smoke)
+    # generic interaction UI evidence는 apply 완료 + runner-backed smoke가 있을 때만 인정
+    has_interaction = bool(interaction_smoke) and interaction_report.get("applied") is True
     # 2C-3 실행 evidence는 apply 완료 + smoke 실증(included=true)일 때만 인정한다 — dry-run/실패 run 오탐 방지
     has_execution = bool(exec_smoke) and exec_report.get("applied") is True \
         and exec_report.get("runner_backed_execution_included") is True
@@ -232,17 +236,28 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         (facts["viewer_exists"] or smoke or has_editor))
 
     # ---- product loop evidence (§7)
+    if has_interaction:
+        facts["authoring_ui"] = True
+        facts["has_interaction_report"] = True
     can_create = bool(facts["authoring_ui"] and editor_smoke.get("add_node_supported", True)) \
         if facts["authoring_ui"] else False
     can_validate = bool(editor_smoke.get("graph_validation_supported")) if has_editor \
         else bool(facts["authoring_ui"] and static["validation_ui"])
-    # 실행 계열은 2C-3 execution smoke가 실증 정본 — 없으면 editor 기록 기반(하위 호환)
+    # 실행 계열은 2C-3 execution smoke가 실증 정본 — 없으면 generic interaction smoke,
+    # 그다음 editor 기록 기반(하위 호환)
     if has_execution:
         can_execute = bool(exec_smoke.get("can_execute_input"))
         can_see_result = bool(exec_smoke.get("can_see_result_from_created_input")) and can_execute
         # 실패 이해: draft validation 피드백(2C-2)이 실행 경로와 함께 있으면 근거로 인정
         can_understand_failure = bool(editor_smoke.get("graph_validation_supported")) and can_execute
         can_revise = bool(exec_smoke.get("revise_cycle_changes_result")) and can_execute
+    elif has_interaction:
+        can_create = bool(interaction_smoke.get("can_create_or_modify_input"))
+        can_validate = bool(interaction_smoke.get("invalid_action_rejected"))
+        can_execute = bool(interaction_smoke.get("can_execute_primary_action"))
+        can_see_result = bool(interaction_smoke.get("state_change_observed")) and can_execute
+        can_understand_failure = bool(interaction_smoke.get("invalid_action_rejected")) and can_execute
+        can_revise = bool(interaction_smoke.get("revise_changes_result")) and can_execute
     else:
         can_execute = bool(editor_smoke.get("runner_backed_execution_included")) if has_editor else False
         can_see_result = bool(editor_smoke.get("draft_execution_result_visible")) and can_execute

@@ -1065,3 +1065,38 @@ def test_live_47_no_repair_apply():
     assert summary["repair_execute"] is False
     check = json.loads((FIXTURE_47 / "review/phase2d0/phase2d0_hash_check.json").read_text("utf-8"))
     assert check["status"] == "PASS"
+
+
+def test_interaction_ui_evidence_feeds_product_loop(tmp_path):
+    """generic interaction UI report(applied+smoke)가 product loop evidence로 인정된다 (이슈 #5 §6).
+
+    2C-3 execution report가 있으면 그쪽이 우선 정본 — interaction은 그다음."""
+    run = _build_green_run(tmp_path, _VIEWER_READONLY)
+    _dump(run / "review" / "interaction_ui" / "interaction_ui_report.json", {
+        "applied": True, "smoke_pass": True,
+        "interaction_smoke": {
+            "can_create_or_modify_input": True, "can_execute_primary_action": True,
+            "state_change_observed": True, "invalid_action_rejected": True,
+            "revise_changes_result": True},
+    })
+    ev, q, hard = _evidence(run)
+    assert ev["facts"]["authoring_ui"] is True
+    loop = ev["product_loop"]
+    assert loop["can_create_or_modify_input"] is True
+    assert loop["can_execute_primary_action"] is True
+    assert loop["can_observe_state_change"] is True
+    assert loop["can_understand_failure"] is True
+    assert loop["can_revise_and_retry"] is True
+    assert loop["product_loop_closed"] is True
+
+
+def test_interaction_ui_report_ignored_unless_applied(tmp_path):
+    """dry-run/미적용 interaction report는 evidence로 인정하지 않는다 — 오탐 방지."""
+    run = _build_green_run(tmp_path, _VIEWER_READONLY)
+    _dump(run / "review" / "interaction_ui" / "interaction_ui_report.json", {
+        "applied": False, "smoke_pass": False,
+        "interaction_smoke": {"can_execute_primary_action": True},
+    })
+    ev, q, hard = _evidence(run)
+    assert ev["facts"]["authoring_ui"] is False
+    assert ev["product_loop"]["can_execute_primary_action"] is False
