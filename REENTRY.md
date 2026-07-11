@@ -11,7 +11,10 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1247개 (flaky 0) at issue #9 마감;
+- tests: full suite PASS ×2 연속 1254개 (flaky 0) at issue #10 마감; smoke =
+  dashboard(/, /products 200) + Table 17 child grid 콘솔 브라우저 실조작
+  (desktop+375px, Boolean false→true, invalid 명시 거부, replay viewer) PASS
+- (이전 기록) full suite PASS ×2 연속 1247개 (flaky 0) at issue #9 마감;
   architecture-build 연속 2회 byte-identical; smoke = dashboard(/, /products,
   #47 run5·#54, viewer_polish panel HTTP 렌더) + browser 실동작(SRS/table
   canonical viewer initial→next→prev/reset→COMPLETE, 검증 실패·REPLAY_MISSING
@@ -155,6 +158,21 @@ RECENT_SEMANTIC_CHANGES:
   invalid/mock success 0, VALIDATOR_DEFECT 0, SPEC_OVERREACH 0.
   증거: runs/_issue9_coverage/state.json
 
+- Issue #10 done (Table 17 Product Core Completion, 커밋 a76ffdc/1002979/(docs)):
+  결과 = grid frontend(generic KIND_TABLE_GRID: state 모양 columns+rows 감지,
+  실제 row/column grid 렌더, column type별 컨트롤 bool select/number input/text,
+  typed JSON payload, 반응형 meta viewport) + child engine Boolean core
+  (기본 False·missing→false, strict bool check·Number는 bool 제외,
+  update_column_type 변환 규칙). fresh child run = factory_20260711_113919
+  (parent 084349 복사, base/parent 불변). coverage = critical 3/3·anchor 3/3·
+  forbidden violation 0 (probe 7/7 PASS: P4 Boolean 4상태+P6 invalid 거부+
+  P7 typed-form static 신설, 전 행 PASS probe ref COVERED). acceptance =
+  14/14 → 최종 product status = PRODUCT_CANDIDATE (11/14 EXECUTION_CANDIDATE
+  HOLD에서 승격, 정본 계산·직접 설정 없음). 남은 gap = 0 (TRUE_CORE_GAP 7 전부
+  해소). 인간 결정 = 없음(이슈 #10 주문 자체가 HOLD 응답). 회귀: #47/#54/SRS
+  084204 factory-validate PASS, viewer 재생성 금지 준수(replay 정상).
+  다음 추천 = deferred 항목(대형 파일 분해 또는 db verdict stale) 별도 주문
+
 - Issue #7 done (VIEWER_POLISH 도메인 중립화, 커밋 3f218cb/687e53a):
   executor = factory_viewer_polish.run_viewer_polish — replay discovery(명시적
   replay/index.json ref 우선, compatibility는 단일 후보만, MISSING/AMBIGUOUS/
@@ -187,13 +205,10 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 후보(단일, 사람 결정): Table 17 coverage child 084349의 EXECUTION_CANDIDATE
-   HOLD packet 응답 — 남은 TRUE_CORE_GAP은 grid UI·타입별 입력 폼·Boolean core
-   지원(§9.3 '기존 구조로 구현 가능' 초과, 새 제품 전용 프론트엔드+core patch 복합).
-   현상 검수로 종결하거나, grid frontend 구현을 별도 주문으로 지시
-2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
-   literal-only artifact 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
-   은 필요 시 별도 주문
+1. 다음 후보(단일): deferred 중 택일 별도 주문 — 대형 파일 분해
+   (factory_validate/challenge_dashboard/factory_product_loop §21), literal-only
+   artifact 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본).
+   (Table 17 HOLD는 이슈 #10으로 종결 — child 113919 PRODUCT_CANDIDATE 14/14)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
