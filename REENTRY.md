@@ -11,10 +11,11 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 (1107, flaky 0) at issue #6 마감;
-  architecture-build 연속 2회 byte-identical; dashboard smoke(/, /products,
-  #47 run5 정상, fresh child 3종 generic draft_execution panel HTTP 렌더
-  EXECUTED·validation PASS, 실패 상태 enum 7종 정직 표시, mock success 0) PASS
+- tests: full suite PASS ×2 연속 (flaky 0) at issue #7 마감;
+  architecture-build 연속 2회 byte-identical; smoke = dashboard(/, /products,
+  #47 run5·#54, viewer_polish panel HTTP 렌더) + browser 실동작(SRS/table
+  canonical viewer initial→next→prev/reset→COMPLETE, 검증 실패·REPLAY_MISSING
+  명시 표시, mock success 0) PASS
 - architecture_check: PASS + WARN 채널 (literal-only artifacts 집계, route 미선언 CLI,
   AI_INDEX component query primary 초과 — 모두 §17.2 비차단)
 - known_flaky: []
@@ -111,6 +112,21 @@ RECENT_SEMANTIC_CHANGES:
   남은 gap은 실행과 무관한 진짜 viewer 결함(VIEWER_POLISH_REQUIRED)으로 정직 HOLD.
   base 3종+parent 3종 hash 불변, invalid/mock success 0
 
+- Issue #7 done (VIEWER_POLISH 도메인 중립화, 커밋 3f218cb/687e53a):
+  executor = factory_viewer_polish.run_viewer_polish — replay discovery(명시적
+  replay/index.json ref 우선, compatibility는 단일 후보만, MISSING/AMBIGUOUS/
+  INVALID/UNSUPPORTED 명시) → schema-shape adapter(standard_typed_event =
+  SRS/table/filesystem 공통, graph_legacy_event) → canonical viewer contract
+  (frames, before/after는 파생 가능한 것만 — 날조 없음) → generic viewer core
+  (contract만 읽음) → navigation 실증 evidence. graph는 legacy 2C-1 adapter 격리.
+  detector 수리: viewer가 실제 읽는 키만 replay에 요구(message 오탐 제거).
+  검증 도메인: SRS 27 = loop iter1 lane APPLIED(child 042220) →
+  REVIEWABLE_ARTIFACT→INTERACTION_CANDIDATE 승격, 남은 gap UX_POLISH(stub HOLD).
+  Table 17 = detector 수리로 VIEWER 오탐 gap 소멸(gap=None,
+  EXECUTION_CANDIDATE 정직 HOLD) + execute_lane child 042339 APPLIED(canonical
+  변환 실증). #47/#54 회귀 없음(validate PASS, base 4종 hash 불변, graph legacy
+  라우팅 실측). invalid/mock success 0
+
 OPEN_BLOCKERS:
 - id: hold_54
   state: RESOLVED — closed (이슈 #6에서 실행 통합 완료)
@@ -128,10 +144,11 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 자동 가능 후보(단일): fresh 2종(27 SRS·17 table)의 진짜 viewer 결함 수리
-   (VIEWER_POLISH lane) — 27은 viewer가 replay/scenarios/${id}.json fetch(실파일은
-   replay_scenario_*.json), 17은 event.type/message vs replay 키 mismatch.
-   두 도메인의 남은 최우선 gap이 동일 계열로 수렴
+1. 다음 자동 가능 후보(단일): UX_POLISH lane의 실행 경로 결정 — fresh 2종(27 SRS·
+   17 table)의 남은 공통 blocker가 UX_POLISH_REQUIRED(현재 executor는 설계상
+   stub=BLOCKED→HOLD)로 수렴. live 수요가 실측으로 확인됐으므로 generic UX
+   executor 구현 또는 사람 검수 종결 중 하나를 사람이 결정(자유 형식 수정 위험이
+   가장 큰 lane이라 승인 필요)
 2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    literal-only artifact 185개의 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
    은 필요 시 별도 주문
