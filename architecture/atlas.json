@@ -5,7 +5,7 @@
    "path_pattern": "action_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 46,
+   "source_line": 49,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -6413,7 +6413,7 @@
    "path_pattern": "runner_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 67,
+   "source_line": 95,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -7178,7 +7178,7 @@
    "path_pattern": "state_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 40,
+   "source_line": 43,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -8798,6 +8798,7 @@
    "repo_idea_miner/factory_core_pipeline.py",
    "repo_idea_miner/factory_core_prompts.py",
    "repo_idea_miner/factory_draft_execution.py",
+   "repo_idea_miner/factory_interaction_ui.py",
    "repo_idea_miner/factory_product_editor.py",
    "repo_idea_miner/factory_product_loop.py",
    "repo_idea_miner/factory_prompts.py",
@@ -12260,7 +12261,7 @@
      ]
     }
    ],
-   "loc": 578,
+   "loc": 1098,
    "module": "repo_idea_miner.factory_interaction_ui",
    "path": "repo_idea_miner/factory_interaction_ui.py",
    "private_symbols": [
@@ -12276,6 +12277,7 @@
     "INTERACTION_SUBDIR",
     "KIND_ACTION_CONSOLE",
     "KIND_GRAPH_EDITOR",
+    "KIND_TABLE_GRID",
     "REPORT_JSON",
     "SERVER_REL",
     "UI_REL",
@@ -12283,6 +12285,8 @@
     "detect_interaction_kind",
     "first_fixture",
     "generate_interaction_ui",
+    "generate_table_grid_ui",
+    "grid_render_hints",
     "has_error_signal",
     "run_interaction_smoke",
     "run_interaction_ui"
@@ -15850,9 +15854,9 @@
   }
  ],
  "repository": {
-  "head": "13cefc0a2cf562b5f3ccbb16f26531a2e453b984",
-  "structural_diff": false,
-  "structural_fingerprint": "acfca493fe86b21edba91d4ee70f69dd3c30837ef2905c2e6376d6d60046d36d",
+  "head": "d3f8c18068ca4ae894ff22267e0e4e18665b5b70",
+  "structural_diff": true,
+  "structural_fingerprint": "9e775ebeb5d054f02bc25176941216ecc13355a09b183489947251ad57492b92",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
