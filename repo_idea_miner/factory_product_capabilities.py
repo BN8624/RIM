@@ -51,6 +51,38 @@ def normalize_loop_evidence(loop: dict) -> dict:
     return out
 
 
+def _contract_mediated_replay_read(tmp_ws: Path, viewer_srcs: dict[str, str]) -> bool:
+    """contract-매개 replay 읽기 인정 (이슈 #8 — probe07 stale coupling 수리).
+
+    이슈 #7 canonical viewer는 viewer_contract.json만 fetch하므로 'replay/'+fetch
+    substring 규칙에 영구히 걸리지 않는다. 대신 (1)product 파일이 viewer_contract.json을
+    fetch하고 (2)그 contract 파일이 존재·파싱되며 (3)source_artifact_refs가 실제로
+    존재하는 replay/ 파일을 sha256 일치로 참조할 때만 replay 읽기로 인정한다."""
+    if not any("viewer_contract.json" in src and "fetch" in src
+               for src in viewer_srcs.values()):
+        return False
+    product_dir = tmp_ws / "product"
+    if not product_dir.is_dir():
+        return False
+    for contract_path in sorted(product_dir.rglob("viewer_contract.json")):
+        try:
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for ref in contract.get("source_artifact_refs") or []:
+            rel = str(ref.get("ref") or "")
+            digest = ref.get("sha256")
+            if "replay/" not in rel or not digest:
+                continue
+            target = tmp_ws / rel
+            if not target.is_file():
+                continue
+            actual = hashlib.sha256(target.read_bytes()).hexdigest()
+            if actual == digest:
+                return True
+    return False
+
+
 # ---------------------------------------------------------------- input kind 분류 (§6)
 
 # challenge ID/title이 아니라 contract 구조 어휘로만 분류한다. 우선순위는 동점 tie-break 전용.
@@ -349,12 +381,20 @@ def run_fresh_probe(
         # replay 읽기는 같은 파일 안에서 fetch까지 있어야 인정한다 (blob 결합 과대 인정 방지)
         reads_replay = any(("replay/" in src and "fetch" in src)
                            for src in viewer_srcs.values())
+        reads_replay_method = "raw_fetch" if reads_replay else None
+        if not reads_replay:
+            # 이슈 #7 canonical viewer는 replay를 직접 fetch하지 않고 viewer_contract.json만
+            # 읽는다 — contract가 실제 replay 파일을 digest 일치로 참조할 때만 인정한다
+            # (raw substring 규칙보다 강한 근거이므로 검사 약화가 아니다).
+            reads_replay = _contract_mediated_replay_read(tmp_ws, viewer_srcs)
+            reads_replay_method = "contract_mediated" if reads_replay else None
         displays_fields = sum(1 for f in ("final_state", "events", "summary") if f in viewer_blob)
         viewer_ok = bool(viewer_srcs) and reads_replay and displays_fields >= 2
         report["viewer_static_ok"] = viewer_ok
         report["probes"].append(_probe_record(
             "probe07_viewer_display", "viewer", "static_analysis", ok=viewer_ok,
             viewer_entrypoint=viewer_rel, reads_replay=reads_replay,
+            reads_replay_method=reads_replay_method,
             displayed_core_fields=displays_fields,
             note="브라우저 미실행 — 렌더링이 아니라 소스 근거만 검사"))
         if not viewer_ok:

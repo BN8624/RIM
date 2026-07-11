@@ -75,11 +75,15 @@ def test_failure_signature_stable_and_none_on_success():
     assert failure_signature("CORE_PATCH", [], None) is None
 
 
-def test_ux_polish_stub_blocks_honestly(tmp_path):
-    res = LANE_EXECUTORS["UX_POLISH"]({"parent_run_dir": tmp_path})
+def test_ux_polish_blocks_honestly_without_artifact_root(tmp_path):
+    # 이슈 #8: stub → generic executor. artifact root가 없는 run에서는 여전히
+    # 정직한 BLOCKED여야 한다 (성공 조작 없음).
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    res = LANE_EXECUTORS["UX_POLISH"]({"parent_run_dir": parent,
+                                       "children_root": tmp_path / "children"})
     assert res["status"] == "BLOCKED"
-    assert res["child_run_dir"] is None
-    assert any("미구현" in p for p in res["problems"])
+    assert "factory_ux_polish" in LANE_EXECUTOR_ROUTES["UX_POLISH"]
 
 
 def test_archive_and_hold_do_not_apply(tmp_path):

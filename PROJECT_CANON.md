@@ -281,6 +281,45 @@ NOTES:
 - viewer mismatch detection requires only the keys the viewer actually reads
   (a `.type`-only viewer never requires `message`) — the graph-schema assumption
   that flagged every non-graph domain was an accidental coupling
+- generic ux polish (`factory_ux_polish`): product surfaces → canonical UX contract
+  (reuses interaction/viewer/runner contracts; ux_target_id/source_artifact_refs with
+  sha256/primary_task/primary_actions/state_indicators/feedback_channels/error_channels/
+  viewport_requirements/keyboard_requirements/allowed_operations/forbidden_changes) →
+  deterministic diagnosis (15 states, static DOM/CSS/JS analysis — never subjective
+  LLM screen impressions) → bounded operation catalog → marker-block patch →
+  re-diagnosis validation (rollback on failure) → machine-checkable evidence →
+  validator. No domain/challenge/run/filename branches
+- ux authority boundary: the executor only makes existing features discoverable and
+  understandable (labels, feedback, state/error exposure, overflow, narrow-viewport
+  stacking, keyboard focus, replay position, validation connection); it never adds
+  features, changes contract meaning, edits domain data, redesigns pages, or fabricates
+  success messages; PRODUCT_REQUIREMENT and UPSTREAM_CONTRACT defects are surfaced,
+  never covered by UX patches
+- ux operation catalog: only the 12 canonical operations (CLARIFY_LABEL,
+  EXPOSE_PRIMARY_ACTION, ADD_ACTION_FEEDBACK, EXPOSE_STATE, EXPOSE_ERROR, FIX_OVERFLOW,
+  STACK_FOR_NARROW_VIEWPORT, ADD_VISIBLE_FOCUS, FIX_FOCUS_ORDER, MARK_DISABLED_REASON,
+  EXPOSE_REPLAY_POSITION, CONNECT_VALIDATION_FEEDBACK); free-form operations
+  (MAKE_BEAUTIFUL/REDESIGN_PAGE/IMPROVE_STYLE/...) are forbidden; each operation is an
+  idempotent `data-ux-op` marker block with precondition/patch_scope/validation/rollback;
+  budget: 5 operations and 3 target surfaces per product, one operation per gap
+- ux evidence ownership: `review/ux_polish/*` (contract/diagnosis/operations/evidence/
+  report + dashboard summary) is written by the executor; `ux_polish_included=true`
+  requires status APPLIED or UX_READY + viewport(narrow) and keyboard checks PASS +
+  visible action/state/feedback/error channels + JS parse PASS + runtime action refs
+  (existing runner-backed evidence — UX never re-fabricates execution proof); the
+  validator blocks catalog-외 operations, budget overruns, product/-외 patches, and
+  included overclaims; HTTP 200/CSS-only changes/screenshots are never UX success
+- UX_POLISH_REQUIRED gap removal: loop closure and 60s-understandability metrics alone
+  do not close the UX rung — a ux polish report (applied or UX_READY, included=true)
+  is also required; once present with clean metrics the primary gap becomes None
+  (remaining blockers are requirement-coverage/human level, reported via acceptance,
+  never a new blocker system); pure aesthetics stay a non-blocking
+  HUMAN_AESTHETIC_REVIEW note, not a product failure
+- probe07 replay-read recognition: raw `replay/`+fetch in one product file, or
+  contract-mediated (product file fetches `viewer_contract.json` whose
+  source_artifact_refs point to existing replay files with matching sha256) — the
+  raw-substring-only rule was a stale coupling that permanently failed every
+  canonical (contract-reading) viewer
 
 QUERY:
 - architecture-context --canon CANON-06

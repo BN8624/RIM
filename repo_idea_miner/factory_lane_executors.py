@@ -25,7 +25,8 @@ LANE_EXECUTOR_ROUTES = {
     "RUNNER_BACKED_DRAFT_EXECUTION":
         "generic factory_runner_backed_execution.run_runner_backed_execution (graph 도메인만 "
         "legacy adapter=2C-3 factory_draft_execution.run_draft_execution, child copy에 apply)",
-    "UX_POLISH": "미구현 stub — 정직한 BLOCKED (승인된 수정안: live 수요 확인 전 구현 연기)",
+    "UX_POLISH": "generic factory_ux_polish.run_ux_polish (제한된 operation catalog, "
+                 "child copy에 apply — 이슈 #8)",
     "ARCHIVE": "apply 없음 — archive report 생성",
     "HOLD_FOR_HUMAN": "apply 없음 — human decision packet 생성 (§11)",
 }
@@ -263,11 +264,12 @@ def _exec_draft_execution(ctx: dict) -> dict:
     return _exec_apply_tool("RUNNER_BACKED_DRAFT_EXECUTION", ctx, run_runner_backed_execution)
 
 
-def _exec_ux_polish_stub(ctx: dict) -> dict:
-    # 승인된 수정안: live에서 UX_POLISH lane 수요가 실제로 나오기 전에는 generic UX
-    # executor를 만들지 않는다. 자유 형식 수정 위험이 가장 큰 lane이라 정직하게 막는다.
-    problems = ["UX_POLISH generic executor 미구현 — HOLD_FOR_HUMAN packet으로 위임"]
-    return _common_result("UX_POLISH", "BLOCKED", None, [], [], "NOT_RUN", problems, None)
+def _exec_ux_polish(ctx: dict) -> dict:
+    # 이슈 #8: 제한된 operation catalog 기반 generic UX executor — 자유 형식 수정 없음.
+    # 도메인/graph 분기 없음: 진단이 catalog와 일치하지 않으면 executor가 스스로
+    # UX_READY/UNSUPPORTED/UPSTREAM_BLOCKED로 정직하게 남긴다.
+    from repo_idea_miner.factory_ux_polish import run_ux_polish
+    return _exec_apply_tool("UX_POLISH", ctx, run_ux_polish)
 
 
 def _exec_archive(ctx: dict) -> dict:
@@ -294,7 +296,7 @@ LANE_EXECUTORS = {
     "VIEWER_POLISH": _exec_viewer_polish,
     "INTERACTION_UI": _exec_interaction_ui,
     "RUNNER_BACKED_DRAFT_EXECUTION": _exec_draft_execution,
-    "UX_POLISH": _exec_ux_polish_stub,
+    "UX_POLISH": _exec_ux_polish,
     "ARCHIVE": _exec_archive,
     "HOLD_FOR_HUMAN": _exec_hold_for_human,
 }

@@ -117,6 +117,12 @@ PRODUCT_REPORT_TABS = [
     ("viewer_polish_contract", ("run", "review/viewer_polish/viewer_contract.json", "viewer 계약")),
     ("viewer_polish_discovery", ("run", "review/viewer_polish/viewer_discovery.json", "replay discovery")),
     ("viewer_polish_evidence", ("run", "review/viewer_polish/viewer_evidence.json", "viewer evidence")),
+    # generic ux polish (review/ux_polish/ — 상세 페이지 전용)
+    ("ux_polish_report", ("run", "review/ux_polish/ux_polish_report.json", "ux polish 리포트")),
+    ("ux_polish_contract", ("run", "review/ux_polish/ux_contract.json", "UX 계약")),
+    ("ux_polish_diagnosis", ("run", "review/ux_polish/ux_diagnosis.json", "UX 진단")),
+    ("ux_polish_operations", ("run", "review/ux_polish/ux_operations.json", "UX operations")),
+    ("ux_polish_evidence", ("run", "review/ux_polish/ux_evidence.json", "UX evidence")),
     # Phase 2D-0 autopilot (review/phase2d0/ — 상세 페이지 전용)
     ("product_stage_label", ("run", "review/phase2d0/product_stage_label.md", "autopilot stage")),
     ("product_gap_classification", ("run", "review/phase2d0/product_gap_classification.md", "gap 분류")),
@@ -302,6 +308,11 @@ def load_draft_execution(run_root: Path | None) -> dict | None:
 def load_viewer_polish(run_root: Path | None) -> dict | None:
     """generic viewer polish 요약(review/viewer_polish/)을 읽는다. 없으면 None."""
     return _load_summary_json(run_root, "review/viewer_polish/viewer_polish_dashboard_summary.json")
+
+
+def load_ux_polish(run_root: Path | None) -> dict | None:
+    """generic ux polish 요약(review/ux_polish/)을 읽는다. 없으면 None."""
+    return _load_summary_json(run_root, "review/ux_polish/ux_polish_dashboard_summary.json")
 
 
 def load_phase2d0(run_root: Path | None) -> dict | None:

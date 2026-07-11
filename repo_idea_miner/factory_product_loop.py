@@ -207,6 +207,8 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     draft_exec_evidence = draft_exec_report.get("execution_evidence") or {}
     viewer_polish_report = _load_json(
         run_dir / "review/viewer_polish/viewer_polish_report.json") or {}
+    ux_polish_report = _load_json(
+        run_dir / "review/ux_polish/ux_polish_report.json") or {}
     static = _static_viewer_facts(run_dir)
 
     has_editor = bool(editor_smoke)
@@ -224,6 +226,11 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     # lane evidence(contract source refs = replay 파일 digest)가 replay 읽기의 정본 근거다.
     has_viewer_polish = viewer_polish_report.get("applied") is True \
         and viewer_polish_report.get("viewer_polish_included") is True
+    # generic UX polish evidence(이슈 #8) — included(진단→bounded op→검증 전부 통과)만 인정.
+    # UX_READY(machine-fixable 결함 0으로 실측)도 실증이다 — patch 유무가 아니라 검증이 기준.
+    has_ux_polish = ux_polish_report.get("ux_polish_included") is True \
+        and (ux_polish_report.get("applied") is True
+             or ux_polish_report.get("ux_status") == "UX_READY")
     facts: dict = {
         "viewer_exists": bool(smoke.get("product_viewer_exists", static["viewer_exists"])),
         "viewer_path": smoke.get("product_viewer_path") or static["viewer_path"],
@@ -250,6 +257,7 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         "has_editor_report": has_editor,
         "has_execution_report": has_execution or has_generic_execution,
         "has_viewer_polish_report": has_viewer_polish,
+        "has_ux_polish_report": has_ux_polish,
         "runner_backed_execution_included": True if (has_execution or has_generic_execution)
         else (editor_smoke.get("runner_backed_execution_included") if has_editor else None),
         "draft_export_supported": editor_smoke.get("draft_export_supported") if has_editor else None,
@@ -344,7 +352,7 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         refs[f"loop.{k}"] = f"artifact_evidence.product_loop.{k}={_b(v)}"
     for k in ("viewer_exists", "viewer_reads_replay", "authoring_ui", "green_base", "gate_fail",
               "evidence_sufficient", "archive_recommended", "mismatch_count", "replay_count",
-              "runner_executable", "verdict"):
+              "runner_executable", "verdict", "has_ux_polish_report"):
         refs[f"facts.{k}"] = f"artifact_evidence.facts.{k}={str(facts.get(k)).lower()}"
     if has_editor:
         refs["editor.runner_backed_execution_included"] = (

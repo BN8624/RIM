@@ -1405,6 +1405,84 @@ def _check_viewer_polish_lane(run_dir: Path) -> list[str]:
     return p
 
 
+UX_POLISH_LANE_REQUIRED = (
+    "review/ux_polish/ux_polish_report.json",
+    "review/ux_polish/ux_contract.json",
+    "review/ux_polish/ux_diagnosis.json",
+    "review/ux_polish/ux_evidence.json",
+)
+
+
+def _check_ux_polish_lane(run_dir: Path) -> list[str]:
+    """generic UX_POLISH 산출물 정합 (이슈 #8 §11).
+
+    상태 enum 밖 표기, catalog 밖/금지 operation, budget 초과, 검증 없는 included 과장,
+    product/ 밖 patch, viewport/keyboard 실증 없는 성공을 차단한다. HTTP 200/CSS 변경/
+    screenshot만으로는 성공을 인정하지 않는다."""
+    from repo_idea_miner.factory_ux_polish import (
+        FORBIDDEN_OPERATION_IDS,
+        MAX_OPERATIONS_PER_PRODUCT,
+        OPERATION_IDS,
+        UX_STATUSES,
+    )
+
+    report = _load_json(run_dir / "review/ux_polish/ux_polish_report.json")
+    if report is None:
+        return []
+    p: list[str] = []
+    if report.get("ux_status") not in UX_STATUSES:
+        p.append(f"ux polish: 알 수 없는 ux 상태 표기: {report.get('ux_status')}")
+    ops = report.get("operations") or []
+    for op in ops:
+        op_id = op.get("operation_id")
+        if op_id in FORBIDDEN_OPERATION_IDS:
+            p.append(f"ux polish: 금지된 자유 형식 operation: {op_id}")
+        elif op_id not in OPERATION_IDS:
+            p.append(f"ux polish: catalog 밖 operation: {op_id}")
+    validated = [op for op in ops if op.get("validation") == "PASS"]
+    if len(validated) > MAX_OPERATIONS_PER_PRODUCT:
+        p.append(f"ux polish: operation budget 초과 ({len(validated)} > "
+                 f"{MAX_OPERATIONS_PER_PRODUCT})")
+    for rel in report.get("patched_files") or []:
+        if not str(rel).replace("\\", "/").startswith("product/"):
+            p.append(f"ux polish: product/ 밖 patch: {rel}")
+    included = report.get("ux_polish_included") is True
+    if included and not report.get("applied") \
+            and report.get("ux_status") != "UX_READY":
+        p.append("ux polish: 실증 상태(APPLIED/UX_READY) 없이 included=true (과장)")
+    if report.get("applied") and any(
+            op.get("validation") != "PASS" and not op.get("rolled_back") for op in ops):
+        p.append("ux polish: 검증 안 된 operation이 rollback 없이 남음")
+    if not report.get("applied") and not included:
+        return p
+    for rel in UX_POLISH_LANE_REQUIRED:
+        if not (run_dir / rel).is_file():
+            p.append(f"ux polish: 필수 산출물 없음: {rel}")
+    evidence = _load_json(run_dir / "review/ux_polish/ux_evidence.json") or {}
+    if included:
+        if not report.get("diagnosis_before"):
+            p.append("ux polish: 진단 기록 없이 included=true (과장)")
+        for key in ("viewport_results", "keyboard_results"):
+            if not evidence.get(key):
+                p.append(f"ux polish: {key} 실증 없이 included=true (과장)")
+        vp = evidence.get("viewport_results") or {}
+        if any(not (v.get("narrow") or {}).get("pass") for v in vp.values()):
+            p.append("ux polish: narrow viewport FAIL인데 included=true")
+        kb = evidence.get("keyboard_results") or {}
+        if any(not k.get("pass") for k in kb.values()):
+            p.append("ux polish: keyboard 실증 FAIL인데 included=true")
+        js = evidence.get("js_syntax") or {}
+        if any(c.get("status") != "PASS" for c in js.values()):
+            p.append("ux polish: JS 파싱 검증 없이 included=true")
+        if not evidence.get("runtime_action_refs"):
+            p.append("ux polish: runtime action 실증 참조 없이 included=true "
+                     "(HTTP 200/CSS 변경만으로 성공 불인정)")
+        prov = evidence.get("ux_provenance") or {}
+        if prov.get("fresh") is not True or not prov.get("started_at"):
+            p.append("ux polish: fresh provenance 없는 evidence (과거 결과 재사용 의심)")
+    return p
+
+
 # ---------------------------------------------------------------- Validator registry (§12.3)
 #
 # 순서가 곧 artifact validation plan(§12.4)이다: frozen hash → spec repair → anti-hardcode
@@ -1461,6 +1539,10 @@ MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
                   markers=("review/viewer_polish/viewer_polish_report.json",),
                   inputs=VIEWER_POLISH_LANE_REQUIRED,
                   related_tests=("tests/test_factory_viewer_polish.py",)),
+    ValidatorSpec("ux_polish_lane", _MARKER_RUN_KINDS, _check_ux_polish_lane,
+                  markers=("review/ux_polish/ux_polish_report.json",),
+                  inputs=UX_POLISH_LANE_REQUIRED,
+                  related_tests=("tests/test_factory_ux_polish.py",)),
     ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
                   markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
                   inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"

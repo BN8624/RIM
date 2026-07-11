@@ -400,7 +400,12 @@ def derive_primary_gap(evidence: dict, quality: dict, stage_label: dict) -> str 
         return "RUNNER_BACKED_EXECUTION_REQUIRED"
     if not loop.get("product_loop_closed") or not q.get("user_can_understand_value_in_60s"):
         return "UX_POLISH_REQUIRED"
-    return "UX_POLISH_REQUIRED"
+    # 이슈 #8 §12.4: UX rung은 machine-checkable UX 실증(진단→bounded operation→검증)이
+    # 있어야만 닫힌다 — loop/60s 지표만으로 UX 결함(viewport/keyboard/feedback)을 덮지 않는다.
+    if not facts.get("has_ux_polish_report"):
+        return "UX_POLISH_REQUIRED"
+    # UX 실증까지 있으면 남은 것은 요구사항 coverage/사람 결정 레벨 — lane으로 보낼 gap이 없다.
+    return None
 
 
 _GAP_REFS = {
@@ -410,7 +415,8 @@ _GAP_REFS = {
     "INTERACTION_UI_REQUIRED": ("facts.authoring_ui", "loop.can_create_or_modify_input"),
     "VIEWER_POLISH_REQUIRED": ("facts.mismatch_count", "facts.viewer_reads_replay",
                                "facts.viewer_exists"),
-    "UX_POLISH_REQUIRED": ("quality.user_can_understand_value_in_60s", "loop.product_loop_closed"),
+    "UX_POLISH_REQUIRED": ("quality.user_can_understand_value_in_60s", "loop.product_loop_closed",
+                           "facts.has_ux_polish_report"),
     "CORE_PATCH_REQUIRED": ("facts.green_base", "facts.gate_fail"),
     "RUNNER_PATCH_REQUIRED": ("facts.runner_executable", "facts.green_base"),
     "SPEC_REPAIR_REQUIRED": ("facts.verdict", "facts.green_base"),

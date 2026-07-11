@@ -17,6 +17,7 @@ from repo_idea_miner.challenge_dashboard_data import (
     get_challenge_brief,
     get_challenge_detail,
     load_draft_execution,
+    load_ux_polish,
     load_viewer_polish,
     load_phase2c0,
     load_phase2c1,
@@ -780,6 +781,26 @@ def _viewer_polish_panel(vp: dict | None) -> str:
 </section>"""
 
 
+def _ux_polish_panel(ux: dict | None) -> str:
+    """generic ux polish 패널 — 진단/operation/included를 정직하게 표시한다 (이슈 #8 §11).
+
+    PARTIAL/HUMAN_REVIEW/UPSTREAM_BLOCKED/UNSUPPORTED를 완료로 감추지 않는다."""
+    if not ux:
+        return ""
+    problems = ux.get("problems") or []
+    ops = ux.get("operations") or []
+    diags = ux.get("diagnosis_before") or []
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">UX Polish (generic — 제한된 operation catalog lane)</h2>
+  <p class="meta">UX 상태: <b>{_e(ux.get('ux_status') or '-')}</b>
+    · included: {_e(str(ux.get('ux_polish_included')))}</p>
+  <p class="meta">진단: {_e(', '.join(diags) or '-')}</p>
+  <p class="meta">적용 operation: {_e(', '.join(ops) or '없음')}</p>
+  <div class="field"><span class="k">문제</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in problems) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 def _phase2d0_card_lines(p2d0: dict | None) -> str:
     """목록 카드에 추가하는 autopilot 줄: prior fitness/stage/next lane/status (§29)."""
     if not p2d0:
@@ -1310,6 +1331,7 @@ def render_product_detail(
         + _phase2c3_panel(load_phase2c3(run_root))
         + _draft_execution_panel(load_draft_execution(run_root))
         + _viewer_polish_panel(load_viewer_polish(run_root))
+        + _ux_polish_panel(load_ux_polish(run_root))
         + _phase2d0_panel(load_phase2d0(run_root), run_root)
         + _phase2d1_panel(load_phase2d1(run_root), run_root)
         + gate_html + qa_html + issues_html
