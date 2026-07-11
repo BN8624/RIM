@@ -11,9 +11,10 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS (1057) at issue #4 Phase C repair (e0cf88c);
+- tests: full suite PASS ×2 연속 (1107, flaky 0) at issue #6 마감;
   architecture-build 연속 2회 byte-identical; dashboard smoke(/, /products,
-  /product/5·13·19·21·22 전부 200 + 정직 상태 표시) PASS at issue #4 마감
+  #47 run5 정상, fresh child 3종 generic draft_execution panel HTTP 렌더
+  EXECUTED·validation PASS, 실패 상태 enum 7종 정직 표시, mock success 0) PASS
 - architecture_check: PASS + WARN 채널 (literal-only artifacts 집계, route 미선언 CLI,
   AI_INDEX component query primary 초과 — 모두 §17.2 비차단)
 - known_flaky: []
@@ -99,17 +100,24 @@ RECENT_SEMANTIC_CHANGES:
   실측으로 효과 확인(A: 유령 CORE_PATCH 소멸, C: hold packet이 SPEC_REPAIR_REQUIRED 정확 표시).
   모든 loop base hash PASS, Round1 artifact 보존
 
+- Issue #6 done (RUNNER_BACKED_DRAFT_EXECUTION 도메인 중립화, 커밋 113902e/55ab9ec):
+  executor = factory_runner_backed_execution.run_runner_backed_execution — 도메인 중립
+  (execution contract는 build_interaction_contract 재사용, side effect = temp copy+protected
+  hash, 상태 enum pre 7종+실행 8종, EXECUTED≠제품 성공). 검증 도메인 3종 동일 executor:
+  SRS 27(child 030900)·table 17(child 030900_1)·filesystem 54(child 030809) 전부
+  EXECUTED+validate PASS, graph는 legacy 2C-3 adapter 격리. #54 최종 상태 =
+  PRODUCT_CANDIDATE (strict, acceptance 14/14, mock loop iter1 lane APPLIED — 실질 승격 1건).
+  fresh 2종(27·17)은 has_execution_report false→true·RUNNER_BACKED rung 제거,
+  남은 gap은 실행과 무관한 진짜 viewer 결함(VIEWER_POLISH_REQUIRED)으로 정직 HOLD.
+  base 3종+parent 3종 hash 불변, invalid/mock success 0
+
 OPEN_BLOCKERS:
 - id: hold_54
-  state: RESOLVED as human blocker (이슈 #5 Decision B) — technical next action으로 이동
-  evidence: "partial spec repair 체인 완료: Y1(002210) partial apply(001/002 APPLIED,
-    003 DEFERRED_CORE_DEPENDENCY — spec_repair_scenario_decisions.json) → 의미 확정
-    core patch(engine target_id=실패 action의 대상 id) → Y2(002616) full apply →
-    7/7 gates + green REVIEW_READY + validate PASS → interaction child(004810)
-    generic INTERACTION_UI 적용, stage INTERACTION_CANDIDATE, base 021635/174740 불변.
-    #54 최종 상태 = PARTIAL_PRODUCT"
-  next_action: "기술 후속(사람 의미 결정 불필요): RUNNER_BACKED_DRAFT_EXECUTION lane
-    승인·실행으로 실행 통합"
+  state: RESOLVED — closed (이슈 #6에서 실행 통합 완료)
+  evidence: "partial spec repair 체인(이슈 #5) 후 RUNNER_BACKED_DRAFT_EXECUTION lane
+    APPLIED(child 030809): INTERACTION_CANDIDATE → strict PRODUCT_CANDIDATE
+    (acceptance 14/14), base 021635/004810 불변. #54 최종 상태 = PRODUCT_CANDIDATE"
+  next_action: 없음 — 실행 통합 완료로 종결
 - id: hold_47
   state: RESOLVED — removed (이슈 #5 Decision A)
   evidence: "final human approval: APPROVED / factory verdict: PRODUCT_CANDIDATE /
@@ -120,9 +128,10 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 자동 가능 후보(단일): RUNNER_BACKED_DRAFT_EXECUTION lane의 도메인 중립화 —
-   interaction console(#54·fresh 2종)에 실행 통합. 이번 실측에서 #54·fresh의 남은 gap이
-   전부 RUNNER_BACKED_EXECUTION_REQUIRED로 수렴(lane은 사람 승인 정책)
+1. 다음 자동 가능 후보(단일): fresh 2종(27 SRS·17 table)의 진짜 viewer 결함 수리
+   (VIEWER_POLISH lane) — 27은 viewer가 replay/scenarios/${id}.json fetch(실파일은
+   replay_scenario_*.json), 17은 event.type/message vs replay 키 mismatch.
+   두 도메인의 남은 최우선 gap이 동일 계열로 수렴
 2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    literal-only artifact 185개의 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
    은 필요 시 별도 주문
