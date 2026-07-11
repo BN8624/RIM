@@ -239,6 +239,7 @@ def verify_candidate(run_dir: Path, out_dir: Path,
         "stage": stage, "primary_gap": (desks.get("gap") or {}).get("primary_gap"),
         "recommended_next_lane": (desks.get("lane") or {}).get("recommended_next_lane"),
         "gap_override": desks.get("gap_override"),
+        "human_decision_normalization": desks.get("human_decision_normalization"),
         "problems": desks.get("problems") or [],
     })
 
@@ -278,7 +279,8 @@ def verify_candidate(run_dir: Path, out_dir: Path,
 # ---------------------------------------------------------------- HOLD packet (§11)
 
 def _write_hold_packet(loop_dir: Path, state: dict, reason: str, question: str,
-                       options: list[str]) -> dict:
+                       options: list[str], reason_class: str | None = None,
+                       human_decision: dict | None = None) -> dict:
     packet = {
         "best_candidate_run_dir": state.get("parent_run_dir"),
         "current_stage": state.get("current_stage"),
@@ -288,6 +290,9 @@ def _write_hold_packet(loop_dir: Path, state: dict, reason: str, question: str,
         "failure_signatures": state.get("failure_signatures") or [],
         "protection_results": state.get("protection_results") or {},
         "why_not_automated": reason,
+        # 이슈 #12 §9: semantic HOLD와 execution/budget blocked를 같은 표시로 마스킹하지 않는다
+        "hold_reason_class": reason_class or "EXECUTION_BLOCKED",
+        "human_decision_normalization": human_decision,
         "single_question_for_human": question,
         "recommended_options": options,
     }
@@ -372,6 +377,8 @@ def run_closed_product_loop(
     attempt_diffs: list[dict] = []
     stop: list[str] = []
     hold_reason = None
+    hold_reason_class = None  # SEMANTIC_HOLD | EXECUTION_BLOCKED | BUDGET_EXHAUSTED (이슈 #12 §9)
+    hold_human_decision = None
     children_root = Path(output_dir)
     gap_escalation: dict | None = None  # lane 결과 evidence로 다음 iteration gap을 승급 (§10)
 
@@ -409,6 +416,7 @@ def run_closed_product_loop(
             stop.append("evidence 부족/desk 실패" if ftype != AUTOPILOT_INFRA_FAIL
                         else "live 인프라 실패 (재시도 소진)")
             hold_reason = f"judge desk 실패: {ftype}"
+            hold_reason_class = "EXECUTION_BLOCKED"
             it.update(desk_status="FAIL", failure_type=ftype)
             result["iterations"].append(it)
             break
@@ -441,12 +449,28 @@ def run_closed_product_loop(
             stop.append("ARCHIVE 판정")
             result["iterations"].append(it)
             break
+        # human_decision_required는 run_judgment_desks가 정규화한 값이다 (이슈 #12) —
+        # semantic hold(HOLD_FOR_HUMAN lane 또는 semantic-hold gap)일 때만 true.
         if lane in (None, "HOLD_FOR_HUMAN") or \
                 (desks.get("lane") or {}).get("human_decision_required"):
             stop.append("human_decision_required")
             hold_reason = "judge가 사람 결정 필요로 판정"
+            hold_reason_class = "SEMANTIC_HOLD"
+            hold_human_decision = desks.get("human_decision_normalization")
+            it["human_decision"] = hold_human_decision
             result["iterations"].append(it)
             break
+
+        # semantic HOLD가 아닌 실행 lane — approval policy는 apply-approval 의미로만 처리한다
+        # (이슈 #12 §9): child run draft apply라 base는 불변, 최종 승인은 사람 검수 단계.
+        policy = LANE_POLICY.get(lane) or {}
+        it["execution_policy"] = {
+            "auto_execute_allowed": policy.get("auto_execute_allowed"),
+            "requires_human_approval_before_apply": policy.get("requires_human_approval_before_apply"),
+            "handling": ("AUTO_EXECUTE" if policy.get("auto_execute_allowed")
+                         else "APPLY_APPROVAL_PENDING"),
+            "note": "child run draft apply — base 불변, semantic HOLD 아님",
+        }
 
         if not execute:
             stop.append("--execute 미지정 → judge/probe only (§13)")
@@ -457,11 +481,13 @@ def run_closed_product_loop(
         if lane_attempts.get(lane, 0) >= b["max_attempts_per_lane"]:
             stop.append(f"lane {lane} 시도 예산 초과 ({b['max_attempts_per_lane']})")
             hold_reason = f"lane {lane} 예산 소진"
+            hold_reason_class = "BUDGET_EXHAUSTED"
             result["iterations"].append(it)
             break
         if lane in _HIGH_RISK_LANES and high_risk_attempts >= b["max_high_risk_lane_attempts"]:
             stop.append(f"high risk lane 시도 예산 초과 ({b['max_high_risk_lane_attempts']})")
             hold_reason = f"high risk lane {lane} 예산 소진"
+            hold_reason_class = "BUDGET_EXHAUSTED"
             result["iterations"].append(it)
             break
 
@@ -509,12 +535,14 @@ def run_closed_product_loop(
             if signatures_seen[sig] >= 2:
                 stop.append("같은 failure signature 2회")
                 hold_reason = f"failure signature 반복: {sig}"
+                hold_reason_class = "EXECUTION_BLOCKED"
                 result["iterations"].append(it)
                 break
         if lane_result["protected_hash_check"] != "PASS" or \
                 lane_result["allowed_scope_check"] != "PASS":
             stop.append("protected scope 변경/allowed scope 위반")
             hold_reason = "보호 장치 위반 — 자동 진행 금지"
+            hold_reason_class = "EXECUTION_BLOCKED"
             result["iterations"].append(it)
             break
         if lane_result["status"] != "APPLIED" or child is None:
@@ -524,6 +552,7 @@ def run_closed_product_loop(
             if consecutive_no_progress >= b["max_consecutive_no_progress"]:
                 stop.append("연속 무개선 2회")
                 hold_reason = "lane 실행이 연속으로 개선을 만들지 못함"
+                hold_reason_class = "EXECUTION_BLOCKED"
             continue
 
         # ---- Child 검증 체인 (§14) + Progress (§9) — artifact root는 resolve_artifact_root가
@@ -562,11 +591,13 @@ def run_closed_product_loop(
             if consecutive_no_progress >= b["max_consecutive_no_progress"]:
                 stop.append("연속 무개선 2회")
                 hold_reason = "연속 무개선 — 전략 변경 필요"
+                hold_reason_class = "EXECUTION_BLOCKED"
         result["iterations"].append(it)
 
     if iteration >= b["max_iterations"] and not stop:
         stop.append("max_iterations 도달")
         hold_reason = hold_reason or "iteration 예산 소진"
+        hold_reason_class = hold_reason_class or "BUDGET_EXHAUSTED"
 
     # ---- 마무리: base 불변 증명 + lineage + HOLD packet + 요약
     base_hash_after = compute_loop_protected_hashes(base_run_dir)
@@ -583,7 +614,8 @@ def run_closed_product_loop(
         result["hold_packet"] = _write_hold_packet(
             loop_dir, state_for_hold(result["final_stage"], gaps), hold_reason,
             "현재 candidate를 이 상태로 검수/출시할지, 사람이 남은 gap을 직접 수정할지 결정해 주세요.",
-            ["현재 candidate 그대로 사람 검수", "남은 gap 수동 수정 후 loop 재실행", "ARCHIVE"])
+            ["현재 candidate 그대로 사람 검수", "남은 gap 수동 수정 후 loop 재실행", "ARCHIVE"],
+            reason_class=hold_reason_class, human_decision=hold_human_decision)
 
     result["stop_conditions"] = stop
     result["active_candidate_run_dir"] = str(parent_run_dir.as_posix())
@@ -597,6 +629,7 @@ def run_closed_product_loop(
     summary = {
         "phase": "2d1", "loop_id": loop_id, "mode": mode, "execute": execute,
         "budgets": b, "status": result["status"], "stop_conditions": stop,
+        "hold_reason_class": hold_reason_class,
         "iteration_count": len(result["iterations"]),
         "final_stage": result["final_stage"],
         "active_candidate_run_dir": result["active_candidate_run_dir"],
@@ -634,5 +667,6 @@ def run_closed_product_loop(
         "status": result["status"],
         "base_hash_status": result["base_hash_status"],
         "hold_for_human": result["hold_packet"] is not None,
+        "hold_reason_class": hold_reason_class,
     })
     return result

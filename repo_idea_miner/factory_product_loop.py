@@ -39,7 +39,9 @@ from repo_idea_miner.factory_autopilot_schemas import (
     RepairBlueprint,
     STAGE_RANK,
     UnifiedDecisionPacket,
+    normalize_human_decision,
     validate_against_hard_blockers,
+    validate_human_decision_consistency,
     validate_judgment_evidence,
     validate_stage_gap_lane_consistency,
     write_schema_files,
@@ -1061,6 +1063,16 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
         if desk_result.get("schema_repair_report"):
             out["schema_repair_reports"].append(desk_result["schema_repair_report"])
 
+    def _normalize_lane_decision():
+        # 이슈 #12: raw human_decision_required는 신뢰하지 않는다 — lane/gap 기준 결정론 정규화.
+        # 교정 사실은 raw/normalized/reason evidence로 남긴다 (mock은 항상 RAW_CONSISTENT).
+        if out["lane"] is None:
+            return
+        report = normalize_human_decision(out["gap"], out["lane"])
+        if report["corrected"]:
+            out["lane"]["human_decision_required"] = report["normalized_human_decision_required"]
+        out["human_decision_normalization"] = report
+
     if gemma_mode == "unified":
         prompt = build_unified_prompt(evidence, quality, hard, LANE_TEMPLATES)
         prompts_out["unified"] = prompt
@@ -1085,6 +1097,7 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
             template = LANE_TEMPLATES.get(out["lane"]["recommended_next_lane"]) or {}
             out["slots"] = mock_order_slots(evidence, out["gap"], out["lane"], template)
             out["blueprint"] = mock_repair_blueprint(evidence, out["gap"], out["lane"], template)
+        _normalize_lane_decision()
         out["status"] = "PASS"
         return out
 
@@ -1133,6 +1146,7 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
         out["lane"] = res["raw"]
 
     if not include_order:
+        _normalize_lane_decision()
         out["status"] = "PASS"  # closed loop(2D-1)는 order/blueprint desk를 쓰지 않는다
         return out
 
@@ -1156,6 +1170,7 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
         out.update(failure_type=res["failure_type"], problems=res["problems"])
         return out
     out["blueprint"] = res["raw"]
+    _normalize_lane_decision()
     out["status"] = "PASS"
     return out
 
@@ -1280,6 +1295,15 @@ def run_product_loop(
                 stop_conditions.append("stage/gap/lane 정합성 실패")
                 iterations.append(it)
                 break
+            # 이슈 #12: 정규화 이후에도 INV-1~3이 깨져 있으면 fail-closed로 거부한다
+            problems = validate_human_decision_consistency(gap_raw, lane_raw)
+            if problems:
+                desks["status"], desks["failure_type"] = "FAIL", AUTOPILOT_INVALID_OUTPUT
+                desks["problems"] += problems
+                it.update(failure_type=AUTOPILOT_INVALID_OUTPUT, desk_status="FAIL")
+                stop_conditions.append("human decision 계약 위반")
+                iterations.append(it)
+                break
 
         it["stage"] = stage_raw.get("stage")
         it["primary_gap"] = gap_raw.get("primary_gap")
@@ -1293,6 +1317,7 @@ def run_product_loop(
         if stage_raw.get("stage") == "ARCHIVE":
             stop_conditions.append("ARCHIVE 판정")
             break
+        # human_decision_required는 정규화된 값이다 (이슈 #12) — semantic hold일 때만 true
         if (lane_raw or {}).get("human_decision_required") or \
                 (lane_raw or {}).get("recommended_next_lane") == "HOLD_FOR_HUMAN":
             stop_conditions.append("human_decision_required = true")
@@ -1333,6 +1358,11 @@ def run_product_loop(
         _write_json(review_dir / "recommended_next_lane.json", desks["lane"])
         _write_text(review_dir / "recommended_next_lane.md", render_lane_md(desks["lane"]))
         result["next_lane"] = desks["lane"].get("recommended_next_lane")
+        if desks.get("human_decision_normalization"):
+            # 이슈 #12: raw→normalized 교정 evidence — 모델 출력을 조용히 바꾸지 않는다
+            _write_json(review_dir / "human_decision_normalization.json",
+                        desks["human_decision_normalization"])
+            result["human_decision_normalization"] = desks["human_decision_normalization"]
 
     order = None
     if desks and desks["slots"] is not None and desks["lane"] is not None:

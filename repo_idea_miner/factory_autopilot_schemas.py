@@ -59,6 +59,9 @@ GAP_TO_LANE = {
     "ARCHIVE_RECOMMENDED": "ARCHIVE",
 }
 
+# semantic hold를 뜻하는 gap — 이 gap 또는 HOLD_FOR_HUMAN lane일 때만 사람 의미 결정이 필요하다 (이슈 #12)
+SEMANTIC_HOLD_GAPS = ("EVIDENCE_INSUFFICIENT", "SCOPE_CREEP_RISK")
+
 # lane risk / 실행 정책 (§14.1). auto_execute는 mock/safe lane에서만 일부 허용.
 LANE_POLICY = {
     "SPEC_REPAIR": {"lane_risk": "high", "dry_run_allowed": True,
@@ -293,11 +296,16 @@ class RecommendedNextLane(BaseModel):
     evidence_refs: list[str] = Field(min_length=1)
     lane_risk: str
     dry_run_allowed: bool
-    auto_execute_allowed: bool
-    requires_human_approval_before_apply: bool
+    auto_execute_allowed: bool = Field(
+        description="현재 모드·lane policy상 사람 승인 없이 자동 적용 가능한가 — semantic 결정 필요와 독립")
+    requires_human_approval_before_apply: bool = Field(
+        description="다음 lane 의미는 확정됐고 실제 apply 전 승인 절차만 필요한가 — semantic HOLD가 아니다")
     allowed_file_scopes: list[str] = Field(default_factory=list)
     protected_file_scopes: list[str] = Field(default_factory=list)
-    human_decision_required: bool = False
+    human_decision_required: bool = Field(
+        default=False,
+        description="사람이 spec/golden/정책 의미를 선택해야 하는 unresolved semantic choice가 있는가 — "
+                    "requires_human_approval_before_apply를 복사하지 않는다")
 
 
 class RepairAction(BaseModel):
@@ -504,6 +512,63 @@ def validate_stage_gap_lane_consistency(stage_label: dict, gap: dict, lane: dict
                     "requires_human_approval_before_apply"):
             if lane.get(key) != policy[key]:
                 p.append(f"lane policy 불일치: {rec_lane}.{key}={lane.get(key)} (정책: {policy[key]})")
+    return p
+
+
+# ---------------------------------------------------------------- human decision 결정론 정규화 (이슈 #12)
+
+def normalize_human_decision(gap: dict | None, lane: dict) -> dict:
+    """live desk raw human_decision_required를 lane/gap 기준으로 결정론적으로 정규화한다.
+
+    canonical 의미: human_decision_required는 unresolved semantic choice(HOLD_FOR_HUMAN lane
+    또는 SEMANTIC_HOLD_GAPS gap)일 때만 true다. requires_human_approval_before_apply(apply 전
+    승인 절차)와 auto_execute_allowed(자동 실행 policy)는 semantic 결정과 독립이며 복사 금지다.
+    raw 값은 교정하되 조용히 바꾸지 않는다 — raw/normalized/reason을 evidence로 반환한다.
+    """
+    raw = bool(lane.get("human_decision_required"))
+    rec_lane = lane.get("recommended_next_lane")
+    primary = (gap or {}).get("primary_gap")
+    semantic_hold = rec_lane == "HOLD_FOR_HUMAN" or primary in SEMANTIC_HOLD_GAPS
+    if raw == semantic_hold:
+        reason_code = "RAW_CONSISTENT"
+    elif semantic_hold:
+        reason_code = "SEMANTIC_HOLD_FORCED_TRUE"  # Case 1: HOLD lane인데 raw false
+    else:
+        reason_code = "APPROVAL_CONFUSION_CORRECTED_FALSE"  # Case 2: 실행 lane인데 raw true
+    policy = LANE_POLICY.get(rec_lane) or {}
+    return {
+        "raw_human_decision_required": raw,
+        "normalized_human_decision_required": semantic_hold,
+        "corrected": raw != semantic_hold,
+        "reason_code": reason_code,
+        "semantic_hold_expected": semantic_hold,
+        "recommended_next_lane": rec_lane,
+        "primary_gap": primary,
+        "semantic_hold_gaps": list(SEMANTIC_HOLD_GAPS),
+        "lane_policy_refs": {
+            "auto_execute_allowed": policy.get("auto_execute_allowed"),
+            "requires_human_approval_before_apply": policy.get("requires_human_approval_before_apply"),
+        },
+    }
+
+
+def validate_human_decision_consistency(gap: dict | None, lane: dict) -> list[str]:
+    """정규화 이후 불변식 검사 (이슈 #12 INV-1~3). 위반은 invalid desk output이다.
+
+    INV-1/2: semantic hold(lane==HOLD_FOR_HUMAN 또는 semantic-hold gap) → true.
+    INV-3: semantic hold 아님 → false. approval/auto_execute policy는 이 판정과 독립(INV-4/5).
+    """
+    p: list[str] = []
+    rec_lane = lane.get("recommended_next_lane")
+    primary = (gap or {}).get("primary_gap")
+    semantic_hold = rec_lane == "HOLD_FOR_HUMAN" or primary in SEMANTIC_HOLD_GAPS
+    hd = lane.get("human_decision_required")
+    if semantic_hold and hd is not True:
+        p.append(f"INV-1/2 위반: semantic hold(lane={rec_lane}, gap={primary})인데 "
+                 f"human_decision_required={hd}")
+    if not semantic_hold and hd is not False:
+        p.append(f"INV-3 위반: semantic hold 아님(lane={rec_lane}, gap={primary})인데 "
+                 f"human_decision_required={hd}")
     return p
 
 

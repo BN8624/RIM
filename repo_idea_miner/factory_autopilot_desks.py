@@ -96,6 +96,11 @@ _EVIDENCE_RULES = """evidence_refs 규칙:
 
 _OUTPUT_RULES = "출력은 JSON 객체 하나만. 설명 문장/마크다운/코드펜스 금지."
 
+_HUMAN_DECISION_RULES = """human_decision_required 규칙 (semantic 결정 ≠ 승인):
+- human_decision_required는 사람이 spec/golden/정책 의미를 선택해야 하는 unresolved semantic choice가 있을 때만 true다.
+- requires_human_approval_before_apply(apply 전 승인 절차)를 human_decision_required로 복사하지 마라 — 둘은 다른 의미다.
+- lane이 HOLD_FOR_HUMAN이 아니고 semantic 질문이 없으면 human_decision_required=false다."""
+
 
 def _evidence_block(evidence: dict, quality: dict, hard: dict) -> str:
     facts = {k: v for k, v in (evidence.get("facts") or {}).items()
@@ -172,6 +177,8 @@ gap → lane 매핑 규칙: {json.dumps(GAP_TO_LANE, ensure_ascii=False)}
 lane risk policy (출력의 lane_risk/dry_run_allowed/auto_execute_allowed/requires_human_approval_before_apply는
 이 정책 값을 그대로 써야 한다):
 {policy_text}
+
+{_HUMAN_DECISION_RULES}
 
 {_EVIDENCE_RULES}
 추가 규칙: evidence_refs에 primary_gap evidence_refs 중 최소 1개를 포함하라.
@@ -251,6 +258,8 @@ recommended_next_lane, repair_blueprint, auto_order_slots, scope_guard_draft.
 gap → lane 매핑: {json.dumps(GAP_TO_LANE, ensure_ascii=False)}
 lane risk policy(그대로 사용): {json.dumps(LANE_POLICY, ensure_ascii=False)}
 repair_blueprint.apply_allowed는 반드시 false다.
+
+{_HUMAN_DECISION_RULES}
 
 {_EVIDENCE_RULES}
 
