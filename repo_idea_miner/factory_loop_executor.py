@@ -146,7 +146,16 @@ JSON만 출력. Schema: {{"items": [{{"requirement": "...", "status": "...", "ev
 
 def _judge_requirement_coverage(run_dir: Path, profile: dict, probe: dict,
                                 known_refs: set, executor, use_llm: bool) -> dict:
-    """requirement coverage를 desk로 판정하고 근거 없는 낙관 판정을 unknown으로 강등한다."""
+    """requirement coverage를 desk로 판정하고 근거 없는 낙관 판정을 unknown으로 강등한다.
+
+    유효한 fresh coverage matrix(이슈 #9 — 결정론적 probe 실증 기반)가 있으면 그것이
+    정본이다. 검증 실패한 matrix는 채택하지 않고 desk 경로로 떨어진다."""
+    from repo_idea_miner.factory_coverage import load_matrix_judge_coverage
+    matrix = load_matrix_judge_coverage(run_dir)
+    if matrix is not None and matrix.get("valid"):
+        return {"judge_coverage": matrix["judge_coverage"], "problems": [],
+                "desk_status": "COVERAGE_MATRIX"}
+    matrix_problems = list((matrix or {}).get("problems") or [])
     normalized = _load_json(run_dir / "normalized_challenge.json") or {}
     requirements = [str(r) for r in
                     (normalized.get("success_conditions") or [])
@@ -160,7 +169,7 @@ def _judge_requirement_coverage(run_dir: Path, profile: dict, probe: dict,
     prompt = _build_coverage_prompt(requirements, profile, probe, list(known_refs))
     res = execute_desk(executor, "requirement_coverage", prompt,
                        RequirementCoverageJudgment, mock_output=mock)
-    problems: list[str] = list(res.get("problems") or [])
+    problems: list[str] = matrix_problems + list(res.get("problems") or [])
     judged: dict = {}
     if res["status"] == "PASS":
         for item in (res["raw"] or {}).get("items") or []:

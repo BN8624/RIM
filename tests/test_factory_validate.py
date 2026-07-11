@@ -94,7 +94,7 @@ def test_marker_validator_registry_is_single_source(tmp_path):
     assert ids == ["frozen_hash_guard", "spec_repair_outputs", "spec_repair_apply",
                    "anti_hardcode_patch", "phase2c0", "phase2c1", "phase2c2", "phase2c3",
                    "interaction_ui", "draft_execution_lane", "viewer_polish_lane",
-                   "ux_polish_lane", "phase2d0", "phase2d1"]
+                   "ux_polish_lane", "coverage_matrix", "phase2d0", "phase2d1"]
     for spec in MARKER_VALIDATORS:
         assert set(spec.run_kinds) == {RUN_KIND_CONTINUATION, RUN_KIND_CORE}, spec.validator_id
         assert spec.related_tests, spec.validator_id

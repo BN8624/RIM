@@ -491,7 +491,7 @@
    "path_pattern": "base_hash_before.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 352,
+   "source_line": 361,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -509,7 +509,7 @@
    "path_pattern": "base_hash_check.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 566,
+   "source_line": 575,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -608,7 +608,7 @@
    "path_pattern": "capability_profile.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 222,
+   "source_line": 231,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -842,7 +842,7 @@
    "path_pattern": "continuation_run_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1809,
+   "source_line": 1824,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -986,7 +986,7 @@
    "path_pattern": "core_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 186,
+   "source_line": 195,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -1178,6 +1178,42 @@
    "source_line": 0,
    "source_path": "repo_idea_miner/factory_run_layout.py",
    "symbol_id": "repo_idea_miner.factory_run_layout"
+  },
+  {
+   "artifact_id": "coverage_adjudication_json",
+   "path_pattern": "coverage_adjudication.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_coverage.py",
+   "symbol_id": "repo_idea_miner.factory_coverage"
+  },
+  {
+   "artifact_id": "coverage_matrix_json",
+   "path_pattern": "coverage_matrix.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_coverage.py",
+   "symbol_id": "repo_idea_miner.factory_coverage"
+  },
+  {
+   "artifact_id": "coverage_probe_results_json",
+   "path_pattern": "coverage_probe_results.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_coverage.py",
+   "symbol_id": "repo_idea_miner.factory_coverage"
+  },
+  {
+   "artifact_id": "coverage_probe_spec_json",
+   "path_pattern": "coverage_probe_spec.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_coverage.py",
+   "symbol_id": "repo_idea_miner.factory_coverage"
   },
   {
    "artifact_id": "current_state_md",
@@ -1715,7 +1751,7 @@
    "path_pattern": "factory_validate.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 216,
+   "source_line": 225,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -1733,7 +1769,7 @@
    "path_pattern": "failure_classification.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1810,
+   "source_line": 1825,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -2138,7 +2174,7 @@
    "path_pattern": "gate_rerun.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 203,
+   "source_line": 212,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2147,7 +2183,7 @@
    "path_pattern": "gate_rerun_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1813,
+   "source_line": 1828,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -2408,7 +2444,7 @@
    "path_pattern": "green_base_promotion.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1812,
+   "source_line": 1827,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -2543,7 +2579,7 @@
    "path_pattern": "hold_for_human_packet.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 285,
+   "source_line": 294,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2777,7 +2813,7 @@
    "path_pattern": "judge_snapshot.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 228,
+   "source_line": 237,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2813,7 +2849,7 @@
    "path_pattern": "lane_result.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 468,
+   "source_line": 477,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2840,7 +2876,7 @@
    "path_pattern": "lineage.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 567,
+   "source_line": 576,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2975,7 +3011,7 @@
    "path_pattern": "loop_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 599,
+   "source_line": 608,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -3092,7 +3128,16 @@
    "path_pattern": "normalized_challenge.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 150,
+   "source_line": 289,
+   "source_path": "repo_idea_miner/factory_coverage.py",
+   "symbol_id": "repo_idea_miner.factory_coverage"
+  },
+  {
+   "artifact_id": "normalized_challenge_json",
+   "path_pattern": "normalized_challenge.json",
+   "provenance": "AST_IO_CALL",
+   "role": "CONSUMES",
+   "source_line": 159,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -3353,7 +3398,7 @@
    "path_pattern": "phase17_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1814,
+   "source_line": 1829,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -4055,7 +4100,7 @@
    "path_pattern": "phase2d1_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 600,
+   "source_line": 609,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4082,7 +4127,7 @@
    "path_pattern": "post_product_anti_hardcode.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 212,
+   "source_line": 221,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4118,7 +4163,7 @@
    "path_pattern": "product_acceptance.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 249,
+   "source_line": 258,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4622,7 +4667,7 @@
    "path_pattern": "progress_comparison.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 533,
+   "source_line": 542,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4631,7 +4676,7 @@
    "path_pattern": "progress_vector.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 258,
+   "source_line": 267,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4874,7 +4919,7 @@
    "path_pattern": "repair_plan.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1811,
+   "source_line": 1826,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -5081,9 +5126,36 @@
    "path_pattern": "requirement_coverage.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 241,
+   "source_line": 250,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
+  },
+  {
+   "artifact_id": "review_coverage_coverage_adjudication_json",
+   "path_pattern": "review/coverage/coverage_adjudication.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_validate.py",
+   "symbol_id": "repo_idea_miner.factory_validate"
+  },
+  {
+   "artifact_id": "review_coverage_coverage_matrix_json",
+   "path_pattern": "review/coverage/coverage_matrix.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_validate.py",
+   "symbol_id": "repo_idea_miner.factory_validate"
+  },
+  {
+   "artifact_id": "review_coverage_coverage_probe_results_json",
+   "path_pattern": "review/coverage/coverage_probe_results.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_validate.py",
+   "symbol_id": "repo_idea_miner.factory_validate"
   },
   {
    "artifact_id": "review_draft_execution_draft_execution_dashboard_summary_json",
@@ -6017,7 +6089,7 @@
    "path_pattern": "review/ux_polish/ux_evidence.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1461,
+   "source_line": 1470,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6062,7 +6134,7 @@
    "path_pattern": "review/ux_polish/ux_polish_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1429,
+   "source_line": 1438,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6350,7 +6422,7 @@
    "path_pattern": "runner_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 187,
+   "source_line": 196,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -6425,6 +6497,15 @@
    "source_line": 0,
    "source_path": "repo_idea_miner/factory_core_pipeline.py",
    "symbol_id": "repo_idea_miner.factory_core_pipeline"
+  },
+  {
+   "artifact_id": "runner_contract_json",
+   "path_pattern": "runner_contract.json",
+   "provenance": "AST_STRING_LITERAL",
+   "role": "LITERAL_REFERENCE",
+   "source_line": 0,
+   "source_path": "repo_idea_miner/factory_coverage.py",
+   "symbol_id": "repo_idea_miner.factory_coverage"
   },
   {
    "artifact_id": "runner_contract_json",
@@ -8329,6 +8410,7 @@
    ],
    "component_id": "validation",
    "modules": [
+    "factory_coverage",
     "factory_validate"
    ],
    "status": "canonical"
@@ -8675,7 +8757,7 @@
  ],
  "health": {
   "import_cycles": [],
-  "module_count": 78,
+  "module_count": 79,
   "orphan_modules": [],
   "over_500_loc": [
    "repo_idea_miner/architecture_atlas.py",
@@ -8749,7 +8831,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1133,
+  "test_count": 1157,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -11695,6 +11777,62 @@
    ]
   },
   {
+   "artifact_refs": [
+    "coverage_adjudication.json",
+    "coverage_matrix.json",
+    "coverage_probe_results.json",
+    "coverage_probe_spec.json",
+    "normalized_challenge.json",
+    "runner_contract.json"
+   ],
+   "component": "validation",
+   "imported_by": [
+    "repo_idea_miner.factory_loop_executor",
+    "repo_idea_miner.factory_validate"
+   ],
+   "imports": [
+    {
+     "from": "repo_idea_miner.factory_run_layout",
+     "names": [
+      "resolve_artifact_root"
+     ]
+    }
+   ],
+   "loc": 368,
+   "module": "repo_idea_miner.factory_coverage",
+   "path": "repo_idea_miner/factory_coverage.py",
+   "private_symbols": [
+    "_ROW_REQUIRED_FIELDS",
+    "_STATUS_TO_JUDGE",
+    "_aggregate",
+    "_dig",
+    "_eval_check",
+    "_load_json",
+    "_run_scenario",
+    "_validate_rows",
+    "_write_json"
+   ],
+   "public_symbols": [
+    "ADJUDICATION_NAME",
+    "COVERAGE_STATUSES",
+    "COVERAGE_SUBDIR",
+    "FAILURE_CLASSES",
+    "MATRIX_NAME",
+    "PROBE_CHECK_KINDS",
+    "PROBE_RESULTS_NAME",
+    "PROBE_SPEC_NAME",
+    "REQUIREMENT_KINDS",
+    "artifact_fingerprint",
+    "build_coverage_matrix",
+    "load_matrix_judge_coverage",
+    "run_coverage_probes",
+    "validate_coverage_artifacts"
+   ],
+   "tests": [
+    "test_factory_coverage"
+   ]
+  },
+  {
    "artifact_refs": [],
    "component": "storage",
    "imported_by": [
@@ -12122,7 +12260,7 @@
      ]
     }
    ],
-   "loc": 541,
+   "loc": 578,
    "module": "repo_idea_miner.factory_interaction_ui",
    "path": "repo_idea_miner/factory_interaction_ui.py",
    "private_symbols": [
@@ -12150,6 +12288,7 @@
     "run_interaction_ui"
    ],
    "tests": [
+    "test_factory_coverage",
     "test_factory_interaction_ui",
     "test_factory_runner_backed_execution"
    ]
@@ -12415,6 +12554,12 @@
      ]
     },
     {
+     "from": "repo_idea_miner.factory_coverage",
+     "names": [
+      "load_matrix_judge_coverage"
+     ]
+    },
+    {
      "from": "repo_idea_miner.factory_db",
      "names": [
       "find_product_run_id_by_run_dir"
@@ -12488,7 +12633,7 @@
      ]
     }
    ],
-   "loc": 629,
+   "loc": 638,
    "module": "repo_idea_miner.factory_loop_executor",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "private_symbols": [
@@ -12509,6 +12654,7 @@
     "verify_candidate"
    ],
    "tests": [
+    "test_factory_coverage",
     "test_factory_phase2d1_cli_dashboard",
     "test_factory_phase2d1_loop"
    ]
@@ -12780,6 +12926,7 @@
     "evaluate_product_acceptance"
    ],
    "tests": [
+    "test_factory_coverage",
     "test_factory_phase2d1_loop"
    ]
   },
@@ -13595,6 +13742,7 @@
    "imported_by": [
     "repo_idea_miner.cli_handlers",
     "repo_idea_miner.factory_anti_hardcode",
+    "repo_idea_miner.factory_coverage",
     "repo_idea_miner.factory_draft_execution",
     "repo_idea_miner.factory_interaction_ui",
     "repo_idea_miner.factory_lane_executors",
@@ -14336,6 +14484,9 @@
     "recommended_next_lane.md",
     "repair_blueprint.json",
     "repair_plan.json",
+    "review/coverage/coverage_adjudication.json",
+    "review/coverage/coverage_matrix.json",
+    "review/coverage/coverage_probe_results.json",
     "review/draft_execution/draft_execution_report.json",
     "review/draft_execution/execution_contract.json",
     "review/draft_execution/execution_evidence.json",
@@ -14428,6 +14579,12 @@
      ]
     },
     {
+     "from": "repo_idea_miner.factory_coverage",
+     "names": [
+      "validate_coverage_artifacts"
+     ]
+    },
+    {
      "from": "repo_idea_miner.factory_frozen",
      "names": [
       "compare_frozen_hashes",
@@ -14509,7 +14666,7 @@
      ]
     }
    ],
-   "loc": 1872,
+   "loc": 1887,
    "module": "repo_idea_miner.factory_validate",
    "path": "repo_idea_miner/factory_validate.py",
    "private_symbols": [
@@ -14520,6 +14677,7 @@
     "_all_gates_pass",
     "_check_anti_hardcode_patch",
     "_check_continuation_summary",
+    "_check_coverage_matrix",
     "_check_dashboard_summary",
     "_check_draft_execution_lane",
     "_check_failure_classification",
@@ -14603,6 +14761,7 @@
     "test_factory_continue_17",
     "test_factory_continue_validate_17b",
     "test_factory_core_hardening_16b",
+    "test_factory_coverage",
     "test_factory_draft_execution_2c3",
     "test_factory_interaction_ui",
     "test_factory_phase2d1_cli_dashboard",
@@ -15691,10 +15850,10 @@
   }
  ],
  "repository": {
-  "head": "54849f6cbc81637d44dd32412d3419c68d574cb1",
-  "structural_diff": false,
-  "structural_fingerprint": "49c067d4082e1001a48b4d72f6aad95a59eb1c80c0ebb014ffba948aebde5482",
-  "structure_snapshot": "861c8c33bb34e07fca7610323d4259906873edc6a42ac1a4bb04a732451e0dfe"
+  "head": "4164b39b43c7c9617e98c897b46f33c546ace01c",
+  "structural_diff": true,
+  "structural_fingerprint": "acfca493fe86b21edba91d4ee70f69dd3c30837ef2905c2e6376d6d60046d36d",
+  "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
   {
@@ -16990,10 +17149,11 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 629,
+   "end_line": 638,
    "kind": "function",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "related_tests": [
+    "test_factory_coverage",
     "test_factory_phase2d1_cli_dashboard",
     "test_factory_phase2d1_loop"
    ],
@@ -17004,7 +17164,7 @@
     "orchestrator"
    ],
    "signature": "def run_closed_product_loop(run_dir: str | Path | None=None, run_id: int | None=None, mode: str='mock', gemma_mode: str='sequential', execute: bool=False, max_iterations: int | None=None, output_dir: str | Path='runs', db_conn=None, settings=None, factory_settings=None, llm=None, scheduler=None, budgets: dict | None=None) -> dict",
-   "start_line": 291,
+   "start_line": 300,
    "symbol_id": "repo_idea_miner.factory_loop_executor.run_closed_product_loop"
   },
   {
@@ -17014,10 +17174,11 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 266,
+   "end_line": 275,
    "kind": "function",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "related_tests": [
+    "test_factory_coverage",
     "test_factory_phase2d1_cli_dashboard",
     "test_factory_phase2d1_loop"
    ],
@@ -17026,7 +17187,7 @@
     "invariant_target"
    ],
    "signature": "def verify_candidate(run_dir: Path, out_dir: Path, executor, use_llm: bool, timeout: float, use_docker: bool | None, secrets: list[str], protected_hash_status: str='PASS', gemma_mode: str='sequential') -> dict",
-   "start_line": 180,
+   "start_line": 189,
    "symbol_id": "repo_idea_miner.factory_loop_executor.verify_candidate"
   },
   {
@@ -17344,7 +17505,7 @@
     "CANON-07"
    ],
    "component_id": "validation",
-   "end_line": 1571,
+   "end_line": 1586,
    "kind": "function",
    "path": "repo_idea_miner/factory_validate.py",
    "related_tests": [
@@ -17352,6 +17513,7 @@
     "test_factory_continue_17",
     "test_factory_continue_validate_17b",
     "test_factory_core_hardening_16b",
+    "test_factory_coverage",
     "test_factory_draft_execution_2c3",
     "test_factory_interaction_ui",
     "test_factory_phase2d1_cli_dashboard",
@@ -17371,7 +17533,7 @@
     "validator"
    ],
    "signature": "def run_marker_validators(run_dir: Path, run_kind: str) -> list[CheckResult]",
-   "start_line": 1561,
+   "start_line": 1576,
    "symbol_id": "repo_idea_miner.factory_validate.run_marker_validators"
   },
   {
@@ -17380,7 +17542,7 @@
     "CANON-10"
    ],
    "component_id": "validation",
-   "end_line": 1837,
+   "end_line": 1852,
    "kind": "function",
    "path": "repo_idea_miner/factory_validate.py",
    "related_tests": [
@@ -17388,6 +17550,7 @@
     "test_factory_continue_17",
     "test_factory_continue_validate_17b",
     "test_factory_core_hardening_16b",
+    "test_factory_coverage",
     "test_factory_draft_execution_2c3",
     "test_factory_interaction_ui",
     "test_factory_phase2d1_cli_dashboard",
@@ -17408,7 +17571,7 @@
     "validator"
    ],
    "signature": "def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tuple[bool, list[str], dict]",
-   "start_line": 1788,
+   "start_line": 1803,
    "symbol_id": "repo_idea_miner.factory_validate.validate_continuation_run_dir"
   },
   {
@@ -17424,6 +17587,7 @@
     "test_factory_continue_17",
     "test_factory_continue_validate_17b",
     "test_factory_core_hardening_16b",
+    "test_factory_coverage",
     "test_factory_draft_execution_2c3",
     "test_factory_interaction_ui",
     "test_factory_phase2d1_cli_dashboard",
@@ -17452,7 +17616,7 @@
     "CANON-11"
    ],
    "component_id": "validation",
-   "end_line": 1872,
+   "end_line": 1887,
    "kind": "function",
    "path": "repo_idea_miner/factory_validate.py",
    "related_tests": [
@@ -17460,6 +17624,7 @@
     "test_factory_continue_17",
     "test_factory_continue_validate_17b",
     "test_factory_core_hardening_16b",
+    "test_factory_coverage",
     "test_factory_draft_execution_2c3",
     "test_factory_interaction_ui",
     "test_factory_phase2d1_cli_dashboard",
@@ -17480,7 +17645,7 @@
     "orchestrator"
    ],
    "signature": "def validate_product_run_dir(run_dir: str | Path, secrets: list[str]) -> tuple[bool, list[str]]",
-   "start_line": 1840,
+   "start_line": 1855,
    "symbol_id": "repo_idea_miner.factory_validate.validate_product_run_dir"
   },
   {
@@ -17590,6 +17755,7 @@
   "test_factory_core_hardening_16b": "tests/test_factory_core_hardening_16b.py",
   "test_factory_core_pipeline_mock": "tests/test_factory_core_pipeline_mock.py",
   "test_factory_core_schemas": "tests/test_factory_core_schemas.py",
+  "test_factory_coverage": "tests/test_factory_coverage.py",
   "test_factory_dashboard": "tests/test_factory_dashboard.py",
   "test_factory_db": "tests/test_factory_db.py",
   "test_factory_draft_execution_2c3": "tests/test_factory_draft_execution_2c3.py",
@@ -17786,6 +17952,13 @@
   "test_factory_core_schemas": [
    "factory_core_prompts",
    "factory_core_schemas"
+  ],
+  "test_factory_coverage": [
+   "factory_coverage",
+   "factory_interaction_ui",
+   "factory_loop_executor",
+   "factory_product_acceptance",
+   "factory_validate"
   ],
   "test_factory_dashboard": [
    "challenge_dashboard",
@@ -18085,6 +18258,7 @@
   "checks": [
    "_check_anti_hardcode_patch",
    "_check_continuation_summary",
+   "_check_coverage_matrix",
    "_check_dashboard_summary",
    "_check_draft_execution_lane",
    "_check_failure_classification",

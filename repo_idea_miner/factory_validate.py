@@ -1413,6 +1413,15 @@ UX_POLISH_LANE_REQUIRED = (
 )
 
 
+def _check_coverage_matrix(run_dir: Path) -> list[str]:
+    """coverage matrix 재검증 (이슈 #9 — 있으면-검사).
+
+    enum 밖 분류, 중복 requirement_id, 정본 항목 누락, PASS probe 실증 없는 COVERED,
+    fingerprint 불일치(과거/타 run evidence 복사), 집계 불일치를 차단한다."""
+    from repo_idea_miner.factory_coverage import validate_coverage_artifacts
+    return validate_coverage_artifacts(run_dir)
+
+
 def _check_ux_polish_lane(run_dir: Path) -> list[str]:
     """generic UX_POLISH 산출물 정합 (이슈 #8 §11).
 
@@ -1543,6 +1552,12 @@ MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
                   markers=("review/ux_polish/ux_polish_report.json",),
                   inputs=UX_POLISH_LANE_REQUIRED,
                   related_tests=("tests/test_factory_ux_polish.py",)),
+    ValidatorSpec("coverage_matrix", _MARKER_RUN_KINDS, _check_coverage_matrix,
+                  markers=("review/coverage/coverage_matrix.json",),
+                  inputs=("review/coverage/coverage_matrix.json",
+                          "review/coverage/coverage_probe_results.json",
+                          "review/coverage/coverage_adjudication.json"),
+                  related_tests=("tests/test_factory_coverage.py",)),
     ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
                   markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
                   inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"

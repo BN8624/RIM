@@ -64,7 +64,7 @@ modules = [
 [components.validation]
 status = "canonical"
 canon_ids = ["CANON-10"]
-modules = ["factory_validate"]
+modules = ["factory_validate", "factory_coverage"]
 
 [components.cli]
 status = "canonical"
