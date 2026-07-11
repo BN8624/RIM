@@ -79,6 +79,16 @@ RECENT_SEMANTIC_CHANGES:
   불변(보호 37파일 hash PASS). #54 상태 = VALID_HOLD. 절차 기록:
   runs/_factory_reality_validation/state.json
 
+- Issue #5 done (#47 승인·#54 partial spec repair·INTERACTION_UI 도메인 중립화,
+  커밋 e2c4e03/7dbccf7/5a50d4d/4d458f0): #47 = APPROVED/PRODUCT_CANDIDATE/READY
+  (product_reviews id 1, 공식 성공 기준 사례 종결). #54 = PARTIAL_PRODUCT — scenario 단위
+  partial spec repair(결정 4상태 계약, CANON-05) + 의미 확정 core patch(target_id)로
+  7/7 gates·green REVIEW_READY 도달, interaction UI 적용 후 INTERACTION_CANDIDATE.
+  INTERACTION_UI = generic executor(factory_interaction_ui, CANON-06 계약): 3개 도메인
+  (SRS 27/테이블 17/파일시스템 54) 동일 executor로 lane APPLIED+runner-backed smoke+
+  validate PASS, graph 도메인은 legacy 2C-2 adapter 격리, challenge hardcode 0,
+  #47 회귀 없음, invalid success 0. runtime HTTP 실증(action→state 변경, invalid 명시 거부)
+
 - Issue #4 Phase C done (fresh 3종 blind, commit e0cf88c): Fresh-A 27 SRS(run 190458) =
   PARTIAL_PRODUCT(gates 7/7, acceptance 11/14, 남은 gap 조작 UI/loop closure 정직 표면화),
   Fresh-B 17 테이블 스튜디오(run 193103) = PARTIAL_PRODUCT(patch 0회 green_base, critical
@@ -91,11 +101,15 @@ RECENT_SEMANTIC_CHANGES:
 
 OPEN_BLOCKERS:
 - id: hold_54
-  state: waiting_human (VALID_HOLD — viewer mock 제거·golden 의미 판정·FD-1~4 수리 완료 후 남은 blocker)
-  evidence: runs/factory_20260710_174740/review/phase2d1/loop_20260711_034840/hold_for_human_packet.json
-  next_action: "scenario_003의 golden 결함(root_node)과 core 결함(target_id)이 얽혀 자동 수리
-    순서가 없음 — spec repair apply의 시나리오 단위 부분 적용을 허용할지, 또는 spec repair
-    pending 중 core patch lane을 허용할지 사람이 결정"
+  state: RESOLVED as human blocker (이슈 #5 Decision B) — technical next action으로 이동
+  evidence: "partial spec repair 체인 완료: Y1(002210) partial apply(001/002 APPLIED,
+    003 DEFERRED_CORE_DEPENDENCY — spec_repair_scenario_decisions.json) → 의미 확정
+    core patch(engine target_id=실패 action의 대상 id) → Y2(002616) full apply →
+    7/7 gates + green REVIEW_READY + validate PASS → interaction child(004810)
+    generic INTERACTION_UI 적용, stage INTERACTION_CANDIDATE, base 021635/174740 불변.
+    #54 최종 상태 = PARTIAL_PRODUCT"
+  next_action: "기술 후속(사람 의미 결정 불필요): RUNNER_BACKED_DRAFT_EXECUTION lane
+    승인·실행으로 실행 통합"
 - id: hold_47
   state: RESOLVED — removed (이슈 #5 Decision A)
   evidence: "final human approval: APPROVED / factory verdict: PRODUCT_CANDIDATE /
@@ -106,12 +120,12 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 추천 작업(단일, 이슈 #4 §7 실측 근거): INTERACTION_UI(2C-2) executor 도메인 중립화 —
-   #47식 산출물 체인(2C-1 polish/user_review_decision)+graph 도메인(supported_node_types) 전제
-   제거. fresh 2/3(A·B)의 동일 lane 반복 blocker
-2. hold_54 / hold_47 인간 결정 대기 (아래 blocker 참조)
-3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
-   literal-only artifact 185개의 실증 승격은 필요 시 별도 주문
+1. 다음 자동 가능 후보(단일): RUNNER_BACKED_DRAFT_EXECUTION lane의 도메인 중립화 —
+   interaction console(#54·fresh 2종)에 실행 통합. 이번 실측에서 #54·fresh의 남은 gap이
+   전부 RUNNER_BACKED_EXECUTION_REQUIRED로 수렴(lane은 사람 승인 정책)
+2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+   literal-only artifact 185개의 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
+   은 필요 시 별도 주문
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)

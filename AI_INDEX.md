@@ -11,7 +11,7 @@ sections → query the Atlas slice. No prose here.
 | CORE_BUILD | factory-build, gate, golden, harness, desk | CANON-04,CANON-10 | --route core_factory_build |
 | CONTINUATION | factory-continue, patch, queue, failure type | CANON-05,CANON-10 | --route continuation |
 | SPEC_REPAIR | spec repair, golden fix, anti-hardcode | CANON-05,CANON-10 | --route spec_repair |
-| PRODUCTIZATION | review, polish, editor, draft execution, viewer | CANON-06,CANON-11 | --route productization_chain |
+| PRODUCTIZATION | review, polish, editor, interaction ui, draft execution, viewer | CANON-06,CANON-11 | --route productization_chain |
 | CLOSED_LOOP | autopilot, judge, lane, gap, HOLD, evidence | CANON-07,CANON-10,CANON-11 | --route factory_closed_loop |
 | STORAGE | db, run layout, artifact root, run kind | CANON-08 | --component storage |
 | DASHBOARD | dashboard, presentation, read model, label | CANON-09 | --component dashboard |

@@ -47,7 +47,7 @@ status = "canonical"
 canon_ids = ["CANON-06"]
 modules = [
   "factory_review", "factory_product_polish", "factory_product_editor",
-  "factory_draft_execution", "factory_product_evidence",
+  "factory_interaction_ui", "factory_draft_execution", "factory_product_evidence",
 ]
 
 [components.autopilot]
