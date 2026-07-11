@@ -301,7 +301,11 @@ NOTES:
   EXPOSE_REPLAY_POSITION, CONNECT_VALIDATION_FEEDBACK); free-form operations
   (MAKE_BEAUTIFUL/REDESIGN_PAGE/IMPROVE_STYLE/...) are forbidden; each operation is an
   idempotent `data-ux-op` marker block with precondition/patch_scope/validation/rollback;
-  budget: 5 operations and 3 target surfaces per product, one operation per gap
+  budget: 5 operations and 3 target surfaces per product, one operation per gap;
+  STACK_FOR_NARROW_VIEWPORT also injects a marker `<meta name="viewport">` when the
+  product declares none (a max-width media query never fires on mobile's ~980px fallback
+  layout viewport without it), and a stacking media query without meta viewport does not
+  resolve the NARROW_VIEWPORT_BROKEN diagnosis
 - ux evidence ownership: `review/ux_polish/*` (contract/diagnosis/operations/evidence/
   report + dashboard summary) is written by the executor; `ux_polish_included=true`
   requires status APPLIED or UX_READY + viewport(narrow) and keyboard checks PASS +

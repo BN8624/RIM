@@ -229,13 +229,23 @@ def _stylesheet(text: str) -> str:
     return "\n".join(_STYLE_BLOCK_RE.findall(text))
 
 
+_META_VIEWPORT_RE = re.compile(r"<meta[^>]*name=[\"']viewport[\"'][^>]*>", re.I)
+
+
+def _has_meta_viewport(text: str) -> bool:
+    return bool(_META_VIEWPORT_RE.search(text))
+
+
 def _narrow_viewport_issue(text: str) -> dict | None:
     """고정폭 자식이 있는 flex row가 wrap/stacking media query 없이 좁은 화면을 깨뜨리는지.
 
     결정론 규칙: display:flex 컨테이너 class + width>=200px 고정 class가 같은
     스타일시트에 있고, flex-wrap도 없고, max-width media query 안에 그 컨테이너를
     실제로 세로 배치하는 규칙(flex-direction/flex-wrap/display 변경)도 없으면 결함.
-    media query의 존재만으로는 해소로 보지 않는다 — 내용 없는 block은 수리가 아니다."""
+    media query의 존재만으로는 해소로 보지 않는다 — 내용 없는 block은 수리가 아니다.
+    stacking media query가 있어도 meta viewport가 없으면 해소가 아니다 — 모바일
+    브라우저는 meta viewport 없이 ~980px fallback layout viewport로 렌더하므로
+    max-width query가 실기기에서 절대 발화하지 않는다 (2026-07-11 runtime smoke 실측)."""
     css = _stylesheet(text)
     if not css:
         return None
@@ -253,7 +263,10 @@ def _narrow_viewport_issue(text: str) -> dict | None:
         rule = re.search(rf"\.{re.escape(container)}\s*\{{([^}}]*)\}}", seg)
         if rule and re.search(r"flex-direction|flex-wrap|display\s*:\s*(?:block|grid)",
                               rule.group(1)):
-            return None
+            if _has_meta_viewport(text):
+                return None
+            return {"container": container, "fixed_children": fixed,
+                    "missing_meta_viewport": True}
     return {"container": container, "fixed_children": fixed}
 
 
@@ -453,11 +466,15 @@ def diagnose_surface(surface: dict, contract: dict, artifact_root: Path) -> list
     # NARROW_VIEWPORT_BROKEN
     narrow = _narrow_viewport_issue(text)
     if narrow:
+        if narrow.get("missing_meta_viewport"):
+            why = ("stacking media query가 있지만 meta viewport가 없어 "
+                   "모바일(fallback ~980px)에서 발화하지 않음")
+        else:
+            why = (f"wrap/media query 없이 {VIEWPORT_NARROW[0]}px 화면을 깨뜨림")
         out.append(_diag(
             "NARROW_VIEWPORT_BROKEN", rel, "." + narrow["container"], "component",
             f"flex row(.{narrow['container']}) + 고정폭 자식"
-            f"({', '.join('.' + c for c in narrow['fixed_children'])})이 "
-            f"wrap/media query 없이 {VIEWPORT_NARROW[0]}px 화면을 깨뜨림",
+            f"({', '.join('.' + c for c in narrow['fixed_children'])})이 " + why,
             CATEGORY_MACHINE_FIXABLE, "STACK_FOR_NARROW_VIEWPORT"))
 
     # FOCUS_NOT_VISIBLE
@@ -534,8 +551,9 @@ def build_ux_diagnosis(built: dict, artifact_root: Path) -> list[dict]:
 # ---------------------------------------------------------------- Operation catalog (§7)
 
 def _strip_op_block(text: str, op_id: str) -> str:
-    return re.sub(
+    text = re.sub(
         rf"<(style|script)\s+data-ux-op=\"{op_id}\">.*?</\1>\s*", "", text, flags=re.S)
+    return re.sub(rf"<meta\s[^>]*data-ux-op=\"{op_id}\"[^>]*>\s*", "", text)
 
 
 def _inject_style(text: str, op_id: str, css: str) -> str:
@@ -669,8 +687,19 @@ def apply_operation(text: str, diag: dict, contract: dict) -> tuple[str, dict] |
         css = (f"@media (max-width: {NARROW_STACK_THRESHOLD_PX}px) {{\n"
                + "\n".join(rules) + "\n}")
         rec = _op_record(op, surface, "." + issue["container"],
-                         f"{NARROW_STACK_THRESHOLD_PX}px 이하에서 필수 영역 세로 배치")
-        return _inject_style(text, op, css), rec
+                         f"{NARROW_STACK_THRESHOLD_PX}px 이하에서 필수 영역 세로 배치"
+                         " (meta viewport 부재 시 함께 주입)")
+        new_text = _inject_style(text, op, css)
+        if not _has_meta_viewport(new_text):
+            # meta viewport 없이는 위 media query가 모바일에서 발화하지 않으므로
+            # 같은 operation의 일부로 주입한다 — 제품이 자체 선언한 meta는 건드리지 않음
+            meta = ('<meta name="viewport" content="width=device-width, '
+                    f'initial-scale=1" data-ux-op="{op}">\n')
+            if "</head>" in new_text:
+                new_text = new_text.replace("</head>", meta + "</head>", 1)
+            else:
+                new_text = meta + new_text
+        return new_text, rec
 
     if op == "FIX_FOCUS_ORDER":
         if not _unfocusable_action_elements(text):

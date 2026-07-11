@@ -363,14 +363,62 @@ def test_operations_are_idempotent_marker_blocks():
     out1 = _apply_for(_BROKEN_VIEWER, "NARROW_VIEWPORT_BROKEN")
     text1, _ = out1
     surface = {"rel": "x", "text": text1}
-    # 강제로 같은 op 재적용 — marker block이 교체되고 중복되지 않는다
+    # 강제로 같은 op 재적용 — marker block(style+meta)이 교체되고 중복되지 않는다
     diag = {"status": "NARROW_VIEWPORT_BROKEN", "surface": "x", "target": ".layout",
             "target_kind": "component", "evidence": "", "category": "MACHINE_FIXABLE",
             "operation": "STACK_FOR_NARROW_VIEWPORT", "machine_fixable": True}
     out2 = apply_operation(text1, diag, {})
     if out2 is not None:  # 재진단이 사라져 precondition 미충족(None)이어도 정상
-        assert out2[0].count('data-ux-op="STACK_FOR_NARROW_VIEWPORT"') == 1
-    assert text1.count('data-ux-op="STACK_FOR_NARROW_VIEWPORT"') == 1
+        assert out2[0].count('<style data-ux-op="STACK_FOR_NARROW_VIEWPORT"') == 1
+        assert out2[0].count('<meta name="viewport"') == 1
+    assert text1.count('<style data-ux-op="STACK_FOR_NARROW_VIEWPORT"') == 1
+    assert text1.count('<meta name="viewport"') == 1
+
+
+def test_media_query_without_meta_viewport_still_broken():
+    """2026-07-11 runtime smoke 실측 회귀: stacking media query가 있어도 meta viewport가
+    없으면 모바일(fallback ~980px)에서 발화하지 않으므로 해소로 인정하지 않는다."""
+    html = _BROKEN_VIEWER.replace(
+        "</style>",
+        "@media (max-width: 700px) { .layout { flex-direction: column; } }\n</style>")
+    surface = {"rel": "product/viewer/index.html", "text": html}
+    statuses = [d["status"] for d in diagnose_surface(surface, {}, Path("."))]
+    assert "NARROW_VIEWPORT_BROKEN" in statuses
+    diag = next(d for d in diagnose_surface(surface, {}, Path("."))
+                if d["status"] == "NARROW_VIEWPORT_BROKEN")
+    assert "meta viewport" in diag["evidence"]
+
+
+def test_stack_op_injects_meta_viewport_when_absent():
+    out = _apply_for(_BROKEN_VIEWER, "NARROW_VIEWPORT_BROKEN")
+    new_text, _ = out
+    assert new_text.count('<meta name="viewport"') == 1
+    assert 'data-ux-op="STACK_FOR_NARROW_VIEWPORT"' in new_text
+    assert "width=device-width" in new_text
+
+
+def test_stack_op_keeps_product_own_meta_viewport():
+    html = _BROKEN_VIEWER.replace(
+        "<head>",
+        '<head><meta name="viewport" content="width=device-width, initial-scale=1">')
+    out = _apply_for(html, "NARROW_VIEWPORT_BROKEN")
+    new_text, _ = out
+    # 제품 자체 meta는 유지하고 marker meta를 추가하지 않는다
+    assert new_text.count('<meta name="viewport"') == 1
+    assert '<meta name="viewport"' in new_text
+    assert 'data-ux-op="STACK_FOR_NARROW_VIEWPORT">' in new_text  # style block은 주입
+
+
+def test_media_query_with_meta_viewport_resolved():
+    html = _BROKEN_VIEWER.replace(
+        "<head>",
+        '<head><meta name="viewport" content="width=device-width, initial-scale=1">'
+    ).replace(
+        "</style>",
+        "@media (max-width: 700px) { .layout { flex-direction: column; } }\n</style>")
+    surface = {"rel": "product/viewer/index.html", "text": html}
+    statuses = [d["status"] for d in diagnose_surface(surface, {}, Path("."))]
+    assert "NARROW_VIEWPORT_BROKEN" not in statuses
 
 
 def test_operation_record_has_full_spec_fields():

@@ -128,7 +128,14 @@ RECENT_SEMANTIC_CHANGES:
   (gap=None, EXECUTION_CANDIDATE 정직 HOLD). 잔여 acceptance 실패는 양쪽
   모두 요구사항 coverage 2종(PRODUCT_REQUIREMENT — UX로 덮지 않음).
   #47/#54 회귀 없음(validate PASS, UX 진단 dry-run UX_READY 수리 대상 0),
-  base 6종 hash 불변, invalid/mock success 0
+  base 6종 hash 불변, invalid/mock success 0.
+  마감 §18 runtime smoke(브라우저 실조작)에서 meta viewport 부재 발견 —
+  주입된 media query가 모바일 fallback ~980px에서 절대 발화 안 함 → 같은
+  op 일부로 meta 주입+재진단 강화(catalog 확장 없음, 커밋은 마감 fix),
+  062013/062015 재적용 APPLIED·validate PASS·실렌더 innerWidth=375 column
+  스택 확인. #54 viewer의 scenarios.json 데이터 경로 결함이 기존 잠복
+  결함으로 표면화(이슈 #8 무관, VIEWER_POLISH 미적용 산출물 — 사람 결정
+  대상). 증거: runs/_issue8_ux_polish/runtime_smoke_and_meta_fix.json
 
 - Issue #7 done (VIEWER_POLISH 도메인 중립화, 커밋 3f218cb/687e53a):
   executor = factory_viewer_polish.run_viewer_polish — replay discovery(명시적
@@ -167,7 +174,11 @@ NEXT_ACTIONS:
    요구사항 coverage 2종(critical_requirement_coverage_full/
    difficulty_anchor_coverage_full). 현재 상태로 검수·종결하거나, requirement
    coverage 보강(core 기능 추가 — 자동 lane 없음)을 별도 주문으로 지시
-2. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
+2. 사람 결정(비차단): #54 child 030809 viewer가 scenarios.json(부재 파일) fetch로
+   scenario 목록 로드 실패를 정직 표시 — 기존 잠복 결함(이슈 #8 무관, raw fetch
+   리터럴이라 probe07은 통과). VIEWER_POLISH lane 적용을 지시하면 canonical viewer로
+   해소 가능. interaction console·runner-backed 실행 증거는 정상
+3. deferred: 대형 파일 분해 후보(factory_validate/challenge_dashboard/factory_product_loop §21),
    literal-only artifact 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본)
    은 필요 시 별도 주문
 
@@ -183,6 +194,9 @@ DO_NOT_REPEAT:
   승격되지 않는 것이 설계 한도다 — report가 필요한 run은 execute_lane 직접 실행으로 남긴다
 - UX patch는 data-ux-op marker block 주입만 — 기존 product 마크업/스크립트를 재작성하는
   operation을 추가하지 않는다 (자유 형식 수정 금지, CANON-06)
+- viewport/keyboard의 정적 분석 PASS를 실기기 동작으로 간주하지 않는다 — media query는
+  meta viewport 없이는 모바일에서 발화하지 않는다(§18 runtime smoke가 잡음). 정적
+  검사와 브라우저 실조작 smoke는 서로를 대체하지 않는다
 
 VERIFY:
 - python -m repo_idea_miner architecture-check

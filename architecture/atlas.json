@@ -5108,7 +5108,7 @@
    "path_pattern": "review/draft_execution/draft_execution_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 881,
+   "source_line": 910,
    "source_path": "repo_idea_miner/factory_ux_polish.py",
    "symbol_id": "repo_idea_miner.factory_ux_polish"
   },
@@ -5225,7 +5225,7 @@
    "path_pattern": "review/interaction_ui/interaction_ui_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 891,
+   "source_line": 920,
    "source_path": "repo_idea_miner/factory_ux_polish.py",
    "symbol_id": "repo_idea_miner.factory_ux_polish"
   },
@@ -8749,7 +8749,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1129,
+  "test_count": 1133,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -14152,7 +14152,7 @@
      ]
     }
    ],
-   "loc": 1195,
+   "loc": 1224,
    "module": "repo_idea_miner.factory_ux_polish",
    "path": "repo_idea_miner/factory_ux_polish.py",
    "private_symbols": [
@@ -14166,6 +14166,7 @@
     "_FOCUS_ORDER_JS",
     "_ID_CLASS_RE",
     "_MARK_DISABLED_JS",
+    "_META_VIEWPORT_RE",
     "_NATIVE_FOCUSABLE",
     "_POSITION_REGION_HINTS",
     "_SCRIPT_BLOCK_RE",
@@ -14177,6 +14178,7 @@
     "_digest",
     "_dump",
     "_file_digest",
+    "_has_meta_viewport",
     "_inject_script",
     "_inject_style",
     "_keyboard_check",
@@ -15689,8 +15691,8 @@
   }
  ],
  "repository": {
-  "head": "68e7bdf424760abd4e873666b44168af4a275fd3",
-  "structural_diff": true,
+  "head": "54849f6cbc81637d44dd32412d3419c68d574cb1",
+  "structural_diff": false,
   "structural_fingerprint": "49c067d4082e1001a48b4d72f6aad95a59eb1c80c0ebb014ffba948aebde5482",
   "structure_snapshot": "861c8c33bb34e07fca7610323d4259906873edc6a42ac1a4bb04a732451e0dfe"
  },
@@ -17322,7 +17324,7 @@
     "CANON-11"
    ],
    "component_id": "productization",
-   "end_line": 1141,
+   "end_line": 1170,
    "kind": "function",
    "path": "repo_idea_miner/factory_ux_polish.py",
    "related_tests": [
@@ -17332,7 +17334,7 @@
     "orchestrator"
    ],
    "signature": "def run_ux_polish(run_dir=None, run_id=None, apply: bool=False, db_conn=None, timeout: float=60.0) -> dict",
-   "start_line": 910,
+   "start_line": 939,
    "symbol_id": "repo_idea_miner.factory_ux_polish.run_ux_polish"
   },
   {
