@@ -918,8 +918,11 @@ def _phase2d1_panel(p2d1: dict | None, run_root: Path | None) -> str:
             f'<td>{_e(en.get("selected_lane") or "-")}</td></tr>')
     hold_html = ""
     if hold:
+        # 이슈 #12 §9·§14: semantic HOLD와 execution/budget blocked를 같은 표시로 마스킹하지 않는다
+        hold_class = hold.get("hold_reason_class")
         hold_html = (
-            f'<div class="field"><span class="k">HOLD_FOR_HUMAN</span>'
+            f'<div class="field"><span class="k">HOLD_FOR_HUMAN'
+            f'{_e(" · " + hold_class if hold_class else "")}</span>'
             f'<p class="meta">{_e(hold.get("why_not_automated") or "-")}</p>'
             f'<p class="meta"><b>질문: {_e(hold.get("single_question_for_human") or "-")}</b></p>'
             f'<ul class="evi">{"".join(f"<li>{_e(o)}</li>" for o in hold.get("recommended_options") or [])}</ul></div>')
