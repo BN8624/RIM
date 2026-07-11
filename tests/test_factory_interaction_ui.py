@@ -6,9 +6,13 @@ from repo_idea_miner.factory_core_gates import detect_mock_fallback
 from repo_idea_miner.factory_interaction_ui import (
     KIND_ACTION_CONSOLE,
     KIND_GRAPH_EDITOR,
+    KIND_TABLE_GRID,
+    _run_runner,
     build_interaction_contract,
     detect_interaction_kind,
     generate_interaction_ui,
+    grid_render_hints,
+    run_interaction_smoke,
     run_interaction_ui,
 )
 from repo_idea_miner.factory_validate import _check_interaction_ui
@@ -89,6 +93,65 @@ if __name__ == "__main__":
     main()
 '''
 
+_TABLE_RUNNER = '''import argparse, copy, json
+
+DEFAULTS = {"Text": "", "Number": 0, "Boolean": False}
+
+def type_ok(t, v):
+    if t == "Boolean":
+        return isinstance(v, bool)
+    if t == "Number":
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+    return isinstance(v, str)
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scenario", required=True)
+    args = ap.parse_args()
+    sc = json.load(open(args.scenario, encoding="utf-8"))
+    state = copy.deepcopy(sc["initial_state"])
+    cols = state["TableSchema"]["columns"]
+    rows = state["TableData"]["rows"]
+    events, errors = [], []
+    for a in sc.get("actions") or []:
+        kind = a.get("type")
+        p = a.get("payload") or {}
+        if kind == "add_column":
+            cid, ctype = p.get("column_id"), p.get("type")
+            if not cid or ctype not in DEFAULTS:
+                errors.append("column_id/type이 필요합니다")
+                events.append({"type": "ERROR_OCCURRED", "target_id": str(cid)})
+                continue
+            cols[cid] = {"name": p.get("name") or cid, "type": ctype}
+            for r in rows.values():
+                r[cid] = DEFAULTS[ctype]
+            state["TableSchema"]["version"] += 1
+            events.append({"type": "COLUMN_ADDED", "target_id": cid})
+        elif kind == "update_cell":
+            rid, cid = p.get("row_id"), p.get("column_id")
+            if rid not in rows or cid not in cols or "value" not in p:
+                errors.append("row_id/column_id/value가 필요합니다")
+                events.append({"type": "ERROR_OCCURRED", "target_id": str(rid)})
+                continue
+            v = p["value"]
+            t = cols[cid]["type"]
+            if not type_ok(t, v):
+                errors.append(t + " 컬럼에 맞지 않는 값: " + repr(v))
+                events.append({"type": "ERROR_OCCURRED", "target_id": str(cid)})
+                continue
+            rows[rid][cid] = v
+            events.append({"type": "CELL_UPDATED", "target_id": rid + "." + cid})
+        else:
+            errors.append("unknown action: " + str(kind))
+            events.append({"type": "ERROR_OCCURRED", "target_id": "system"})
+    print(json.dumps({"ok": not errors, "final_state": state, "events": events,
+                      "summary": str(len(events)) + " events", "errors": errors},
+                     ensure_ascii=True))
+
+if __name__ == "__main__":
+    main()
+'''
+
 _DOMAINS = {
     "ledger": {
         "runner": _LEDGER_RUNNER,
@@ -113,6 +176,32 @@ _DOMAINS = {
                     "initial_state": {"Panel": {"mode": "idle", "steps": 0}},
                     "actions": [{"type": "set_mode", "payload": {"mode": "active"}},
                                 {"type": "set_mode", "payload": {"mode": "idle"}}]},
+    },
+    "table": {
+        "runner": _TABLE_RUNNER,
+        "state_contract": {"state_entities": [
+            {"name": "TableSchema", "fields": ["columns", "version"],
+             "invariants": ["version >= 0"]},
+            {"name": "TableData", "fields": ["rows", "row_count"],
+             "invariants": ["row_count >= 0"]}]},
+        "action_contract": {"actions": [
+            {"name": "add_column", "input": ["column_id", "name", "type"],
+             "preconditions": ["type은 Text|Number|Boolean"], "output": ["COLUMN_ADDED"]},
+            {"name": "update_cell", "input": ["row_id", "column_id", "value"],
+             "preconditions": ["value는 column type과 일치"], "output": ["CELL_UPDATED"]}]},
+        "fixture": {"id": "scenario_001",
+                    "initial_state": {
+                        "TableSchema": {"columns": {"c1": {"name": "A", "type": "Text"},
+                                                    "cb": {"name": "B", "type": "Boolean"}},
+                                        "version": 0},
+                        "TableData": {"rows": {"r1": {"c1": "x", "cb": False},
+                                               "r2": {"c1": "7", "cb": True}},
+                                      "row_count": 2}},
+                    "actions": [
+                        {"type": "update_cell",
+                         "payload": {"row_id": "r1", "column_id": "cb", "value": True}},
+                        {"type": "add_column",
+                         "payload": {"column_id": "c2", "name": "C", "type": "Number"}}]},
     },
 }
 
@@ -306,3 +395,120 @@ def test_generated_artifacts_carry_no_fixture_id(tmp_path):
     assert contract["scenario_template"].get("id") == "interactive_session"
     ui = (run / "workspace" / "product" / "interaction" / "index.html").read_text(encoding="utf-8")
     assert "scenario_001" not in ui
+
+
+# ---------------------------------------------------------------- table grid (이슈 #10 §19.1~19.4)
+
+def test_detect_table_kind_and_srs_not_table(tmp_path):
+    """§19.1: state 모양(columns+rows)만으로 table_grid 감지 — SRS류 필드는 비감지."""
+    run = _make_domain_run(tmp_path, "table")
+    assert detect_interaction_kind(run / "workspace") == KIND_TABLE_GRID
+
+    srs = tmp_path / "srs_run" / "workspace"
+    _dump(srs / "state_contract.json", {"state_entities": [
+        {"name": "Card", "fields": ["id", "interval", "ease_factor",
+                                    "next_review_date", "status"], "invariants": []},
+        {"name": "Session", "fields": ["current_time", "pending_cards"], "invariants": []}]})
+    _dump(srs / "action_contract.json", {"actions": [{"name": "review_card",
+                                                      "input": ["card_id"]}]})
+    assert detect_interaction_kind(srs) == KIND_ACTION_CONSOLE
+
+
+def test_grid_render_hints_require_real_entities():
+    """§19.1: hints는 initial_state의 실제 entity 키만 기록 — 못 찾으면 None."""
+    initial = _DOMAINS["table"]["fixture"]["initial_state"]
+    assert grid_render_hints(initial) == {
+        "schema_entity": "TableSchema", "columns_field": "columns",
+        "data_entity": "TableData", "rows_field": "rows"}
+    # 빈 표(§19.1-7)는 여전히 grid 대상이다
+    assert grid_render_hints({"S": {"columns": {}}, "D": {"rows": {}}}) is not None
+    assert grid_render_hints({}) is None
+    assert grid_render_hints({"S": initial["TableSchema"]}) is None  # rows 없음
+    # invalid row shape(§19.1-4): row가 dict가 아니면 대상이 아니다
+    assert grid_render_hints({"S": {"columns": {"c1": {"type": "Text"}}},
+                              "D": {"rows": {"r1": "oops"}}}) is None
+
+
+def test_table_contract_kind_and_determinism(tmp_path):
+    """§19.1-5: table contract는 결정적이고 grid render hints를 싣는다."""
+    run = _make_domain_run(tmp_path, "table")
+    c1 = build_interaction_contract(run / "workspace")
+    c2 = build_interaction_contract(run / "workspace")
+    assert c1 == c2
+    assert c1["interaction_kind"] == KIND_TABLE_GRID
+    assert c1["interaction_id"] == "core_table_grid"
+    assert c1["render_hints"]["grid"] == {
+        "schema_entity": "TableSchema", "columns_field": "columns",
+        "data_entity": "TableData", "rows_field": "rows"}
+    assert generate_interaction_ui(c1) == generate_interaction_ui(c2)
+
+
+def test_table_fields_without_matching_state_fall_back_to_console(tmp_path):
+    """columns/rows 필드를 선언해도 initial_state에 실체가 없으면 정직하게 console 폴백."""
+    run = _make_domain_run(tmp_path, "table")
+    _dump(run / "workspace" / "fixtures" / "scenario_001.json",
+          {"id": "scenario_001",
+           "initial_state": {"Flat": {"columns": ["not", "a", "dict"], "rows": []}},
+           "actions": [{"type": "update_cell", "payload": {}}]})
+    contract = build_interaction_contract(run / "workspace")
+    assert contract["interaction_kind"] == KIND_ACTION_CONSOLE
+    assert contract["interaction_id"] == "core_action_console"
+    assert "grid" not in contract["render_hints"]
+
+
+def test_table_ui_static_typed_controls_and_grid_markup(tmp_path):
+    """§19.2: 실제 grid 마크업 + 타입별 컨트롤(bool select/number input/datalist) + 반응형."""
+    run = _make_domain_run(tmp_path, "table")
+    ui = generate_interaction_ui(build_interaction_contract(run / "workspace"))
+    assert '<table id="grid-table">' in ui               # raw dump가 아닌 실제 표(F4)
+    assert 'name="viewport"' in ui                       # 반응형 meta
+    assert "@media (max-width:640px)" in ui
+    assert 'dataset.kind = "boolean"' in ui              # 명시적 true/false select
+    assert 'inp.type = "number"' in ui                   # 숫자 전용 컨트롤
+    assert "coerceControl" in ui                         # typed payload(F3 제거)
+    for dl in ("dl-columns", "dl-rows", "dl-types"):
+        assert dl in ui
+    assert "scenario_001" not in ui  # fixture id 미노출(entity 이름은 contract 데이터로만 등장)
+
+
+def test_table_smoke_boolean_roundtrip_and_typed_rejection(tmp_path):
+    """§19.3: bool 값이 타입 그대로 runner를 오간다(false→true) — 문자열 'true'는 거부."""
+    run = _make_domain_run(tmp_path, "table")
+    root = run / "workspace"
+    contract = build_interaction_contract(root)
+    smoke = run_interaction_smoke(root, contract)
+    assert smoke["pass"] is True
+    assert smoke["state_change_observed"] is True        # update_cell cb: false→true
+    assert smoke["invalid_action_rejected"] is True
+
+    scenario = dict(contract["scenario_template"])
+    scenario["actions"] = [{"type": "update_cell",
+                            "payload": {"row_id": "r1", "column_id": "cb", "value": True}}]
+    code, parsed, _ = _run_runner(root, scenario, 60.0)
+    assert code == 0 and parsed["errors"] == []
+    assert parsed["final_state"]["TableData"]["rows"]["r1"]["cb"] is True  # bool 타입 보존
+    # 전부-문자열 단순화(F3)가 통하지 않음을 실증 — Boolean 컬럼에 문자열은 거부
+    scenario["actions"] = [{"type": "update_cell",
+                            "payload": {"row_id": "r1", "column_id": "cb", "value": "true"}}]
+    _, parsed, _ = _run_runner(root, scenario, 60.0)
+    assert parsed["errors"]
+    assert parsed["final_state"]["TableData"]["rows"]["r1"]["cb"] is False  # 상태 불변
+
+
+def test_table_domain_full_apply_smoke_and_validator(tmp_path):
+    """§19.4: table 도메인 전체 적용 — grid 콘솔 생성, smoke 실증, validator/mock 통과."""
+    run, out = _apply_domain(tmp_path, "table")
+    assert out["applied"] is True and out["ok"] is True and out["status"] == "APPLIED"
+    smoke = out["interaction_smoke"]
+    assert smoke["state_change_observed"] is True
+    assert smoke["invalid_action_rejected"] is True
+    assert smoke["revise_changes_result"] is True
+    contract = _load(run / "workspace" / "product" / "interaction" / "contract.json")
+    assert contract["interaction_kind"] == KIND_TABLE_GRID
+    ui = (run / "workspace" / "product" / "interaction" / "index.html").read_text(encoding="utf-8")
+    assert "grid-table" in ui
+    assert _check_interaction_ui(run) == []
+    files = {rel: (run / "workspace" / rel).read_text(encoding="utf-8")
+             for rel in ("product/interaction/index.html", "product/interaction_server.py")}
+    result = detect_mock_fallback(files)
+    assert result["mock_fallback_count"] == 0, result["problems"]
