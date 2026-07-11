@@ -17,6 +17,7 @@ from repo_idea_miner.challenge_dashboard_data import (
     get_challenge_brief,
     get_challenge_detail,
     load_draft_execution,
+    load_viewer_polish,
     load_phase2c0,
     load_phase2c1,
     load_phase2c2,
@@ -760,6 +761,25 @@ def _draft_execution_panel(de: dict | None) -> str:
 </section>"""
 
 
+def _viewer_polish_panel(vp: dict | None) -> str:
+    """generic viewer polish 패널 — discovery/viewer 상태를 정직하게 표시한다 (이슈 #7 §7.3).
+
+    missing/invalid/ambiguous/unsupported를 완료나 빈 화면으로 감추지 않는다."""
+    if not vp:
+        return ""
+    problems = vp.get("problems") or []
+    return f"""
+<section class="panel">
+  <h2 class="sec-h">Viewer Polish (generic — 도메인 중립 replay viewer lane)</h2>
+  <p class="meta">viewer 상태: <b>{_e(vp.get('viewer_status') or '-')}</b>
+    · discovery: {_e(vp.get('discovery_status') or '-')}
+    · adapter: {_e(vp.get('viewer_kind') or '-')}</p>
+  <p class="meta">viewer polish included: {_e(str(vp.get('viewer_polish_included')))}
+    · frame 수: {_e(str(vp.get('frame_count') if vp.get('frame_count') is not None else '-'))}</p>
+  <div class="field"><span class="k">문제</span><ul class="evi">{''.join(f'<li>{_e(x)}</li>' for x in problems) or '<li class="muted">없음</li>'}</ul></div>
+</section>"""
+
+
 def _phase2d0_card_lines(p2d0: dict | None) -> str:
     """목록 카드에 추가하는 autopilot 줄: prior fitness/stage/next lane/status (§29)."""
     if not p2d0:
@@ -1289,6 +1309,7 @@ def render_product_detail(
         + _phase2c2_panel(load_phase2c2(run_root))
         + _phase2c3_panel(load_phase2c3(run_root))
         + _draft_execution_panel(load_draft_execution(run_root))
+        + _viewer_polish_panel(load_viewer_polish(run_root))
         + _phase2d0_panel(load_phase2d0(run_root), run_root)
         + _phase2d1_panel(load_phase2d1(run_root), run_root)
         + gate_html + qa_html + issues_html

@@ -205,6 +205,8 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     draft_exec_report = _load_json(
         run_dir / "review/draft_execution/draft_execution_report.json") or {}
     draft_exec_evidence = draft_exec_report.get("execution_evidence") or {}
+    viewer_polish_report = _load_json(
+        run_dir / "review/viewer_polish/viewer_polish_report.json") or {}
     static = _static_viewer_facts(run_dir)
 
     has_editor = bool(editor_smoke)
@@ -217,12 +219,18 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     has_generic_execution = bool(draft_exec_evidence) \
         and draft_exec_report.get("applied") is True \
         and draft_exec_report.get("runner_backed_execution_included") is True
+    # generic viewer polish evidence(이슈 #7)도 같은 기준 — apply + navigation 실증(included)만.
+    # canonical contract만 읽는 viewer는 raw replay fetch가 없어 static 판정이 불가하므로
+    # lane evidence(contract source refs = replay 파일 digest)가 replay 읽기의 정본 근거다.
+    has_viewer_polish = viewer_polish_report.get("applied") is True \
+        and viewer_polish_report.get("viewer_polish_included") is True
     facts: dict = {
         "viewer_exists": bool(smoke.get("product_viewer_exists", static["viewer_exists"])),
         "viewer_path": smoke.get("product_viewer_path") or static["viewer_path"],
         "viewer_source": static["viewer_source"],
         "viewer_reads_replay": bool(smoke.get("product_viewer_reads_replay",
-                                              static["viewer_reads_replay"])),
+                                              static["viewer_reads_replay"]
+                                              or has_viewer_polish)),
         "mismatches": smoke.get("mismatches", static["mismatches"]) or [],
         "authoring_ui": bool(smoke.get("product_interactive_authoring", static["authoring_ui"])),
         "runner_executable": smoke.get("runner_executable"),
@@ -241,6 +249,7 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         "limitations": fitness.get("limitations") or [],
         "has_editor_report": has_editor,
         "has_execution_report": has_execution or has_generic_execution,
+        "has_viewer_polish_report": has_viewer_polish,
         "runner_backed_execution_included": True if (has_execution or has_generic_execution)
         else (editor_smoke.get("runner_backed_execution_included") if has_editor else None),
         "draft_export_supported": editor_smoke.get("draft_export_supported") if has_editor else None,

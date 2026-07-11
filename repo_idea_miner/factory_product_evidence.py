@@ -183,10 +183,17 @@ def viewer_field_mismatches(replay: dict | None, viewer_src: str) -> list[str]:
     if re.search(r"edge\.from|edge\.to", viewer_src) and sample_edge and \
             ("from" not in sample_edge or "to" not in sample_edge):
         out.append(f"viewer는 edge.from/edge.to를 읽지만 replay edge 키는 {sorted(sample_edge)} → 엣지 미렌더링")
-    # event type/message
-    if re.search(r"ev\.type|ev\.message|\.type\b", viewer_src) and sample_event and \
-            ("type" not in sample_event or "message" not in sample_event):
-        out.append(f"viewer는 event.type/message를 읽지만 replay event 키는 {sorted(sample_event)} → 이벤트 로그 undefined")
+    # event type/message — viewer가 실제로 읽는 키만 replay에 요구한다 (이슈 #7 §11.1:
+    # .type만 읽는 viewer에 message까지 요구하면 message 없는 도메인 전부 오탐)
+    if sample_event:
+        wanted = []
+        if re.search(r"ev\.type|\.type\b", viewer_src) and "type" not in sample_event:
+            wanted.append("type")
+        if re.search(r"ev\.message", viewer_src) and "message" not in sample_event:
+            wanted.append("message")
+        if wanted:
+            out.append(f"viewer는 event.{'/'.join(wanted)}를 읽지만 replay event 키는 "
+                       f"{sorted(sample_event)} → 이벤트 로그 undefined")
     # node position x/y
     if re.search(r"node\.x|node\.y", viewer_src) and sample_node and \
             ("x" not in sample_node or "y" not in sample_node):

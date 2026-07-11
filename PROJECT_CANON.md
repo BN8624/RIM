@@ -244,6 +244,43 @@ NOTES:
   (applied+included) closes it — with an interaction report present but no execution
   report, the ladder rung and the hard blocker (EXECUTION_CANDIDATE cap) enforce the
   gap; probe fixture-scenario success is not draft-execution proof
+- generic viewer polish (`factory_viewer_polish`): replay artifact → discovery →
+  domain adapter → canonical viewer contract (viewer_id/viewer_kind/source_artifact_refs
+  with sha256/replays[frames]/capabilities/validation_rules/evidence_requirements) →
+  generic viewer core (reads only `product/viewer/viewer_contract.json`, never raw
+  replay keys) → navigation evidence → validator. The graph domain routes to the
+  legacy 2C-1 adapter at the lane router by artifact shape
+- replay artifact ref priority: explicit `replay/index.json` manifest refs first;
+  compatibility discovery only without an index and only with exactly one candidate
+  (provenance recorded); multiple candidates = AMBIGUOUS, never auto-picked; glob or
+  filename guessing is never the canonical source
+- canonical frame semantics: frame_id/sequence/event_kind/summary/payload/
+  affected_targets are derived mechanically from raw events (payload preserved
+  verbatim); before/after state exist only where derivable (first=fixture
+  initial_state matched by declared id, last=final_state) — missing values stay
+  null, never fabricated
+- viewer adapter boundary: selection by replay event schema shape only
+  (`events[].type` = standard typed adapter shared by SRS/table/filesystem;
+  `events[].event` = graph legacy read adapter); mixed/unknown shapes are
+  UNSUPPORTED; no domain-name, challenge, run, or filename branches in the core
+- viewer status semantics: discovery states (FOUND/MISSING/AMBIGUOUS/INVALID/
+  UNSUPPORTED) and viewer states (REPLAY_READY/COMPLETE/MISSING/INVALID/AMBIGUOUS/
+  UNSUPPORTED/VALIDATION_FAILED) are displayed explicitly; REPLAY_COMPLETE only means
+  the replay is fully navigable, never product success; missing/invalid artifacts are
+  never replaced by empty or mock viewers
+- viewer evidence ownership: `review/viewer_polish/*` (contract/discovery/evidence/
+  report + dashboard summary) is written by the executor;
+  `viewer_polish_included=true` requires discovery FOUND + schema-valid contract +
+  model-level navigation proof (visited frames, state transition observed) + JS
+  parse PASS; the validator blocks included overclaims, zero-frame success,
+  digest-less sources, and stale provenance
+- VIEWER_POLISH_REQUIRED gap removal: the child's recomputed viewer facts must be
+  clean (viewer exists, no mismatches) and replay reading is evidenced either by the
+  viewer surface itself or by an applied+included viewer polish report (the
+  contract-reading viewer has no raw replay fetch to observe statically)
+- viewer mismatch detection requires only the keys the viewer actually reads
+  (a `.type`-only viewer never requires `message`) — the graph-schema assumption
+  that flagged every non-graph domain was an accidental coupling
 
 QUERY:
 - architecture-context --canon CANON-06

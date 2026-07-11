@@ -16,7 +16,9 @@ LANE_EXECUTOR_ROUTES = {
     "SPEC_REPAIR": "Phase 2B-1 factory_spec_repair.run_spec_repair_apply (child copy에 apply)",
     "CORE_PATCH": "Phase 2A factory_continue.run_continuation (continuation run이 child)",
     "RUNNER_PATCH": "Phase 2A factory_continue.run_continuation (continuation run이 child)",
-    "VIEWER_POLISH": "Phase 2C-1 factory_product_polish.run_product_polish (child copy에 apply)",
+    "VIEWER_POLISH": "generic factory_viewer_polish.run_viewer_polish (graph 도메인만 "
+                     "legacy adapter=2C-1 factory_product_polish.run_product_polish, "
+                     "child copy에 apply)",
     "INTERACTION_UI": "generic factory_interaction_ui.run_interaction_ui (graph 도메인만 "
                       "legacy adapter=2C-2 factory_product_editor.run_product_editor, "
                       "child copy에 apply)",
@@ -211,8 +213,20 @@ def _exec_apply_tool(lane: str, ctx: dict, runner) -> dict:
 
 
 def _exec_viewer_polish(ctx: dict) -> dict:
-    from repo_idea_miner.factory_product_polish import run_product_polish
-    return _exec_apply_tool("VIEWER_POLISH", ctx, run_product_polish)
+    # 도메인 어댑터 경계 (이슈 #7 §6): graph 도메인은 legacy 2C-1 adapter(run_product_polish),
+    # 그 외는 generic viewer polish executor. challenge/run/fixture 분기 없음 — artifact 모양만 본다.
+    from repo_idea_miner.factory_interaction_ui import (
+        KIND_GRAPH_EDITOR,
+        detect_interaction_kind,
+    )
+    from repo_idea_miner.factory_run_layout import resolve_artifact_root
+
+    root = resolve_artifact_root(Path(ctx["parent_run_dir"]))
+    if root is not None and detect_interaction_kind(Path(root)) == KIND_GRAPH_EDITOR:
+        from repo_idea_miner.factory_product_polish import run_product_polish
+        return _exec_apply_tool("VIEWER_POLISH", ctx, run_product_polish)
+    from repo_idea_miner.factory_viewer_polish import run_viewer_polish
+    return _exec_apply_tool("VIEWER_POLISH", ctx, run_viewer_polish)
 
 
 def _exec_interaction_ui(ctx: dict) -> dict:

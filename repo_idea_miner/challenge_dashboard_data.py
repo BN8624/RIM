@@ -112,6 +112,11 @@ PRODUCT_REPORT_TABS = [
     ("draft_execution_result", ("run", "review/draft_execution/execution_result.json", "실행 결과")),
     ("draft_execution_manifest", ("run", "review/draft_execution/side_effect_manifest.json", "side effect manifest")),
     ("draft_execution_evidence", ("run", "review/draft_execution/execution_evidence.json", "실행 evidence")),
+    # generic viewer polish (review/viewer_polish/ — 상세 페이지 전용)
+    ("viewer_polish_report", ("run", "review/viewer_polish/viewer_polish_report.json", "viewer polish 리포트")),
+    ("viewer_polish_contract", ("run", "review/viewer_polish/viewer_contract.json", "viewer 계약")),
+    ("viewer_polish_discovery", ("run", "review/viewer_polish/viewer_discovery.json", "replay discovery")),
+    ("viewer_polish_evidence", ("run", "review/viewer_polish/viewer_evidence.json", "viewer evidence")),
     # Phase 2D-0 autopilot (review/phase2d0/ — 상세 페이지 전용)
     ("product_stage_label", ("run", "review/phase2d0/product_stage_label.md", "autopilot stage")),
     ("product_gap_classification", ("run", "review/phase2d0/product_gap_classification.md", "gap 분류")),
@@ -292,6 +297,11 @@ def load_phase2c3(run_root: Path | None) -> dict | None:
 def load_draft_execution(run_root: Path | None) -> dict | None:
     """generic runner-backed draft execution 요약(review/draft_execution/)을 읽는다. 없으면 None."""
     return _load_summary_json(run_root, "review/draft_execution/draft_execution_dashboard_summary.json")
+
+
+def load_viewer_polish(run_root: Path | None) -> dict | None:
+    """generic viewer polish 요약(review/viewer_polish/)을 읽는다. 없으면 None."""
+    return _load_summary_json(run_root, "review/viewer_polish/viewer_polish_dashboard_summary.json")
 
 
 def load_phase2d0(run_root: Path | None) -> dict | None:

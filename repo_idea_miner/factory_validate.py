@@ -1345,6 +1345,66 @@ def _check_draft_execution_lane(run_dir: Path) -> list[str]:
     return p
 
 
+VIEWER_POLISH_LANE_REQUIRED = (
+    "review/viewer_polish/viewer_polish_report.json",
+    "review/viewer_polish/viewer_contract.json",
+    "review/viewer_polish/viewer_discovery.json",
+    "review/viewer_polish/viewer_evidence.json",
+)
+
+
+def _check_viewer_polish_lane(run_dir: Path) -> list[str]:
+    """generic VIEWER_POLISH 산출물 정합 (이슈 #7 §8~§9).
+
+    상태 enum 밖 표기, navigation/discovery 실증 없는 included 과장, frame 0개 성공,
+    mock/재사용 evidence를 차단한다. HTML 생성·HTTP 200만으로는 성공을 인정하지 않는다."""
+    from repo_idea_miner.factory_viewer_polish import (
+        DISCOVERY_STATUSES,
+        VIEWER_STATUSES,
+    )
+
+    report = _load_json(run_dir / "review/viewer_polish/viewer_polish_report.json")
+    if report is None:
+        return []
+    p: list[str] = []
+    if report.get("viewer_status") not in VIEWER_STATUSES:
+        p.append(f"viewer polish: 알 수 없는 viewer 상태 표기: {report.get('viewer_status')}")
+    if report.get("discovery_status") not in DISCOVERY_STATUSES:
+        p.append(f"viewer polish: 알 수 없는 discovery 상태 표기: {report.get('discovery_status')}")
+    included = report.get("viewer_polish_included") is True
+    if not report.get("applied"):
+        if included:
+            p.append("viewer polish: applied=false인데 viewer_polish_included=true (과장)")
+        return p
+    for rel in VIEWER_POLISH_LANE_REQUIRED:
+        if not (run_dir / rel).is_file():
+            p.append(f"viewer polish: 필수 산출물 없음: {rel}")
+    evidence = _load_json(run_dir / "review/viewer_polish/viewer_evidence.json") or {}
+    contract = _load_json(run_dir / "review/viewer_polish/viewer_contract.json") or {}
+    if included:
+        if evidence.get("discovery_status") != "FOUND":
+            p.append("viewer polish: discovery FOUND 없이 included=true (과장)")
+        navigation = evidence.get("navigation") or {}
+        if navigation.get("pass") is not True:
+            p.append("viewer polish: navigation 실증 없이 included=true (과장)")
+        if not evidence.get("frame_count"):
+            p.append("viewer polish: frame 0개인데 included=true")
+        if len(evidence.get("visited_frames") or []) < 2 \
+                and evidence.get("frame_count", 0) >= 2:
+            p.append("viewer polish: frame 이동 실증(visited>=2) 없이 included=true")
+        if (evidence.get("render_status") or {}).get("js_syntax") != "PASS":
+            p.append("viewer polish: JS 파싱 검증 없이 included=true")
+        refs = evidence.get("source_replay_refs") or []
+        if not refs or any(not r.get("sha256") for r in refs):
+            p.append("viewer polish: source replay digest 없는 evidence (mock 의심)")
+        if (contract.get("source_artifact_refs") or []) != refs:
+            p.append("viewer polish: contract와 evidence의 source refs 불일치 (재사용 의심)")
+        prov = evidence.get("viewer_provenance") or {}
+        if prov.get("fresh") is not True or not prov.get("started_at"):
+            p.append("viewer polish: fresh provenance 없는 evidence (과거 결과 재사용 의심)")
+    return p
+
+
 # ---------------------------------------------------------------- Validator registry (§12.3)
 #
 # 순서가 곧 artifact validation plan(§12.4)이다: frozen hash → spec repair → anti-hardcode
@@ -1397,6 +1457,10 @@ MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
                   markers=("review/draft_execution/draft_execution_report.json",),
                   inputs=DRAFT_EXECUTION_LANE_REQUIRED,
                   related_tests=("tests/test_factory_runner_backed_execution.py",)),
+    ValidatorSpec("viewer_polish_lane", _MARKER_RUN_KINDS, _check_viewer_polish_lane,
+                  markers=("review/viewer_polish/viewer_polish_report.json",),
+                  inputs=VIEWER_POLISH_LANE_REQUIRED,
+                  related_tests=("tests/test_factory_viewer_polish.py",)),
     ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
                   markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
                   inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"
