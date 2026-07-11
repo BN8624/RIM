@@ -44,6 +44,11 @@ HASH_APPLY_CHECK = "frozen_hash_apply_check.json"
 GATE_RERUN_JSON = "gate_rerun_after_spec_repair.json"
 PROMOTION_JSON = "green_base_promotion_after_spec_repair.json"
 DASHBOARD_JSON = "phase2b1_dashboard_summary.json"
+SCENARIO_DECISIONS_JSON = "spec_repair_scenario_decisions.json"
+
+# scenario 단위 partial spec repair 결정 상태 (이슈 #5 §5.3)
+SCENARIO_DECISIONS = ("APPLIED", "DEFERRED_CORE_DEPENDENCY", "DEFERRED_AMBIGUOUS",
+                      "UNCHANGED_VALID")
 
 # comparison_mode 완화 검사용 엄격도 (§7.2 — 낮아지면 금지)
 _MODE_STRICTNESS = {"exact": 3, "partial": 2, "invariant": 1, "review": 0}
@@ -262,6 +267,51 @@ def plan_scenario_repair(golden: dict, replay: dict | None, contract_fields: set
     return entry
 
 
+def derive_scenario_decision(entry: dict, golden: dict, replay: dict | None) -> dict:
+    """scenario 1건의 partial spec repair 결정 상태를 도출한다 (§5.3).
+
+    APPLIED / DEFERRED_CORE_DEPENDENCY / DEFERRED_AMBIGUOUS / UNCHANGED_VALID.
+    결정은 §8 plan 결과와 replay evidence에서만 유도한다 — challenge 특정 규칙 금지."""
+    sid = entry["scenario_id"]
+    blocked = entry["blocked_reasons"]
+    decision = {
+        "scenario_id": sid, "decision": None, "reason_code": None,
+        "evidence_refs": [f"replay/replay_{sid}.json", entry.get("golden_file")],
+        "old_expected_semantics": None, "new_expected_semantics": None,
+        "core_dependency": False, "applied": False,
+    }
+    if entry.get("new_golden") is not None:
+        decision.update(
+            decision="APPLIED", reason_code="GOLDEN_BEHIND_CONTRACT",
+            old_expected_semantics="계약 필수 표현이 golden expected에 미반영",
+            new_expected_semantics="; ".join(entry["changes"]))
+        return decision
+    if blocked:
+        text = " | ".join(blocked)
+        if "근거 부족" in text or "출력 없음" in text:
+            decision.update(decision="DEFERRED_AMBIGUOUS", reason_code="NO_REPLAY_EVIDENCE")
+        elif "contract state field가 아님" in text:
+            decision.update(decision="DEFERRED_CORE_DEPENDENCY",
+                            reason_code="RUNNER_NOISE_FIELD", core_dependency=True)
+        elif ("훼손" in text or "종류 불일치" in text or "수 변경" in text or "삭제" in text
+              or "축소" in text or "불일치" in text or "하드코딩" in text):
+            decision.update(decision="DEFERRED_CORE_DEPENDENCY",
+                            reason_code="VALUE_CONFLICT_WITH_RUNNER", core_dependency=True)
+        else:
+            decision.update(decision="DEFERRED_AMBIGUOUS", reason_code="UNCLASSIFIED_BLOCK")
+        decision["old_expected_semantics"] = "기존 golden 기대값 유지 (보류)"
+        decision["evidence_refs"] = decision["evidence_refs"] + blocked[:5]
+        return decision
+    if (golden.get("comparison_mode") or "exact") == "review":
+        decision.update(decision="UNCHANGED_VALID", reason_code="REVIEW_MODE_NOT_AUTOGATED")
+        return decision
+    if replay is not None and compare_golden(golden, replay)[0] == "PASS":
+        decision.update(decision="UNCHANGED_VALID", reason_code="ALREADY_PASSING")
+        return decision
+    decision.update(decision="DEFERRED_AMBIGUOUS", reason_code="NO_ACTIONABLE_REPAIR")
+    return decision
+
+
 def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
     """§11 apply plan을 만든다. 실행/파일 수정 없이 기존 replay/ 산출물만 근거로 쓴다."""
     workspace = run_dir / "workspace"
@@ -281,6 +331,7 @@ def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
     scenarios: list[dict] = []
     planned_files: list[str] = []
     blocked: list[str] = []
+    decisions: list[dict] = []
     for gpath in golden_files:
         golden = load_json(gpath) or {}
         sid = golden.get("scenario_id") or gpath.stem.replace("expected_", "scenario_")
@@ -288,6 +339,7 @@ def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
         entry = plan_scenario_repair(golden, replay, contract_fields, summary_hardcoded)
         entry["golden_file"] = f"golden/{gpath.name}"
         scenarios.append(entry)
+        decisions.append(derive_scenario_decision(entry, golden, replay))
         if entry["blocked_reasons"]:
             blocked += [f"{sid}: {b}" for b in entry["blocked_reasons"]]
         elif entry["new_golden"] is not None:
@@ -328,8 +380,11 @@ def build_apply_plan(run_dir: Path, inputs: dict, target_info: dict) -> dict:
             "scenario/golden 수를 변경하지 않음",
         ],
         "blocked_reasons": blocked,
+        "scenario_decisions": decisions,
         "runner_command": runner_contract.get("runner_command"),
-        "status": "DRY_RUN_BLOCKED" if blocked else "DRY_RUN_PASS",
+        # scenario 단위 partial: 적용 가능 scenario와 차단 scenario가 공존하면 PARTIAL (§5.3)
+        "status": ("DRY_RUN_PARTIAL" if planned_files else "DRY_RUN_BLOCKED") if blocked
+        else "DRY_RUN_PASS",
     }
     return plan
 
@@ -506,11 +561,13 @@ def run_spec_repair_apply(
 
     if not apply:
         result["ok"] = True
-        result["status"] = plan["status"]  # DRY_RUN_PASS | DRY_RUN_BLOCKED
+        result["status"] = plan["status"]  # DRY_RUN_PASS | DRY_RUN_PARTIAL | DRY_RUN_BLOCKED
         result["plan"] = plan
         return result
 
-    if plan["blocked_reasons"]:
+    # scenario 단위 partial (§5.3): 적용 가능 scenario가 하나도 없을 때만 전면 차단.
+    # 차단 scenario는 삭제하지 않고 deferred 상태로 기록만 남긴다.
+    if plan["blocked_reasons"] and not plan["planned_files"]:
         result["status"] = "APPLY_BLOCKED"
         result["problems"] = plan["blocked_reasons"]
         result["error"] = "apply plan이 §8 엄격 기준에서 차단됨"
@@ -519,6 +576,8 @@ def run_spec_repair_apply(
         result["status"] = "NOTHING_TO_APPLY"
         result["error"] = "보정할 golden이 없음"
         return result
+    if plan["blocked_reasons"]:
+        result["problems"] = plan["blocked_reasons"]  # 부분 적용 — 차단 사유는 그대로 노출
 
     # ---- Apply (§12 적용 전 절차)
     create_pre_apply_snapshot(run_dir)
@@ -565,6 +624,18 @@ def run_spec_repair_apply(
 
     result["applied"] = True
     result["applied_files"] = applied_files
+
+    # scenario 결정 상태 확정 기록 (§5.3) — 적용된 scenario만 applied=true
+    applied_ids = {s["scenario_id"] for s in plan["planned_changes"] if s["new_golden"] is not None}
+    for d in plan["scenario_decisions"]:
+        d["applied"] = d["scenario_id"] in applied_ids
+    deferred_ids = sorted(d["scenario_id"] for d in plan["scenario_decisions"]
+                          if str(d["decision"]).startswith("DEFERRED"))
+    write_json(run_dir / SCENARIO_DECISIONS_JSON, {
+        "base_run_id": plan["base_run_id"], "challenge_id": plan["challenge_id"],
+        "plan_status": plan["status"], "decisions": plan["scenario_decisions"],
+        "applied_scenarios": sorted(applied_ids), "deferred_scenarios": deferred_ids,
+    })
 
     # ---- diff summary (§13)
     diff_summary = {
@@ -644,6 +715,10 @@ def run_spec_repair_apply(
         "deleted_expected_fields": [], "invariant_downgrades": [],
         "frozen_hash_apply_status": result["frozen_hash_apply_status"],
         "rollback_executed": False,
+        "partial_apply": bool(plan["blocked_reasons"]),
+        "applied_scenarios": sorted(applied_ids),
+        "deferred_scenarios": deferred_ids,
+        "scenario_decisions": plan["scenario_decisions"],
         "gates": gate_summary, "validate_ok": None,
         "promoted_to_green_base": False, "new_verdict": None,
     }
@@ -661,8 +736,10 @@ def run_spec_repair_apply(
     hardcode_risk = anti.get("hardcode_risk") or "low"
     oracle_risk = oracle.get("risk_level") or "low"
     all_gates_pass = all(gate_summary.get(g) for g in CORE_GATE_ORDER)
+    # deferred scenario가 남았으면 일부 적용을 전체 성공으로 오인하지 않는다 (§5.3)
     promoted = (all_gates_pass and product_consumes and validate_ok
-                and hardcode_risk != "high" and oracle_risk != "high")
+                and hardcode_risk != "high" and oracle_risk != "high"
+                and not deferred_ids)
     remaining = [g for g in CORE_GATE_ORDER if not gate_summary.get(g)]
     if not product_consumes:
         remaining.append("product_layer")
@@ -728,7 +805,8 @@ def run_spec_repair_apply(
                            green_base_path=result.get("green_base_path"))
 
     result["ok"] = True
-    result["status"] = "APPLIED"
+    result["deferred_scenarios"] = deferred_ids
+    result["status"] = "APPLIED_PARTIAL" if deferred_ids else "APPLIED"
     return result
 
 

@@ -408,7 +408,12 @@ def _check_spec_repair_apply(run_dir: Path) -> list[str]:
         p.append(f"spec repair apply: 단일 대상이 아님: target_count={report.get('target_count')}")
     resolved = report.get("resolved_run_dir")
     if resolved and Path(str(resolved).replace("\\", "/")).name != run_dir.name:
-        p.append(f"spec repair apply: resolved_run_dir 불일치: {resolved}")
+        # child copy는 parent의 apply report를 계보로 승계한다 — origin이 resolved와
+        # 일치하면 정합 (불일치만 위조/오배치로 본다)
+        origin = _load_json(run_dir / "child_run_origin.json") or {}
+        origin_name = Path(str(origin.get("parent_run_dir") or "").replace("\\", "/")).name
+        if origin_name != Path(str(resolved).replace("\\", "/")).name:
+            p.append(f"spec repair apply: resolved_run_dir 불일치: {resolved}")
 
     check = _load_json(run_dir / "frozen_hash_apply_check.json") or {}
     if check and check.get("status") != "PASS":
@@ -427,6 +432,20 @@ def _check_spec_repair_apply(run_dir: Path) -> list[str]:
         sc = diff.get("scenario_count") or {}
         if sc and sc.get("before") != sc.get("after"):
             p.append(f"spec repair apply: scenario 수 변경: {sc}")
+
+    # scenario 단위 partial apply 정합 (이슈 #5 §5.3): deferred가 남았는데 전체 성공으로
+    # 오인되면 안 되고, 결정 기록은 반드시 남아야 한다.
+    if report.get("scenario_decisions") is not None:
+        if not (run_dir / "spec_repair_scenario_decisions.json").is_file():
+            p.append("spec repair apply: scenario decisions 산출물 없음")
+        if report.get("deferred_scenarios") and report.get("promoted_to_green_base"):
+            p.append("spec repair apply: deferred scenario가 남았는데 green_base 승격")
+        applied_set = set(report.get("applied_scenarios") or [])
+        decided_applied = {d.get("scenario_id") for d in report["scenario_decisions"]
+                           if d.get("applied")}
+        if applied_set != decided_applied:
+            p.append(f"spec repair apply: applied_scenarios({sorted(applied_set)})와 "
+                     f"decision applied({sorted(decided_applied)}) 불일치")
 
     gate_rerun = _load_json(run_dir / "gate_rerun_after_spec_repair.json") or {}
     promo = _load_json(run_dir / "green_base_promotion_after_spec_repair.json") or {}
@@ -1213,6 +1232,47 @@ def _check_spec_repair_outputs(run_dir: Path) -> list[str]:
     return p
 
 
+INTERACTION_UI_REQUIRED = (
+    "review/interaction_ui/interaction_ui_report.json",
+    "review/interaction_ui/interaction_evidence.json",
+)
+
+
+def _check_interaction_ui(run_dir: Path) -> list[str]:
+    """generic INTERACTION_UI 산출물 정합 (이슈 #5 §6.4~6.5).
+
+    runner-backed evidence 없는 성공 주장과 production mock success를 차단한다."""
+    report = _load_json(run_dir / "review/interaction_ui/interaction_ui_report.json")
+    if report is None or not report.get("applied"):
+        return []
+    p: list[str] = []
+    evidence = _load_json(run_dir / "review/interaction_ui/interaction_evidence.json")
+    if evidence is None:
+        p.append("interaction ui: interaction_evidence.json 없음")
+        return p
+    smoke = report.get("interaction_smoke") or {}
+    if report.get("smoke_pass"):
+        if not smoke.get("state_change_observed"):
+            p.append("interaction ui: state 변경 실증 없이 smoke_pass=true")
+        if not smoke.get("invalid_action_rejected"):
+            p.append("interaction ui: invalid action 거부 실증 없이 smoke_pass=true")
+        if not any(e.get("exit_code") == 0 and e.get("parsed")
+                   for e in evidence.get("exchanges") or []):
+            p.append("interaction ui: runner exchange 실증 없이 smoke_pass=true")
+    from repo_idea_miner.factory_core_gates import detect_mock_fallback
+    for root in ("workspace", "final_artifact"):
+        files = {}
+        for rel in ("product/interaction/index.html", "product/interaction_server.py"):
+            f = run_dir / root / rel
+            if f.is_file():
+                files[rel] = f.read_text(encoding="utf-8", errors="replace")
+        if files:
+            mock = detect_mock_fallback(files)
+            if mock["mock_fallback_count"]:
+                p.append(f"interaction ui: mock fallback 검출({root}): {mock['problems'][:2]}")
+    return p
+
+
 # ---------------------------------------------------------------- Validator registry (§12.3)
 #
 # 순서가 곧 artifact validation plan(§12.4)이다: frozen hash → spec repair → anti-hardcode
@@ -1257,6 +1317,10 @@ MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
                   markers=tuple(f"{PHASE2C3_SUBDIR}/{m}" for m in PHASE2C3_MARKERS),
                   inputs=tuple(f"{PHASE2C3_SUBDIR}/{r}" for r in PHASE2C3_REQUIRED),
                   related_tests=("tests/test_factory_draft_execution_2c3.py",)),
+    ValidatorSpec("interaction_ui", _MARKER_RUN_KINDS, _check_interaction_ui,
+                  markers=("review/interaction_ui/interaction_ui_report.json",),
+                  inputs=INTERACTION_UI_REQUIRED,
+                  related_tests=("tests/test_factory_interaction_ui.py",)),
     ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
                   markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
                   inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"
@@ -1368,7 +1432,10 @@ def _check_repair_plan(plan: dict) -> list[str]:
         p.append("repair_plan: frozen_files 없음")
     if "repair_scope" not in plan:
         p.append("repair_plan: repair_scope 없음")
-    if not plan.get("steps") and not plan.get("patch_targets"):
+    # 모든 실패가 spec repair 대상이면 patch 단계가 없는 것이 정직한 상태다 —
+    # requires_spec_repair 없이 steps도 없을 때만 결함으로 본다.
+    if not plan.get("steps") and not plan.get("patch_targets") \
+            and not plan.get("requires_spec_repair"):
         p.append("repair_plan: steps/patch targets 없음")
     if "requires_spec_repair" not in plan:
         p.append("repair_plan: requires_spec_repair 없음")

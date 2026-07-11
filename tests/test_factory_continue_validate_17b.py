@@ -348,3 +348,17 @@ def test_unknown_run_detected(tmp_path):
     run = tmp_path / "empty"
     run.mkdir()
     assert detect_run_kind(run) == RUN_KIND_UNKNOWN
+
+
+def test_repair_plan_spec_repair_only_allows_empty_steps():
+    """모든 실패가 spec repair 대상이면 steps가 비어도 정직한 상태 — FAIL 아님.
+
+    requires_spec_repair 없이 steps까지 없으면 여전히 결함으로 본다."""
+    from repo_idea_miner.factory_validate import _check_repair_plan
+
+    base = {"repair_scope": "delta_patch", "allowed_touch_files": ["src/"],
+            "frozen_files": ["golden/"], "steps": [], "requires_spec_repair": True}
+    assert not [p for p in _check_repair_plan(base) if "steps" in p]
+
+    bad = dict(base, requires_spec_repair=False)
+    assert any("steps" in p for p in _check_repair_plan(bad))

@@ -19,6 +19,7 @@ from repo_idea_miner.factory_pipeline import FactorySettings, sample_challenge
 from repo_idea_miner.factory_continue import build_spec_repair_proposal, build_spec_repair_review
 from repo_idea_miner.factory_spec_repair import (
     check_apply_preconditions,
+    derive_scenario_decision,
     plan_scenario_repair,
     resolve_apply_target,
     run_spec_repair_apply,
@@ -607,3 +608,127 @@ def test_validate_unapproved_review_fails(tmp_path):
     """§17: review result가 APPROVE_FOR_PHASE2B가 아니었으면 FAIL."""
     run = _fake_apply_run(tmp_path, report={"review_result": "REQUIRES_HUMAN_REVIEW"})
     assert any("APPROVE_FOR_PHASE2B" in p for p in _check_spec_repair_apply(run))
+
+
+# ---------------------------------------------------------------- 이슈 #5 §5.3: scenario 단위 partial spec repair
+
+def _inject_core_conflict(run: Path, skip_name: str) -> Path:
+    """다른 golden 하나를 replay 기반 exact로 바꾸고 leaf 값 하나를 충돌시킨다.
+
+    runner 출력과 기대값이 실질 충돌하는 §8 차단 상황(core 결함과 얽힘)을 재현한다."""
+    others = [p for p in sorted((run / "workspace" / "golden").glob("expected_*.json"))
+              if p.name != skip_name]
+    assert others, "충돌을 주입할 두 번째 golden이 필요"
+    path = others[0]
+    golden = _load(path)
+    sid = golden.get("scenario_id") or path.stem.replace("expected_", "scenario_")
+    replay = _load(run / "workspace" / "replay" / f"replay_{sid}.json")
+    fs = json.loads(json.dumps(replay["final_state"]))
+
+    def _tamper(node) -> bool:
+        for k, v in node.items():
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, (int, float)):
+                node[k] = 987654
+                return True
+            if isinstance(v, str):
+                node[k] = v + "_CONFLICT"
+                return True
+            if isinstance(v, dict) and _tamper(v):
+                return True
+        return False
+
+    assert _tamper(fs), "충돌시킬 leaf 값이 필요"
+    golden.update(comparison_mode="exact", expected_final_state=fs,
+                  expected_events=json.loads(json.dumps(replay.get("events") or [])),
+                  expected_summary=replay.get("summary") or "")
+    _dump(path, golden)
+    return path
+
+
+def test_dry_run_partial_status(spec_env, tmp_path):
+    """§5.3: 적용 가능 scenario와 core 충돌 scenario가 공존하면 DRY_RUN_PARTIAL."""
+    run = _clone(spec_env, tmp_path)
+    _inject_core_conflict(run, spec_env["golden_path"].name)
+    out = run_spec_repair_apply(run_dir=run, apply=False, settings=SETTINGS, factory_settings=FSET)
+    assert out["status"] == "DRY_RUN_PARTIAL"
+    plan = _load(run / "spec_repair_apply_plan.json")
+    assert plan["planned_files"] and plan["blocked_reasons"]
+    decisions = {d["decision"] for d in plan["scenario_decisions"]}
+    assert "APPLIED" in decisions and "DEFERRED_CORE_DEPENDENCY" in decisions
+
+
+def test_partial_apply_scenario_decisions(spec_env, tmp_path):
+    """§5.3~5.4: 독립 golden defect만 APPLIED, core 충돌 scenario는 DEFERRED로 보존.
+
+    deferred가 남으면 green 승격 금지 — 일부 적용을 전체 성공으로 오인하지 않는다."""
+    run = _clone(spec_env, tmp_path)
+    conflict_path = _inject_core_conflict(run, spec_env["golden_path"].name)
+    conflict_bytes = conflict_path.read_bytes()
+
+    out = run_spec_repair_apply(run_dir=run, apply=True, settings=SETTINGS, factory_settings=FSET)
+    assert out["status"] == "APPLIED_PARTIAL"
+    assert out["applied"] is True
+    assert out["deferred_scenarios"]
+
+    # 차단 golden은 그대로, 뒤처진 golden만 보정
+    assert conflict_path.read_bytes() == conflict_bytes
+    fixed = _load(run / "workspace" / "golden" / spec_env["golden_path"].name)
+    assert spec_env["removed_key"] in fixed["expected_final_state"]
+
+    decs = _load(run / "spec_repair_scenario_decisions.json")
+    applied = [d for d in decs["decisions"] if d["decision"] == "APPLIED"]
+    deferred = [d for d in decs["decisions"] if d["decision"] == "DEFERRED_CORE_DEPENDENCY"]
+    assert applied and all(d["applied"] for d in applied)
+    assert deferred and all(not d["applied"] and d["core_dependency"] for d in deferred)
+    for d in deferred:
+        assert d["reason_code"] == "VALUE_CONFLICT_WITH_RUNNER"
+        assert d["evidence_refs"]
+
+    promo = _load(run / "green_base_promotion_after_spec_repair.json")
+    assert promo["promoted_to_green_base"] is False
+    report = _load(run / "spec_repair_apply_report.json")
+    assert report["partial_apply"] is True
+    assert report["applied_scenarios"] and report["deferred_scenarios"]
+    # validator가 partial 정합(결정 파일 존재, applied 일치, 승격 금지)을 통과시킨다
+    assert _check_spec_repair_apply(run) == []
+
+
+def test_scenario_decision_ambiguous_and_unchanged():
+    """§5.3: replay evidence가 없으면 DEFERRED_AMBIGUOUS, 이미 유효하면 UNCHANGED_VALID."""
+    fields = {"global_tick"}
+    golden = {"scenario_id": "sX", "comparison_mode": "exact",
+              "expected_final_state": {"global_tick": 1},
+              "expected_events": [], "expected_summary": ""}
+    entry = plan_scenario_repair(golden, None, fields)
+    d = derive_scenario_decision(entry, golden, None)
+    assert d["decision"] == "DEFERRED_AMBIGUOUS"
+    assert d["reason_code"] == "NO_REPLAY_EVIDENCE"
+    assert d["applied"] is False
+
+    replay = {"ok": True, "final_state": {"global_tick": 1}, "events": [], "summary": ""}
+    golden2 = {"scenario_id": "sY", "comparison_mode": "exact",
+               "expected_final_state": {"global_tick": 1},
+               "expected_events": [], "expected_summary": ""}
+    entry2 = plan_scenario_repair(golden2, replay, fields)
+    d2 = derive_scenario_decision(entry2, golden2, replay)
+    assert d2["decision"] == "UNCHANGED_VALID"
+    assert d2["reason_code"] == "ALREADY_PASSING"
+
+
+def test_child_copy_inherits_apply_report_without_false_mismatch(applied, tmp_path):
+    """child copy는 parent의 apply report를 계보(child_run_origin)로 승계한다 — 오탐 금지.
+
+    origin이 없거나 다른 run을 가리키면 여전히 불일치로 잡는다."""
+    import shutil as _shutil
+
+    parent = applied["run"]
+    child = tmp_path / "child_copy"
+    _shutil.copytree(parent, child)
+    _dump(child / "child_run_origin.json",
+          {"parent_run_dir": str(parent).replace("\\", "/")})
+    assert not [p for p in _check_spec_repair_apply(child) if "resolved_run_dir" in p]
+
+    _dump(child / "child_run_origin.json", {"parent_run_dir": "runs/other_run"})
+    assert any("resolved_run_dir" in p for p in _check_spec_repair_apply(child))
