@@ -11,7 +11,13 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 (flaky 0) at issue #12 마감 (신규 human decision 계약
+- tests: full suite PASS ×2 연속 1295개 (flaky 0) at issue #13 마감 (structured console
+  input 테스트 20종 포함); smoke = dashboard(/, /products, /product/36 200) + Fresh-C
+  child 165952 scratchpad 복사본 콘솔 browser 실조작(§15 전 항목: valid object/array,
+  invalid JSON, wrong type 3종, primitive, 375px) + synthetic structured run
+  (array/nested boolean/number/boolean/null) + server 재검증 curl 우회 실증 +
+  replay viewer 실렌더
+- (이전 기록) full suite PASS ×2 연속 (flaky 0) at issue #12 마감 (신규 human decision 계약
   테스트 21개 포함); smoke = dashboard(/, /products, /product/36 200, HOLD 패널
   hold_reason_class 표시) + Fresh-C fresh child live loop 실증
 - (이전 기록) full suite PASS ×2 연속 1254개 (flaky 0) at issue #11 마감 (코드 변경 0 배치);
@@ -30,28 +36,30 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
-- **Issue #13 IN PROGRESS (Schema-Aware Structured Console Input, 커밋 aa83568 push됨,
-  이슈 OPEN — 다음 세션이 이어서 마감)**: Phase A~D 완료 / Phase E·마감 잔여.
-  완료된 것 = (1)Phase A 판정: 복합(UI_RENDERING_GAP+CLIENT_PARSE_GAP: action console이
-  전 필드 text input→string 전송 + SERVER_VALIDATION_GAP: 서버 schema 재검증 0. 서버→runner
-  JSON 왕복은 타입 보존 — 손실 지점은 클라이언트 단일). (2)구현: observe_input_types
-  (fixture 실사용 payload에서 field type descriptor 관측 — kinds/fields/items/null union,
-  action_contract에 타입 정보가 없어 fixture가 결정론 타입 정본), console structured
-  JSON textarea(object/array schema만 명시적 parse, parse status 표시, invalid는 대기열
-  차단, string은 JSON처럼 보여도 문자열 유지, boolean select/number input, meta viewport
-  추가), server 재검증(fail-closed: TYPE_MISMATCH/MISSING_REQUIRED_FIELD/INVALID_ARRAY_ITEM/
-  FORBIDDEN_KEY(__proto__/prototype/constructor)/EXCESSIVE_NESTING(16)/body 1MB),
-  smoke structured_input evidence(type/digest/type_preserved) + factory_validate §9.3
-  type-loss 검사. (3)테스트 19종(tests/test_structured_console_input.py) + 영향권 122 PASS.
-  주의: 생성 JS의 검증 결과 키는 {"valid": ...} — {"ok": true}는 mock-fallback 검출기
-  catch-window에 오탐된다(검출기 약화 금지). (4)Phase E 부분: Fresh-C child 165952를
-  scratchpad 복사(원본 불변)해 콘솔 재생성 — config_schema/params object 2종
-  type_preserved=true, smoke ok. 잔여 = §15 browser 실조작(valid object/array, invalid
-  JSON, wrong type, primitive, 375px), 전체 pytest 2회, architecture-build 2회+check
-  (구조 변경 있음 — atlas rebuild 필요), CANON-06 계약 기록(§17.2: structured parse는
-  schema object/array일 때만·JSON 자동 추측 금지·이중 validation·runner type preservation·
-  fail-closed), REENTRY/메모리 갱신, 이슈 #13 보고 댓글+close(형식 §23), 다음 추천 =
-  Fresh Blind Batch 3 (§17.3 지시)
+- Issue #13 done (Schema-Aware Structured Console Input, 커밋 aa83568 + 마감 커밋):
+  결함 판정 = 복합(UI_RENDERING_GAP+CLIENT_PARSE_GAP: action console이 전 필드 text
+  input→string 전송 + SERVER_VALIDATION_GAP: 서버 schema 재검증 0 — 서버→runner JSON
+  왕복은 타입 보존, 손실 지점은 클라이언트 단일). 구현 결과 = observe_input_types
+  (fixture 실사용 payload 관측이 결정론 타입 정본 — kinds/fields/items/null union),
+  console structured JSON textarea(object/array schema만 명시적 parse, parse/validation
+  status, invalid 대기열 차단), boolean select/number input, string은 JSON처럼 보여도
+  문자열 유지(자동 추측 금지). 지원 타입 = string/number/boolean/null/object/array
+  (nested 포함, null union). validation = client(INVALID_JSON/WRONG_TOP_LEVEL_TYPE/
+  MISSING_REQUIRED_FIELD/INVALID_FIELD_TYPE/INVALID_ARRAY_ITEM/EXCESSIVE_NESTING)
+  + server 독립 재검증(fail-closed: TYPE_MISMATCH/MISSING_REQUIRED_FIELD/
+  INVALID_ARRAY_ITEM/FORBIDDEN_KEY(__proto__/prototype/constructor)/EXCESSIVE_NESTING(16)/
+  body 1MB) 이중, 위반 시 runner 호출 0·state 변화 0. runtime 결과 = Fresh-C child
+  165952 scratchpad 복사본(원본 불변) browser 실조작: nested object 2계층 실행·보존,
+  invalid JSON/wrong type 명시 거부(POST 0), primitive string 유지; synthetic structured
+  run(echo runner 타입 검증): array [3,6,9] 보존, nested boolean string 거부, number
+  42.5/boolean true/null metadata 보존, 문자열 '{"looks": "like json"}' string 유지.
+  §15.6에서 발견·수정 2건 = 모바일 media query의 #action-select 누락(8px overflow)
+  + 대기열 li 긴 JSON 텍스트 overflow-wrap 부재(253px 파괴) → 수정 후 overflow 0,
+  회귀 테스트 고정. primitive 회귀 = 기존 text/number/boolean 컨트롤 동작 유지
+  (테스트 20종 + Table17/SRS27 등 회귀 제품 factory-validate 9종 PASS). remaining gap =
+  없음(구조화 입력 범위 내) — union/oneOf/recursive schema는 §18 범위 외.
+  CANON-06에 structured console input semantics 계약 기록.
+  증거: runs/_issue13_structured_input/browser_runtime_evidence.json
 - Issue #12 done (Live Desk Human Decision Contract Alignment, 커밋 0d0a725/47ba0e1/68040a8):
   결함 판정 = 복합(PROMPT_DEFECT: lane prompt에 human_decision_required 의미 정의 부재 +
   NORMALIZATION_MISSING: raw 값이 loop 정지에 직행 + VALIDATOR_MISSING: consistency 검증
@@ -275,13 +283,8 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 이슈 #13 마감 재개 (OPEN, Phase A~D 완료·커밋 aa83568): ①§15 browser 실조작
-   (scratchpad 복사본 재생성 가능: run_interaction_ui apply → interaction_server 기동 →
-   valid object/array·invalid JSON·wrong type·primitive·375px), ②전체 pytest 2회 연속,
-   ③architecture-build 2회 byte-identical+check(구조 변경 있음), ④CANON-06 structured
-   input 계약 기록, ⑤이슈 #13 완료 보고 댓글(§23 형식)+close. 다음 추천 작업은
-   Fresh Blind Batch 3 (주문서 §17.3 지시). (그 외 deferred: 대형 파일 분해,
-   literal-only artifact 실증 승격, db verdict stale)
+1. Fresh Blind Batch 3 (이슈 #13 주문서 §17.3 지시 — 특별한 새 blocker 없음).
+   (그 외 deferred: 대형 파일 분해, literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
@@ -303,6 +306,9 @@ DO_NOT_REPEAT:
 - viewport/keyboard의 정적 분석 PASS를 실기기 동작으로 간주하지 않는다 — media query는
   meta viewport 없이는 모바일에서 발화하지 않는다(§18 runtime smoke가 잡음). 정적
   검사와 브라우저 실조작 smoke는 서로를 대체하지 않는다
+- 생성 콘솔 JS의 검증 결과 키는 {"valid": ...}를 유지한다 — {"ok": true} 문자열은
+  mock-fallback 정적 검출기의 catch-window에 오탐된다(검출기 약화 금지 원칙 때문에
+  코드 쪽에서 회피, 이슈 #13)
 
 VERIFY:
 - python -m repo_idea_miner architecture-check

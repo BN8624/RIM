@@ -224,6 +224,21 @@ NOTES:
   creation, strict bool type-check on write — Python bool ⊄ Number), and type
   conversion happens only on explicit column-type change; invalid values are
   explicit runner errors, never silent coercion
+- structured console input semantics (action_console kind): input control kinds derive
+  only from observed field type descriptors (fixture actual-usage payload observation is
+  the deterministic type authority — action contracts declare no types); structured JSON
+  parse happens only when the schema kind is object or array — a primitive string field
+  keeps its text control and string payload even when the value looks like JSON
+  (automatic JSON guessing and field-name-based branching are forbidden); validation is
+  dual and fail-closed: the client rejects invalid JSON / top-level and nested type
+  mismatches / missing required fields before queueing (runner calls 0, state mutation 0),
+  and the server independently revalidates every action against the interaction contract
+  (type mismatch, missing required field, array item type, forbidden keys
+  `__proto__`/`prototype`/`constructor`, nesting and body-size limits) before invoking
+  the runner; validated object/array/null values reach the runner, evidence, and replay
+  with their original JSON types preserved (string-flattening is a forbidden
+  simplification); smoke records structured input evidence (schema kinds, value kind,
+  digest, type_preserved) and the validator blocks type-loss regressions
 - interaction runtime fallback policy: valid artifact → real UI; missing/invalid/
   unsupported → explicit state; mock fixtures only on test/dev paths; production
   runtime never shows automatic mock success
