@@ -275,12 +275,12 @@ textarea{padding:4px;margin:2px;font-family:ui-monospace,monospace;width:100%;
 .parse-status.ok{color:#7ee787}
 .parse-status.bad{color:#ff7b72}
 #validation-view{color:#f0b429;white-space:pre-wrap}
-#queue li{margin:2px 0}
+#queue li{margin:2px 0;overflow-wrap:anywhere}
 @media (max-width:640px){
   body{margin:8px}
   .panel{padding:8px}
   button{width:100%;margin:4px 0;box-sizing:border-box}
-  #action-inputs input,#action-inputs select{width:100%;box-sizing:border-box;margin:4px 0}
+  #action-select,#action-inputs input,#action-inputs select{width:100%;box-sizing:border-box;margin:4px 0}
 }
 </style></head><body>
 <h1>Interaction Console</h1>

@@ -183,6 +183,16 @@ def test_primitive_string_field_keeps_text_control_and_string_payload(tmp_path):
     assert "string schema는 JSON처럼 보여도 문자열 유지" in ui
 
 
+def test_action_console_mobile_query_covers_action_select(tmp_path):
+    """§15.6: action-select는 #action-inputs 밖의 형제 — 모바일 media query가 직접 덮어야
+    옵션 라벨 고유 폭이 375px viewport를 넘치지 않는다 (browser 실측 회귀 고정)."""
+    run = _make_struct_run(tmp_path)
+    ui = generate_interaction_ui(build_interaction_contract(run / "workspace"))
+    assert "#action-select,#action-inputs input,#action-inputs select{width:100%" in ui
+    # 긴 structured JSON 대기열 텍스트가 좁은 viewport를 가로로 파괴하지 않는다
+    assert "#queue li{margin:2px 0;overflow-wrap:anywhere}" in ui
+
+
 def test_generated_ui_and_server_have_no_eval(tmp_path):
     """§13: eval/Function constructor/임의 실행 금지."""
     run = _make_struct_run(tmp_path)
