@@ -1273,6 +1273,12 @@ def _check_interaction_ui(run_dir: Path) -> list[str]:
         if not any(e.get("exit_code") == 0 and e.get("parsed")
                    for e in evidence.get("exchanges") or []):
             p.append("interaction ui: runner exchange 실증 없이 smoke_pass=true")
+    # 이슈 #13 §9.3: object/array schema field의 타입 손실은 smoke_pass와 무관하게 실패다
+    for entry in smoke.get("structured_input") or []:
+        if not entry.get("type_preserved"):
+            p.append("interaction ui: structured input 타입 손실 — "
+                     f"{entry.get('action')}.{entry.get('field')} = {entry.get('value_kind')}"
+                     f" (기대: {'|'.join(entry.get('schema_kinds') or [])})")
     from repo_idea_miner.factory_core_gates import detect_mock_fallback
     for root in ("workspace", "final_artifact"):
         files = {}

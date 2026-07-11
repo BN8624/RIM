@@ -1,6 +1,7 @@
 # 도메인 중립 INTERACTION_UI executor — interaction contract를 읽어 실조작 UI를 생성하고 runner로 검증한다 (이슈 #5 §6).
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -77,6 +78,76 @@ def grid_render_hints(initial_state: dict) -> dict | None:
             "data_entity": data_entity, "rows_field": "rows"}
 
 
+# ---------------------------------------------------------------- structured input 타입 관측 (이슈 #13)
+
+# 관측 재귀 한도 — 병리적 fixture로 인한 폭주 방지 (검증 한도와 별개)
+_TYPE_OBSERVE_MAX_DEPTH = 8
+
+
+def _json_kind(value) -> str:
+    """JSON 값의 canonical kind. bool은 number보다 먼저 판정한다 (Python bool ⊂ int 함정)."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    return "unsupported"
+
+
+def _merge_type_descriptor(desc: dict | None, value, depth: int = 0) -> dict:
+    """관측값 하나를 type descriptor에 병합한다. descriptor는 JSON 직렬화 가능·결정론적이다.
+
+    {"kinds": [정렬된 관측 kind], "fields": {object field별 descriptor}, "items": array 원소 descriptor}
+    """
+    desc = desc or {"kinds": []}
+    kind = _json_kind(value)
+    if kind not in desc["kinds"]:
+        desc["kinds"] = sorted(desc["kinds"] + [kind])
+    if depth >= _TYPE_OBSERVE_MAX_DEPTH:
+        return desc
+    if kind == "object":
+        fields = desc.setdefault("fields", {})
+        for k in sorted(value):
+            fields[k] = _merge_type_descriptor(fields.get(k), value[k], depth + 1)
+    elif kind == "array":
+        items = desc.get("items")
+        for it in value:
+            items = _merge_type_descriptor(items, it, depth + 1)
+        if items is not None:
+            desc["items"] = items
+    return desc
+
+
+def observe_input_types(artifact_root: Path, action_names: set[str]) -> dict:
+    """fixture 전체의 action payload에서 field별 type descriptor를 관측한다 (이슈 #13 §4).
+
+    action_contract에는 타입 정보가 없으므로 fixture 실사용 값이 결정론적 타입 정본이다.
+    관측이 없는 field는 결과에 없다 — 그 field는 기존 text 입력과 검증 skip을 유지한다."""
+    observed: dict[str, dict] = {}
+    for path in sorted(artifact_root.glob("fixtures/scenario_*.json")):
+        fixture = _load_json(path)
+        if not fixture:
+            continue
+        for action in fixture.get("actions") or []:
+            if not isinstance(action, dict):
+                continue
+            name = action.get("type")
+            payload = action.get("payload")
+            if name not in action_names or not isinstance(payload, dict):
+                continue
+            slot = observed.setdefault(name, {})
+            for field in sorted(payload):
+                slot[field] = _merge_type_descriptor(slot.get(field), payload[field])
+    return observed
+
+
 def first_fixture(artifact_root: Path) -> dict | None:
     for p in sorted((artifact_root / "fixtures").glob("scenario_*.json")):
         data = _load_json(p)
@@ -144,6 +215,11 @@ def build_interaction_contract(artifact_root: Path) -> dict:
             for a in actions
         ],
         "input_schema": {a.get("name"): list(a.get("input") or []) for a in actions},
+        # 이슈 #13: fixture 실사용 값에서 관측한 field type descriptor — object/array schema일
+        # 때만 structured JSON input을 열고, 관측 없는 field는 기존 text 입력을 유지한다.
+        "input_types": observe_input_types(
+            artifact_root, {a.get("name") for a in actions}),
+        "input_types_provenance": "fixtures/scenario_*.json action payload 관측",
         "state_schema": {e.get("name"): list(e.get("fields") or []) for e in entities},
         "initial_state": fixture["initial_state"],
         # runner의 시나리오 스키마는 도메인마다 다르다 — fixture를 템플릿으로 재사용해
@@ -179,6 +255,7 @@ def generate_interaction_ui(contract: dict) -> str:
     contract_json = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     head = """<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Interaction Console</title>
 <style>
 body{font-family:system-ui,sans-serif;margin:16px;background:#111;color:#eee}
@@ -187,10 +264,24 @@ h1{font-size:18px} h2{font-size:14px;margin:12px 0 4px}
 pre{background:#1b1b1b;padding:8px;border-radius:4px;overflow:auto;max-height:320px}
 button{padding:6px 12px;margin:4px 4px 4px 0;cursor:pointer}
 input,select{padding:4px;margin:2px}
+textarea{padding:4px;margin:2px;font-family:ui-monospace,monospace;width:100%;
+  box-sizing:border-box;background:#1b1b1b;color:#eee;border:1px solid #444}
 .err{color:#ff7b72;white-space:pre-wrap}
 .okmsg{color:#7ee787}
 .state-tag{font-weight:bold}
+.field-box{display:block;margin:6px 0}
+.field-hint{color:#8b949e;font-size:11px}
+.parse-status{font-size:12px;white-space:pre-wrap}
+.parse-status.ok{color:#7ee787}
+.parse-status.bad{color:#ff7b72}
+#validation-view{color:#f0b429;white-space:pre-wrap}
 #queue li{margin:2px 0}
+@media (max-width:640px){
+  body{margin:8px}
+  .panel{padding:8px}
+  button{width:100%;margin:4px 0;box-sizing:border-box}
+  #action-inputs input,#action-inputs select{width:100%;box-sizing:border-box;margin:4px 0}
+}
 </style></head><body>
 <h1>Interaction Console</h1>
 <div class="panel"><h2>State</h2>
@@ -202,6 +293,7 @@ input,select{padding:4px;margin:2px}
 <button id="queue-add">대기열에 추가</button>
 <button id="run-actions">실행</button>
 <button id="reset-actions">초기화</button>
+<div id="validation-view"></div>
 <ol id="queue"></ol></div>
 <div class="panel"><h2>Events</h2><pre id="events-view"></pre></div>
 <div class="panel"><h2>Errors</h2><div id="error-view" class="err"></div></div>
@@ -263,17 +355,183 @@ function renderActionSelect() {
   }
   renderInputs();
 }
+// ---- structured input (이슈 #13): control은 field 이름이 아니라 관측된 schema kind로만 정한다.
+// primitive string은 {...}/[...] 형태라도 절대 자동 JSON parse하지 않는다.
+const STRUCT_MAX_CHARS = 200000;
+const STRUCT_MAX_DEPTH = 16;
+const FORBIDDEN_KEYS = ["__proto__", "prototype", "constructor"];
+
+function descFor(action, field) {
+  const perAction = (CONTRACT["input_types"] || {})[action] || {};
+  return perAction[field] || null;
+}
+function controlKindForDesc(desc) {
+  if (!desc || !Array.isArray(desc["kinds"]) || !desc["kinds"].length) { return "text"; }
+  const ks = desc["kinds"].filter((k) => k !== "null");
+  if (ks.length !== 1) { return "text"; }  // 혼합/미상 관측 → 기존 text 유지 (추측 금지)
+  if (ks[0] === "object" || ks[0] === "array") { return ks[0]; }
+  if (ks[0] === "boolean") { return "boolean"; }
+  if (ks[0] === "number") { return "number"; }
+  return "text";
+}
+function jsKindOf(v) {
+  if (v === null) { return "null"; }
+  if (Array.isArray(v)) { return "array"; }
+  const t = typeof v;
+  if (t === "boolean" || t === "number" || t === "string") { return t === "number" ? "number" : t; }
+  if (t === "object") { return "object"; }
+  return "unsupported";
+}
+function structuralProblems(v, depth, path, problems) {
+  if (depth > STRUCT_MAX_DEPTH) {
+    problems.push("EXCESSIVE_NESTING: " + path + " 깊이 " + STRUCT_MAX_DEPTH + " 초과");
+    return;
+  }
+  if (Array.isArray(v)) {
+    v.forEach((it, i) => structuralProblems(it, depth + 1, path + "[" + i + "]", problems));
+  } else if (v !== null && typeof v === "object") {
+    for (const key of Object.keys(v)) {
+      if (FORBIDDEN_KEYS.indexOf(key) >= 0) {
+        problems.push("FORBIDDEN_KEY: " + path + "." + key);
+        continue;
+      }
+      structuralProblems(v[key], depth + 1, path + "." + key, problems);
+    }
+  }
+}
+function checkAgainstDesc(v, desc, path, problems) {
+  if (!desc || !Array.isArray(desc["kinds"]) || !desc["kinds"].length) { return; }
+  const k = jsKindOf(v);
+  if (desc["kinds"].indexOf(k) < 0) {
+    problems.push("INVALID_FIELD_TYPE: " + path + " = " + k +
+                  " (기대: " + desc["kinds"].join("|") + ")");
+    return;
+  }
+  if (k === "object" && desc["fields"]) {
+    for (const key of Object.keys(v)) {
+      if (desc["fields"][key]) { checkAgainstDesc(v[key], desc["fields"][key], path + "." + key, problems); }
+    }
+  }
+  if (k === "array" && desc["items"]) {
+    v.forEach((it, i) => {
+      const p = [];
+      checkAgainstDesc(it, desc["items"], path + "[" + i + "]", p);
+      for (const msg of p) { problems.push(msg.replace("INVALID_FIELD_TYPE", "INVALID_ARRAY_ITEM")); }
+    });
+  }
+}
+function parseStructured(raw, kind, allowNull, desc) {
+  const text = String(raw);
+  if (text.length > STRUCT_MAX_CHARS) {
+    return {"valid": false, "error": "PAYLOAD_TOO_LARGE: 입력이 " + STRUCT_MAX_CHARS + "자를 초과"};
+  }
+  if (text.trim() === "") {
+    return {"valid": false, "error": "MISSING_REQUIRED_FIELD: JSON " + kind + " 값이 필요합니다"};
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    return {"valid": false, "error": "INVALID_JSON: " + e.message};
+  }
+  const topKind = jsKindOf(value);
+  if (topKind !== kind && !(allowNull && topKind === "null")) {
+    return {"valid": false, "error": "WRONG_TOP_LEVEL_TYPE: " + topKind +
+            " (기대: " + kind + (allowNull ? "|null" : "") + ")"};
+  }
+  const problems = [];
+  structuralProblems(value, 0, "$", problems);
+  if (!problems.length && topKind !== "null") { checkAgainstDesc(value, desc, "$", problems); }
+  if (problems.length) { return {"valid": false, "error": problems.join("\\n")}; }
+  return {"valid": true, "value": value};
+}
+function updateParseStatus(el) {
+  const status = document.getElementById("parse-status-" + el.dataset.field);
+  if (!status) { return; }
+  const desc = descFor(document.getElementById("action-select").value, el.dataset.field);
+  const out = parseStructured(el.value, el.dataset.kind, el.dataset.allownull === "1", desc);
+  status.textContent = out["valid"] ? "parse OK (" + jsKindOf(out["value"]) + ")" : out["error"];
+  status.className = "parse-status " + (out["valid"] ? "ok" : "bad");
+}
+function showValidation(msg) {
+  document.getElementById("validation-view").textContent = msg || "";
+}
 function renderInputs() {
   const sel = document.getElementById("action-select");
   const span = document.getElementById("action-inputs");
   span.innerHTML = "";
   const fields = CONTRACT["input_schema"][sel.value] || [];
   for (const f of fields) {
+    const desc = descFor(sel.value, f);
+    const kind = controlKindForDesc(desc);
+    if (kind === "object" || kind === "array") {
+      const allowNull = desc["kinds"].indexOf("null") >= 0;
+      const box = document.createElement("label");
+      box.className = "field-box";
+      const hint = document.createElement("div");
+      hint.className = "field-hint";
+      hint.textContent = f + " — JSON " + kind + (allowNull ? " 또는 null" : "");
+      const ta = document.createElement("textarea");
+      ta.rows = 4;
+      ta.dataset.field = f;
+      ta.dataset.kind = kind;
+      ta.dataset.allownull = allowNull ? "1" : "0";
+      ta.placeholder = kind === "object" ? '{"key": value}' : "[value, ...]";
+      ta.addEventListener("input", () => updateParseStatus(ta));
+      const status = document.createElement("div");
+      status.id = "parse-status-" + f;
+      status.className = "parse-status";
+      box.appendChild(hint);
+      box.appendChild(ta);
+      box.appendChild(status);
+      span.appendChild(box);
+      continue;
+    }
+    if (kind === "boolean") {
+      const bsel = document.createElement("select");
+      bsel.dataset.field = f;
+      bsel.dataset.kind = "boolean";
+      for (const [val, label] of [["", f + " (true/false)"], ["true", "true"], ["false", "false"]]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        bsel.appendChild(opt);
+      }
+      span.appendChild(bsel);
+      continue;
+    }
     const inp = document.createElement("input");
     inp.placeholder = f;
     inp.dataset.field = f;
+    inp.dataset.kind = kind;
+    if (kind === "number") {
+      inp.type = "number";
+      inp.step = "any";
+    }
     span.appendChild(inp);
   }
+  showValidation("");
+}
+function coerceConsoleControl(el) {
+  const kind = el.dataset.kind || "text";
+  if (kind === "object" || kind === "array") {
+    const desc = descFor(document.getElementById("action-select").value, el.dataset.field);
+    return parseStructured(el.value, kind, el.dataset.allownull === "1", desc);
+  }
+  if (kind === "boolean") {
+    if (el.value !== "true" && el.value !== "false") {
+      return {"valid": false, "error": "INVALID_FIELD_TYPE: true/false 값을 선택하세요"};
+    }
+    return {"valid": true, "value": el.value === "true"};
+  }
+  if (kind === "number") {
+    const raw = el.value.trim();
+    if (raw === "") { return {"valid": false, "error": "MISSING_REQUIRED_FIELD: 숫자 값이 필요합니다"}; }
+    const n = Number(raw);
+    if (!isFinite(n)) { return {"valid": false, "error": "INVALID_FIELD_TYPE: 숫자가 아닙니다: " + raw}; }
+    return {"valid": true, "value": n};
+  }
+  return {"valid": true, "value": el.value};  // string schema는 JSON처럼 보여도 문자열 유지
 }
 function renderQueue() {
   const ol = document.getElementById("queue");
@@ -288,9 +546,22 @@ document.getElementById("action-select").addEventListener("change", renderInputs
 document.getElementById("queue-add").addEventListener("click", () => {
   const sel = document.getElementById("action-select");
   const payload = {};
-  for (const inp of document.querySelectorAll("#action-inputs input")) {
-    payload[inp.dataset.field] = inp.value;
+  const problems = [];
+  for (const el of document.querySelectorAll(
+      "#action-inputs input, #action-inputs select, #action-inputs textarea")) {
+    const out = coerceConsoleControl(el);
+    if (!out["valid"]) {
+      problems.push(el.dataset.field + ": " + out["error"]);
+      continue;
+    }
+    payload[el.dataset.field] = out["value"];
   }
+  if (problems.length) {
+    // invalid 입력은 대기열에 넣지 않는다 — runner 호출 0, state 변화 0 (fail-closed)
+    showValidation("입력 거부:\\n" + problems.join("\\n"));
+    return;
+  }
+  showValidation("");
   queued.push({"type": sel.value, "payload": payload});
   renderQueue();
 });
@@ -303,6 +574,7 @@ document.getElementById("reset-actions").addEventListener("click", () => {
   renderState(CONTRACT["initial_state"], "INITIAL");
   renderEvents([]);
   showError("");
+  showValidation("");
 });
 document.getElementById("run-actions").addEventListener("click", async () => {
   showError("");
@@ -829,6 +1101,90 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = ROOT / "product" / "interaction" / "contract.json"
 
+# 이슈 #13: client 검증만 신뢰하지 않는다 — 서버가 contract input_types로 재검증한다.
+MAX_BODY_BYTES = 1_000_000
+MAX_DEPTH = 16
+FORBIDDEN_KEYS = ("__proto__", "prototype", "constructor")
+
+
+def _kind_of(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    return "unsupported"
+
+
+def _structural_problems(value, depth, path, problems):
+    if depth > MAX_DEPTH:
+        problems.append("EXCESSIVE_NESTING: %s 깊이 %d 초과" % (path, MAX_DEPTH))
+        return
+    if isinstance(value, list):
+        for i, item in enumerate(value):
+            _structural_problems(item, depth + 1, "%s[%d]" % (path, i), problems)
+    elif isinstance(value, dict):
+        for key in value:
+            if key in FORBIDDEN_KEYS:
+                problems.append("FORBIDDEN_KEY: %s.%s" % (path, key))
+                continue
+            _structural_problems(value[key], depth + 1, "%s.%s" % (path, key), problems)
+
+
+def _check_desc(value, desc, path, problems):
+    kinds = (desc or {}).get("kinds") or []
+    if not kinds:
+        return
+    kind = _kind_of(value)
+    if kind not in kinds:
+        # schema가 object/array를 요구하는데 문자열이 오면 자동 parse 없이 거부한다 (fail closed)
+        problems.append("TYPE_MISMATCH: %s = %s (기대: %s)" % (path, kind, "|".join(kinds)))
+        return
+    if kind == "object" and desc.get("fields"):
+        for key in sorted(value):
+            if key in desc["fields"]:
+                _check_desc(value[key], desc["fields"][key], "%s.%s" % (path, key), problems)
+    if kind == "array" and desc.get("items"):
+        for i, item in enumerate(value):
+            sub = []
+            _check_desc(item, desc["items"], "%s[%d]" % (path, i), sub)
+            problems.extend(p.replace("TYPE_MISMATCH", "INVALID_ARRAY_ITEM") for p in sub)
+
+
+def validate_actions(contract, actions):
+    """request actions를 contract 선언(input_schema)과 관측 타입(input_types)으로 재검증한다."""
+    problems = []
+    if not isinstance(actions, list):
+        return ["TYPE_MISMATCH: actions가 array가 아님"]
+    input_schema = contract.get("input_schema") or {}
+    input_types = contract.get("input_types") or {}
+    for i, action in enumerate(actions):
+        path = "actions[%d]" % i
+        if not isinstance(action, dict):
+            problems.append("TYPE_MISMATCH: %s가 object가 아님" % path)
+            continue
+        payload = action.get("payload")
+        payload = payload if isinstance(payload, dict) else {}
+        _structural_problems(payload, 0, path + ".payload", problems)
+        name = action.get("type")
+        fields = input_schema.get(name)
+        if fields is None:
+            continue  # 미선언 action은 runner가 기존 계약대로 거부한다
+        for field in fields:
+            if field not in payload:
+                problems.append("MISSING_REQUIRED_FIELD: %s.payload.%s" % (path, field))
+        for field, desc in sorted((input_types.get(name) or {}).items()):
+            if field in payload:
+                _check_desc(payload[field], desc, "%s.payload.%s" % (path, field), problems)
+    return problems
+
 
 def _error(handler, code, message):
     body = json.dumps({"error": message}, ensure_ascii=False).encode("utf-8")
@@ -853,13 +1209,22 @@ class Handler(SimpleHTTPRequestHandler):
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         try:
             length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_BODY_BYTES:
+                _error(self, 413, "PAYLOAD_TOO_LARGE: request가 %d bytes 초과" % MAX_BODY_BYTES)
+                return
             payload = json.loads(self.rfile.read(length) or b"{}")
         except (ValueError, json.JSONDecodeError):
             _error(self, 400, "invalid request json")
             return
+        actions = payload.get("actions") or []
+        validation_problems = validate_actions(contract, actions)
+        if validation_problems:
+            # invalid input은 runner 호출 전에 거부한다 — state 변화 0 (이슈 #13 §7.3)
+            _error(self, 400, "; ".join(validation_problems[:20]))
+            return
         scenario = dict(contract.get("scenario_template")
                         or {"initial_state": contract["initial_state"]})
-        scenario["actions"] = payload.get("actions") or []
+        scenario["actions"] = actions
         fd_path = None
         try:
             with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
@@ -931,6 +1296,33 @@ def has_error_signal(parsed: dict | None) -> bool:
     return False
 
 
+def structured_input_evidence(contract: dict, actions: list[dict]) -> list[dict]:
+    """object/array schema field의 실제 전달 타입 evidence (이슈 #13 §9.1).
+
+    전체 payload 대신 digest+타입만 남긴다 — 민감 값 로그 최소화."""
+    types = contract.get("input_types") or {}
+    out: list[dict] = []
+    for action in actions:
+        name = action.get("type")
+        payload = action.get("payload") or {}
+        for field, desc in sorted((types.get(name) or {}).items()):
+            kinds = desc.get("kinds") or []
+            if not ({"object", "array"} & set(kinds)) or field not in payload:
+                continue
+            value = payload[field]
+            digest = hashlib.sha256(
+                json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:16]
+            out.append({
+                "action": name, "field": field,
+                "schema_kinds": list(kinds),
+                "value_kind": _json_kind(value),
+                "input_digest": digest,
+                "type_preserved": _json_kind(value) in kinds,
+            })
+    return out
+
+
 def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 60.0) -> dict:
     """browser 없이 interaction 계약을 runner로 실증한다 (§6.4).
 
@@ -989,6 +1381,14 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
             if not invalid_rejected:
                 problems.append("필수 input이 빠진 action이 거부되지 않음")
 
+    # 이슈 #13 §9.3: object/array schema field가 runner로 문자열 변질돼 가면 실패다
+    structured = structured_input_evidence(contract, fixture_actions)
+    for entry in structured:
+        if not entry["type_preserved"]:
+            problems.append(
+                f"structured input 타입 손실: {entry['action']}.{entry['field']} = "
+                f"{entry['value_kind']} (기대: {'|'.join(entry['schema_kinds'])})")
+
     return {
         "interaction_kind": contract["interaction_kind"],
         "available_actions": action_names,
@@ -998,6 +1398,7 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
         "state_change_observed": state_changed,
         "invalid_action_rejected": invalid_rejected,
         "revise_changes_result": revise_changed,
+        "structured_input": structured,
         "problems": problems,
         "pass": state_changed and invalid_rejected and not problems,
     }
