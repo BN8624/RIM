@@ -11,7 +11,10 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1254개 (flaky 0) at issue #10 마감; smoke =
+- tests: full suite PASS ×2 연속 1254개 (flaky 0) at issue #11 마감 (코드 변경 0 배치);
+  smoke = dashboard(/, /products 200) + Fresh-C interaction 콘솔 실조작
+  (runner-backed action→state 변화, invalid 명시 거부) + Fresh-B replay viewer 실렌더 PASS
+- (이전 기록) full suite PASS ×2 연속 1254개 (flaky 0) at issue #10 마감; smoke =
   dashboard(/, /products 200) + Table 17 child grid 콘솔 브라우저 실조작
   (desktop+375px, Boolean false→true, invalid 명시 거부, replay viewer) PASS
 - (이전 기록) full suite PASS ×2 연속 1247개 (flaky 0) at issue #9 마감;
@@ -173,6 +176,27 @@ RECENT_SEMANTIC_CHANGES:
   084204 factory-validate PASS, viewer 재생성 금지 준수(replay 정상).
   다음 추천 = deferred 항목(대형 파일 분해 또는 db verdict stale) 별도 주문
 
+- Issue #11 done (Fresh Blind Batch 2 — Factory 무수정 블라인드 3종, 커밋 docs only):
+  선정 = Fresh-A #1 스터디 플래너(제약 해결형)/Fresh-B #99 HITL 승인 패널(workflow형)/
+  Fresh-C #41 Mini-Transformers(구성·변환형) — 전부 미사용·hardcode 0. Round 1 결과 =
+  A: VALID_HOLD(golden ISO↔runner epoch 의미 괴리+engine time.time() 비결정 —
+  SPEC_REPAIR 사람 결정 실재, base 124224/loop 220017), B: PRODUCT_CORE_GAP(선언 entity
+  AgentWorkflowState 미구현, core_contract FAIL/DROP, base 151426/loop 002817),
+  C: PARTIAL_PRODUCT(gates 7/7, INTERACTION_UI APPLIED child 144636, acceptance 12/14,
+  base 142713/loop 234103). INVALID_SUCCESS 0, Factory source 변경 0, 신규 lane/executor 0,
+  generic repair 0회(§10.1 gate 미충족 — 반복 defect 없음) → Round 2 없음, Round 1이 최종.
+  발견된 Factory 결함 후보(1회 관측, 미수리·다음 주문 후보): (1) live desk가 의미 미정의
+  human_decision_required를 policy requires_human_approval_before_apply와 혼동해 true로
+  채워 실행 가능 lane(RUNNER_BACKED) 앞에서 loop 정지 — 결정론 packet 정본 의미는
+  lane==HOLD_FOR_HUMAN 한정(factory_autopilot_desks.py:510), mock loop과 계약 불일치;
+  (2) generic INTERACTION_UI 콘솔이 object-valued 입력을 JSON parse 없이 문자열 전송 —
+  UI 실조작에서 engine 오류 실측(오류는 정직 표시), probe는 runner 직접 구동이라 미탐지.
+  generalization = YELLOW(완주 0/3이나 HOLD/CORE_GAP 진단이 실원인과 일치, 정직한 진단기).
+  Atlas = 3/3 CONTEXT_SUFFICIENT(--route factory_closed_loop). 회귀 = #47/#54/SRS27/Table17
+  validate PASS + base hash 4종 불변. infra: Google API 500 구간(21:41~00:14)으로
+  build transient 실패 A1/B5/C3회 — 전부 fresh 재시도 회복, mock 대체 0.
+  증거: runs/_issue11_blind_batch2/state.json
+
 - Issue #7 done (VIEWER_POLISH 도메인 중립화, 커밋 3f218cb/687e53a):
   executor = factory_viewer_polish.run_viewer_polish — replay discovery(명시적
   replay/index.json ref 우선, compatibility는 단일 후보만, MISSING/AMBIGUOUS/
@@ -205,16 +229,20 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 후보(단일): deferred 중 택일 별도 주문 — 대형 파일 분해
-   (factory_validate/challenge_dashboard/factory_product_loop §21), literal-only
-   artifact 실증 승격, --run-dir mode run의 db verdict stale(artifact가 정본).
-   (Table 17 HOLD는 이슈 #10으로 종결 — child 113919 PRODUCT_CANDIDATE 14/14)
+1. 다음 후보(단일): live desk human_decision_required 계약 정합 별도 주문 —
+   결정론 packet 정본(lane==HOLD_FOR_HUMAN일 때만 true)과 정렬하거나 loop이
+   LANE_POLICY.auto_execute_allowed를 결정론적으로 집행. 이슈 #11 Fresh-C에서
+   실행 가능 lane 앞 부당 정지 실측 (1회 관측이라 #11 repair gate 미충족 — 미수리).
+   (그 외 deferred: generic 콘솔 object 입력 typed 처리, 대형 파일 분해,
+   literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
 - do not put a static current-HEAD hash back into this file (HEAD_SOURCE rule)
 - do not re-add human documentation, checklist, or Atlas HTML/serve/summary
 - do not touch #47/#54/fresh(190458·193103·194814) base runs on disk (tmp copies only)
+- do not touch blind batch 2 base runs(124224·151426·142713)와 Round 1 loop artifact —
+  fresh child로만 진행 (이슈 #11 Round 1 기록은 불변 증거)
 - lane-result escalation (SPEC_REPAIR 분류 → 다음 iteration 승급)은 구현됨(CANON-07) —
   high-risk 예산 1로 같은 loop 내 실행까지는 안 되는 것이 설계 한도이지 버그가 아님
 - LITERAL_REFERENCE artifacts stay non-promoted (§13) — do not upgrade them without AST/manifest proof
