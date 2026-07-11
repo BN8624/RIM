@@ -30,6 +30,28 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- **Issue #13 IN PROGRESS (Schema-Aware Structured Console Input, 커밋 aa83568 push됨,
+  이슈 OPEN — 다음 세션이 이어서 마감)**: Phase A~D 완료 / Phase E·마감 잔여.
+  완료된 것 = (1)Phase A 판정: 복합(UI_RENDERING_GAP+CLIENT_PARSE_GAP: action console이
+  전 필드 text input→string 전송 + SERVER_VALIDATION_GAP: 서버 schema 재검증 0. 서버→runner
+  JSON 왕복은 타입 보존 — 손실 지점은 클라이언트 단일). (2)구현: observe_input_types
+  (fixture 실사용 payload에서 field type descriptor 관측 — kinds/fields/items/null union,
+  action_contract에 타입 정보가 없어 fixture가 결정론 타입 정본), console structured
+  JSON textarea(object/array schema만 명시적 parse, parse status 표시, invalid는 대기열
+  차단, string은 JSON처럼 보여도 문자열 유지, boolean select/number input, meta viewport
+  추가), server 재검증(fail-closed: TYPE_MISMATCH/MISSING_REQUIRED_FIELD/INVALID_ARRAY_ITEM/
+  FORBIDDEN_KEY(__proto__/prototype/constructor)/EXCESSIVE_NESTING(16)/body 1MB),
+  smoke structured_input evidence(type/digest/type_preserved) + factory_validate §9.3
+  type-loss 검사. (3)테스트 19종(tests/test_structured_console_input.py) + 영향권 122 PASS.
+  주의: 생성 JS의 검증 결과 키는 {"valid": ...} — {"ok": true}는 mock-fallback 검출기
+  catch-window에 오탐된다(검출기 약화 금지). (4)Phase E 부분: Fresh-C child 165952를
+  scratchpad 복사(원본 불변)해 콘솔 재생성 — config_schema/params object 2종
+  type_preserved=true, smoke ok. 잔여 = §15 browser 실조작(valid object/array, invalid
+  JSON, wrong type, primitive, 375px), 전체 pytest 2회, architecture-build 2회+check
+  (구조 변경 있음 — atlas rebuild 필요), CANON-06 계약 기록(§17.2: structured parse는
+  schema object/array일 때만·JSON 자동 추측 금지·이중 validation·runner type preservation·
+  fail-closed), REENTRY/메모리 갱신, 이슈 #13 보고 댓글+close(형식 §23), 다음 추천 =
+  Fresh Blind Batch 3 (§17.3 지시)
 - Issue #12 done (Live Desk Human Decision Contract Alignment, 커밋 0d0a725/47ba0e1/68040a8):
   결함 판정 = 복합(PROMPT_DEFECT: lane prompt에 human_decision_required 의미 정의 부재 +
   NORMALIZATION_MISSING: raw 값이 loop 정지에 직행 + VALIDATOR_MISSING: consistency 검증
@@ -253,11 +275,13 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 다음 후보(단일): generic 콘솔 object-valued 입력 typed 처리 별도 주문 —
-   이슈 #11 Fresh-C UI 실조작에서 실측(object 필드를 JSON parse 없이 문자열 전송 →
-   engine 오류, UI 단독으로 primary task 완주 불가). 이슈 #12 §12 허용 조건에
-   해당했으나 Fresh-C 완주를 막지 않아 deferred 유지. (그 외 deferred: 대형 파일
-   분해, literal-only artifact 실증 승격, db verdict stale)
+1. 이슈 #13 마감 재개 (OPEN, Phase A~D 완료·커밋 aa83568): ①§15 browser 실조작
+   (scratchpad 복사본 재생성 가능: run_interaction_ui apply → interaction_server 기동 →
+   valid object/array·invalid JSON·wrong type·primitive·375px), ②전체 pytest 2회 연속,
+   ③architecture-build 2회 byte-identical+check(구조 변경 있음), ④CANON-06 structured
+   input 계약 기록, ⑤이슈 #13 완료 보고 댓글(§23 형식)+close. 다음 추천 작업은
+   Fresh Blind Batch 3 (주문서 §17.3 지시). (그 외 deferred: 대형 파일 분해,
+   literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)

@@ -5,7 +5,7 @@
    "path_pattern": "action_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 49,
+   "source_line": 50,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -842,7 +842,7 @@
    "path_pattern": "continuation_run_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1824,
+   "source_line": 1830,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -1769,7 +1769,7 @@
    "path_pattern": "failure_classification.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1825,
+   "source_line": 1831,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -2183,7 +2183,7 @@
    "path_pattern": "gate_rerun_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1828,
+   "source_line": 1834,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -2444,7 +2444,7 @@
    "path_pattern": "green_base_promotion.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1827,
+   "source_line": 1833,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -3407,7 +3407,7 @@
    "path_pattern": "phase17_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1829,
+   "source_line": 1835,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -4928,7 +4928,7 @@
    "path_pattern": "repair_plan.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1826,
+   "source_line": 1832,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -5198,7 +5198,7 @@
    "path_pattern": "review/draft_execution/draft_execution_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1308,
+   "source_line": 1314,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -5234,7 +5234,7 @@
    "path_pattern": "review/draft_execution/execution_evidence.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1324,
+   "source_line": 1330,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -5252,7 +5252,7 @@
    "path_pattern": "review/draft_execution/execution_result.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1323,
+   "source_line": 1329,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -5270,7 +5270,7 @@
    "path_pattern": "review/draft_execution/side_effect_manifest.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1325,
+   "source_line": 1331,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6098,7 +6098,7 @@
    "path_pattern": "review/ux_polish/ux_evidence.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1470,
+   "source_line": 1476,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6143,7 +6143,7 @@
    "path_pattern": "review/ux_polish/ux_polish_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1438,
+   "source_line": 1444,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6161,7 +6161,7 @@
    "path_pattern": "review/viewer_polish/viewer_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1383,
+   "source_line": 1389,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6197,7 +6197,7 @@
    "path_pattern": "review/viewer_polish/viewer_evidence.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1382,
+   "source_line": 1388,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6233,7 +6233,7 @@
    "path_pattern": "review/viewer_polish/viewer_polish_report.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 1366,
+   "source_line": 1372,
    "source_path": "repo_idea_miner/factory_validate.py",
    "symbol_id": "repo_idea_miner.factory_validate"
   },
@@ -6422,7 +6422,7 @@
    "path_pattern": "runner_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 95,
+   "source_line": 166,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -7187,7 +7187,7 @@
    "path_pattern": "state_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 43,
+   "source_line": 44,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -8841,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1185,
+  "test_count": 1204,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -12276,13 +12276,16 @@
      ]
     }
    ],
-   "loc": 1098,
+   "loc": 1499,
    "module": "repo_idea_miner.factory_interaction_ui",
    "path": "repo_idea_miner/factory_interaction_ui.py",
    "private_symbols": [
     "_SERVER_SOURCE",
+    "_TYPE_OBSERVE_MAX_DEPTH",
     "_dump",
+    "_json_kind",
     "_load_json",
+    "_merge_type_descriptor",
     "_roots",
     "_run_runner"
    ],
@@ -12303,13 +12306,16 @@
     "generate_table_grid_ui",
     "grid_render_hints",
     "has_error_signal",
+    "observe_input_types",
     "run_interaction_smoke",
-    "run_interaction_ui"
+    "run_interaction_ui",
+    "structured_input_evidence"
    ],
    "tests": [
     "test_factory_coverage",
     "test_factory_interaction_ui",
-    "test_factory_runner_backed_execution"
+    "test_factory_runner_backed_execution",
+    "test_structured_console_input"
    ]
   },
   {
@@ -14690,7 +14696,7 @@
      ]
     }
    ],
-   "loc": 1887,
+   "loc": 1893,
    "module": "repo_idea_miner.factory_validate",
    "path": "repo_idea_miner/factory_validate.py",
    "private_symbols": [
@@ -14799,7 +14805,8 @@
     "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
-    "test_golden_representation_lint"
+    "test_golden_representation_lint",
+    "test_structured_console_input"
    ]
   },
   {
@@ -15874,9 +15881,9 @@
   }
  ],
  "repository": {
-  "head": "68040a84eecf6b40c79c2f48695f35264e643c1f",
+  "head": "aa83568922aec55e796f2272fd1cdd4243190ac0",
   "structural_diff": true,
-  "structural_fingerprint": "22da16948334def629c547aaed8f4000221e00e3c8c034a3d732321541fa7bbd",
+  "structural_fingerprint": "0c553a95525dcb1877042e96248cc8abd47392cdf6771caf67f0831850977352",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
@@ -17538,7 +17545,7 @@
     "CANON-07"
    ],
    "component_id": "validation",
-   "end_line": 1586,
+   "end_line": 1592,
    "kind": "function",
    "path": "repo_idea_miner/factory_validate.py",
    "related_tests": [
@@ -17560,13 +17567,14 @@
     "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
-    "test_golden_representation_lint"
+    "test_golden_representation_lint",
+    "test_structured_console_input"
    ],
    "roles": [
     "validator"
    ],
    "signature": "def run_marker_validators(run_dir: Path, run_kind: str) -> list[CheckResult]",
-   "start_line": 1576,
+   "start_line": 1582,
    "symbol_id": "repo_idea_miner.factory_validate.run_marker_validators"
   },
   {
@@ -17575,7 +17583,7 @@
     "CANON-10"
    ],
    "component_id": "validation",
-   "end_line": 1852,
+   "end_line": 1858,
    "kind": "function",
    "path": "repo_idea_miner/factory_validate.py",
    "related_tests": [
@@ -17597,14 +17605,15 @@
     "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
-    "test_golden_representation_lint"
+    "test_golden_representation_lint",
+    "test_structured_console_input"
    ],
    "roles": [
     "orchestrator",
     "validator"
    ],
    "signature": "def validate_continuation_run_dir(run_dir: str | Path, secrets: list[str]) -> tuple[bool, list[str], dict]",
-   "start_line": 1803,
+   "start_line": 1809,
    "symbol_id": "repo_idea_miner.factory_validate.validate_continuation_run_dir"
   },
   {
@@ -17634,7 +17643,8 @@
     "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
-    "test_golden_representation_lint"
+    "test_golden_representation_lint",
+    "test_structured_console_input"
    ],
    "roles": [
     "validator"
@@ -17649,7 +17659,7 @@
     "CANON-11"
    ],
    "component_id": "validation",
-   "end_line": 1887,
+   "end_line": 1893,
    "kind": "function",
    "path": "repo_idea_miner/factory_validate.py",
    "related_tests": [
@@ -17671,14 +17681,15 @@
     "test_factory_ux_polish",
     "test_factory_validate",
     "test_factory_viewer_polish",
-    "test_golden_representation_lint"
+    "test_golden_representation_lint",
+    "test_structured_console_input"
    ],
    "roles": [
     "invariant_target",
     "orchestrator"
    ],
    "signature": "def validate_product_run_dir(run_dir: str | Path, secrets: list[str]) -> tuple[bool, list[str]]",
-   "start_line": 1855,
+   "start_line": 1861,
    "symbol_id": "repo_idea_miner.factory_validate.validate_product_run_dir"
   },
   {
@@ -17830,6 +17841,7 @@
   "test_serve": "tests/test_serve.py",
   "test_signals": "tests/test_signals.py",
   "test_structural_reset_characterization": "tests/test_structural_reset_characterization.py",
+  "test_structured_console_input": "tests/test_structured_console_input.py",
   "test_truncation": "tests/test_truncation.py",
   "test_url_parser": "tests/test_url_parser.py",
   "test_viewer": "tests/test_viewer.py"
@@ -18278,6 +18290,10 @@
   "test_structural_reset_characterization": [
    "architecture_scanner",
    "cli_handlers"
+  ],
+  "test_structured_console_input": [
+   "factory_interaction_ui",
+   "factory_validate"
   ],
   "test_truncation": [
    "truncation"
