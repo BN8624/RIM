@@ -97,10 +97,13 @@ OPEN_BLOCKERS:
     순서가 없음 — spec repair apply의 시나리오 단위 부분 적용을 허용할지, 또는 spec repair
     pending 중 core patch lane을 허용할지 사람이 결정"
 - id: hold_47
-  state: waiting_human
-  evidence: PRODUCT_CANDIDATE 공식 성공 재현 — runs/factory_20260709_072220/review/phase2d1/
-    loop_20260711_023843 (live, iteration 1, gap 없음, gates 7/7, base 불변)
-  next_action: human final review/release decision
+  state: RESOLVED — removed (이슈 #5 Decision A)
+  evidence: "final human approval: APPROVED / factory verdict: PRODUCT_CANDIDATE /
+    release readiness: READY — product_reviews id 1 (run 5, action=productize,
+    reviewer_source=github_issue_5). 근거 run: runs/factory_20260709_072220/review/phase2d1/
+    loop_20260711_023843 (iteration 1, gates 7/7, acceptance PASS, base hash 101 files PASS)"
+  next_action: 없음 — #47은 공식 성공 기준 사례(official success reference)로 종결,
+    추가 수리·polish 불필요
 
 NEXT_ACTIONS:
 1. 다음 추천 작업(단일, 이슈 #4 §7 실측 근거): INTERACTION_UI(2C-2) executor 도메인 중립화 —
