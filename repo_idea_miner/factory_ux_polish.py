@@ -230,14 +230,14 @@ def _stylesheet(text: str) -> str:
 
 
 def _narrow_viewport_issue(text: str) -> dict | None:
-    """고정폭 자식이 있는 flex row가 wrap/media query 없이 좁은 화면을 깨뜨리는지.
+    """고정폭 자식이 있는 flex row가 wrap/stacking media query 없이 좁은 화면을 깨뜨리는지.
 
     결정론 규칙: display:flex 컨테이너 class + width>=200px 고정 class가 같은
-    스타일시트에 있고, flex-wrap도 max-width media query도 없으면 결함."""
+    스타일시트에 있고, flex-wrap도 없고, max-width media query 안에 그 컨테이너를
+    실제로 세로 배치하는 규칙(flex-direction/flex-wrap/display 변경)도 없으면 결함.
+    media query의 존재만으로는 해소로 보지 않는다 — 내용 없는 block은 수리가 아니다."""
     css = _stylesheet(text)
     if not css:
-        return None
-    if re.search(r"@media[^{]*max-width", css):
         return None
     if "flex-wrap" in css:
         return None
@@ -245,9 +245,16 @@ def _narrow_viewport_issue(text: str) -> dict | None:
         r"\.([\w-]+)[^{]*\{[^}]*display:\s*flex", css)]
     fixed = [m.group(1) for m in re.finditer(
         r"\.([\w-]+)[^{]*\{[^}]*width:\s*(?:2\d\d|[3-9]\d\d|\d{4,})px", css)]
-    if containers and fixed:
-        return {"container": containers[0], "fixed_children": fixed}
-    return None
+    if not containers or not fixed:
+        return None
+    container = containers[0]
+    for m in re.finditer(r"@media[^{]*max-width[^{]*\{", css):
+        seg = css[m.end():m.end() + 800]
+        rule = re.search(rf"\.{re.escape(container)}\s*\{{([^}}]*)\}}", seg)
+        if rule and re.search(r"flex-direction|flex-wrap|display\s*:\s*(?:block|grid)",
+                              rule.group(1)):
+            return None
+    return {"container": container, "fixed_children": fixed}
 
 
 def _outline_suppressed(text: str) -> bool:
@@ -264,9 +271,14 @@ def _outline_suppressed(text: str) -> bool:
 def _overflow_clip_selector(text: str) -> str | None:
     css = _stylesheet(text)
     m = re.search(r"([.#][\w-]+)[^{]*\{[^}]*overflow\s*:\s*hidden", css)
-    if m and _CONTROL_TAG_RE.search(text):
-        return m.group(1)
-    return None
+    if not m or not _CONTROL_TAG_RE.search(text):
+        return None
+    sel = m.group(1)
+    # 같은 selector에 대한 이후 overflow:auto 재정의(FIX_OVERFLOW patch)가 있으면 해소된 것
+    later = css[m.end():]
+    if re.search(rf"{re.escape(sel)}\s*\{{[^}}]*overflow\s*:\s*auto", later):
+        return None
+    return sel
 
 
 # ---------------------------------------------------------------- Canonical UX Contract (§6)
@@ -388,12 +400,15 @@ def diagnose_surface(surface: dict, contract: dict, artifact_root: Path) -> list
     has_data_action = 'data-action="' in text
 
     # ACTION_NOT_DISCOVERABLE — control이 아예 없으면 기능 부재(요구사항), 이름 없는
-    # control은 CLARIFY_LABEL로 machine-fixable
+    # control은 CLARIFY_LABEL로 machine-fixable. CLARIFY_LABEL marker script는
+    # runtime에 aria-label을 부여하므로 정적 잔여로 세지 않는다(브라우저 smoke가 실증).
+    label_marker = bool(re.search(r'data-ux-op="CLARIFY_LABEL"', text)) \
+        and 'setAttribute("aria-label"' in text
     if not controls and not has_data_action:
         out.append(_diag("ACTION_NOT_DISCOVERABLE", rel, "surface", "surface",
                          "조작 가능한 control이 표면에 없음 — UX patch로 기능을 만들 수 없다",
                          CATEGORY_PRODUCT_REQUIREMENT))
-    else:
+    elif not label_marker:
         unnamed = [c for c in controls if c["tag"] == "button" and not c["accessible_name"]]
         if unnamed:
             out.append(_diag("ACTION_NOT_DISCOVERABLE", rel, "button", "control",
@@ -459,8 +474,11 @@ def diagnose_surface(surface: dict, contract: dict, artifact_root: Path) -> list
             f"keyboard 도달 불가한 click 대상 {len(bad_tags)}개 ({', '.join(sorted(set(bad_tags)))})",
             CATEGORY_MACHINE_FIXABLE, "FIX_FOCUS_ORDER"))
 
-    # DISABLED_REASON_MISSING
-    disabled_untitled = [m.group(0) for m in re.finditer(
+    # DISABLED_REASON_MISSING — MARK_DISABLED_REASON marker script는 runtime에
+    # title을 부여하므로 정적 잔여로 세지 않는다
+    disabled_marker = bool(re.search(r'data-ux-op="MARK_DISABLED_REASON"', text)) \
+        and 'setAttribute("title"' in text
+    disabled_untitled = [] if disabled_marker else [m.group(0) for m in re.finditer(
         r"<[^>]*\bdisabled\b[^>]*>", text) if "title=" not in m.group(0)]
     if disabled_untitled:
         out.append(_diag("DISABLED_REASON_MISSING", rel, "[disabled]", "control",
@@ -617,11 +635,13 @@ _EXPOSE_REPLAY_POSITION_JS = """\
 
 
 def _op_record(op_id: str, surface: str, target: str, detail: str) -> dict:
+    rev = {v: k for k, v in DIAGNOSIS_TO_OPERATION.items()}
     return {
         "operation_id": op_id,
         "target_surface": surface,
         "target": target,
-        "precondition": "diagnosis " + {v: k for k, v in DIAGNOSIS_TO_OPERATION.items()}[op_id],
+        "precondition": "diagnosis " + rev.get(
+            op_id, "ACTION_NOT_DISCOVERABLE (숨겨진 필수 control)"),
         "patch_scope": "marker_block(data-ux-op) 주입 — 기존 마크업/스크립트 재작성 없음",
         "detail": detail,
         "expected_effect": "해당 diagnosis 재검사가 PASS로 바뀐다",
