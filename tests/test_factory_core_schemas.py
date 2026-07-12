@@ -214,3 +214,40 @@ def test_viewer_only_is_not_default_class():
     from repo_idea_miner.factory_core_prompts import mock_core_classification
 
     assert mock_core_classification()["artifact_class"] != "VIEWER_ONLY"
+
+
+# ---------------------------------------------------------------- blind batch 4 generic repair
+
+
+def test_runner_contract_rejects_sandbox_unsupported_interpreter():
+    """batch 4 D1: sandbox에 없는 interpreter의 runner_command는 동결 전에 거부돼야 한다 —
+    동결 후에는 patch가 runner를 다시 써도 command를 못 바꿔 영구 회복 불가."""
+    from pydantic import ValidationError
+
+    from repo_idea_miner.factory_core_schemas import RunnerContract
+
+    ok = RunnerContract(runner_command="python src/runner.py --scenario fixtures/scenario_001.json")
+    assert ok.runner_command.startswith("python ")
+    for bad in ("node src/runner.js --scenario fixtures/scenario_001.json",
+                "npm run scenario", "deno run runner.ts", "   "):
+        with pytest.raises(ValidationError):
+            RunnerContract(runner_command=bad)
+
+
+def test_prompts_declare_sandbox_runtime_and_rejection_channel():
+    """batch 4 D1/D2: 생성 프롬프트가 sandbox 런타임(python)과 구조적 무효 action의
+    errors 채널 명시 거부를 계약으로 선언해야 한다 (검증 계약과의 모순 해소 —
+    검출기 약화가 아니라 생성 규칙 정합)."""
+    from repo_idea_miner.factory_core_prompts import (
+        build_core_build_prompt,
+        build_core_contract_prompt,
+    )
+
+    contract_prompt = build_core_contract_prompt("{}", "{}")
+    assert "python" in contract_prompt
+    assert "silent-accept 금지" in contract_prompt
+    assert "errors" in contract_prompt
+
+    build_prompt = build_core_build_prompt("", "{}", "[]", [])
+    assert "python 스크립트여야 한다" in build_prompt
+    assert "silent-accept 금지" in build_prompt

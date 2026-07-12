@@ -437,3 +437,55 @@ def test_loop_escalation_recorded_even_when_budget_stops(tmp_path, monkeypatch):
     assert it2["selected_lane"] == "SPEC_REPAIR"
     assert res["hold_packet"] is not None
     assert "SPEC_REPAIR_REQUIRED" in res["hold_packet"]["blocking_gaps"]
+
+
+# ---------------------------------------------------------------- blocked lane 재선택 금지 (batch 4 A1)
+
+def test_loop_does_not_reselect_precondition_blocked_lane(tmp_path, monkeypatch):
+    """batch 4 A1: 전제조건 부재로 BLOCKED된 lane은 parent가 그대로인 한 재실행해도 같은
+    이유로 막힌다 — 재선택으로 예산을 태우지 않고 즉시 EXECUTION_BLOCKED로 정직 HOLD."""
+    import repo_idea_miner.factory_loop_executor as fle
+
+    run = tmp_path / "base_run"
+    (run / "workspace").mkdir(parents=True)
+
+    fake_verify = {
+        "gate_summary": {}, "anti_summary": {}, "validate_ok": True, "probe": {},
+        "profile": {}, "coverage": {},
+        "judge": {"desks": {"status": "PASS",
+                            "gap": {"primary_gap": "CORE_PATCH_REQUIRED"},
+                            "lane": {"recommended_next_lane": "CORE_PATCH"}}},
+        "acceptance": {"product_candidate_allowed": False, "failed_checks": [],
+                       "max_stage": "REVIEWABLE_ARTIFACT"},
+        "vector": {}, "stage": "REVIEWABLE_ARTIFACT",
+        "effective_stage": "REVIEWABLE_ARTIFACT", "overrating_blocked": False,
+    }
+    monkeypatch.setattr(fle, "verify_candidate",
+                        lambda *a, **k: json.loads(json.dumps(fake_verify)))
+
+    lanes_called: list[str] = []
+
+    def fake_execute_lane(lane, ctx):
+        lanes_called.append(lane)
+        return {"lane": lane, "status": "BLOCKED", "child_run_dir": None, "changed_files": [],
+                "allowed_scope_check": "PASS", "protected_hash_check": "PASS",
+                "targeted_tests": [], "targeted_test_status": "SKIPPED",
+                "failure_signature": None,
+                "problems": [], "error": "continuation_base 없음", "underlying_status": None,
+                "route": ""}
+
+    monkeypatch.setattr(fle, "execute_lane", fake_execute_lane)
+    monkeypatch.setattr(fle, "compute_loop_protected_hashes", lambda p: {})
+    monkeypatch.setattr(fle, "compare_protected_hashes",
+                        lambda a, b: {"status": "PASS", "files_checked": 0,
+                                      "changed": [], "added": [], "removed": []})
+
+    res = fle.run_closed_product_loop(
+        run_dir=run, mode="mock", execute=True,
+        budgets={"max_high_risk_lane_attempts": 3, "max_iterations": 4})
+
+    # BLOCKED lane은 딱 한 번만 실행되고 재선택되지 않는다
+    assert lanes_called == ["CORE_PATCH"]
+    assert any("전제조건 부재" in s for s in res["stop_conditions"])
+    assert res["hold_packet"] is not None
+    assert res["hold_packet"]["hold_reason_class"] == "EXECUTION_BLOCKED"
