@@ -42,29 +42,39 @@ SYSTEM_STATUS:
 RECENT_SEMANTIC_CHANGES:
 - **Issue #15 IN PROGRESS (Fresh-D/E/F Golden–Runner Adjudication + Phase 2B Apply,
   이슈 OPEN — 다음 세션이 이어서 마감. Factory production/test 변경 0, 전부 run artifact
-  작업)**: Phase A(정본 조사)·B(독립 판정)·C(승인 repair apply) 완료 / Phase D 부분.
+  작업)**: Phase A·B·C 완료 / Phase D~E 대부분 완료(세션 2), 마감 검증만 잔여.
   판정 3건(독립, 근거는 runs/_issue15_adjudication/state.json phase_a/phase_b) =
-  (D #49) APPROVE_RUNNER_REPAIR + proposal REJECT — 정본 의미: DEP_INVALIDATED 이벤트는
-  전 하위 발화(통지), Outdated 상태는 기존 결과물(content 비어있지 않음) 있는 단계만
-  (golden 001/002를 동시에 만족하는 유일한 일관 의미). (E #95) APPROVE_GOLDEN_REPAIR —
-  golden 4/4가 계약 state field(skills) 누락(schema omission), 표준 harness 적용.
-  (F #98) APPROVE_GOLDEN_REPAIR — golden 산술 오류(range off-by-one·문장 절단·공백
-  모순·rule_id 표기), 정본 관례 = start-inclusive/end-exclusive + 문장·후행 공백 제거,
-  §8 값-훼손 차단 부류라 위임 판정 수동 보정(독립 slicing 계산 evidence, 이슈 #5 선례).
-  적용(fresh child 3종, base/parent/R1/R2 불변): D=045751(engine.py 수리, golden 무수정
-  3/3 PASS, 6/7 — state_invariant 잔여는 빈 tasks[] vacuous 평가기 한계 = 이슈 #14
-  deferred defect, §12상 이번 이슈 수리 금지), E=045751_1(factory-spec-repair-apply
-  --apply live, 7/7 + validate PASS), F=045751_2(golden 5값 보정, 7/7 PASS).
-  Phase D loop: D=HOLD(REVIEWABLE — 평가기 한계로 CORE_PATCH rung 재선택, 제품 결함
-  아님), E=INTERACTION_CANDIDATE 전진(grandchild 051718, INTERACTION_UI×2+RUNNER_BACKED
-  APPLIED, lane 예산 stop), F=loop 중단됨(세션 종료, partial loop dir 140434/140951/
-  142439 보존 — fresh loop 재실행 필요).
-  **잔여(다음 세션)**: ①F loop fresh 재실행(runs/factory_20260712_045751_2), ②E는
-  051718에서 loop 재개 또는 남은 gap lane 직접 실행 → coverage/acceptance/status 정본
-  계산(§15~16), ③D는 남은 blocker가 평가기 한계임을 §16 기준으로 정직 status 판정,
-  ④§14 제품별 필수 검증+§20 runtime 실증(browser), ⑤기존 5종 회귀+§19 계약 회귀,
-  ⑥pytest ×2·atlas ×2·check, ⑦REENTRY/CANON(§23.2 해당 시), §29 보고 댓글+이슈 close.
-  주의: 커밋은 아직 0(모든 변경이 gitignored runs/ 내부) — 마감 시 docs 커밋만 예상.
+  (D #49) APPROVE_RUNNER_REPAIR + proposal REJECT, (E #95) APPROVE_GOLDEN_REPAIR(표준
+  harness), (F #98) APPROVE_GOLDEN_REPAIR(위임 보정) — 상세는 state.json.
+  **세션 2 결과(정본 근거 = state.json phase_d_session2)**:
+  E = PRODUCT_CANDIDATE 확정 — child 060018(= 055548 + VIEWER_POLISH + UX_POLISH 직접
+  실행), coverage matrix 3/3·3/3, issue15_final_verify에서 stage/effective
+  PRODUCT_CANDIDATE·gates 7/7·acceptance 14/14·desk PASS·mock 0. browser 실조작
+  (순서 반영 병합, S999 거부, 375px, viewer replay) 완료.
+  F = 후보 060752(EXECUTION_CANDIDATE) — fresh loop에서 RUNNER_BACKED 2회 실패 원인
+  (runner가 invalid 입력을 조용히 기본값 처리)을 hold packet 권고 옵션대로 제품 child
+  core 최소 수리(055022: analyze code_text 필수 + apply_fix unknown id 명시 거부,
+  golden 무수정 7/7·validate PASS, 기록 core_gap_repair.json) → RUNNER_BACKED APPLIED.
+  위임 golden repair의 §17 after-apply hash 기록 누락을 보완(frozen guard validate
+  PASS). coverage matrix = critical 2/3·anchor 2/3·TRUE_CORE_GAP 2(SC2/DA2 경고
+  카드↔에디터 전용 UI 부재 — 정직 NOT_COVERED, 이슈 #9 선례상 별도 주문 권고).
+  browser 실조작(375px analyze/apply_fix range 정확·invalid 거부) 완료.
+  D = coverage matrix 4/4·3/3, state_invariant 잔여가 빈 tasks[] 평가기 한계임을 실측
+  확정(scenario_002/003 exists:parent_plan_id NOT_EXPOSED 2건, failed 0), viewer
+  browser 실증 완료. 1차 verify: gates 6/7·validate PASS·acceptance 11/14.
+  발견 수리: E/F 자식 체인에 normalized_challenge.json 부재(coverage 공허 1.0 위험)
+  → base 정본 복원. 회귀 완료: 기존 9종 validate PASS+digest/mtime 불변, 이슈 #15
+  불변 9종 MATCH, §19 targeted 306 tests PASS.
+  **잔여(다음 세션)**: ①F/D 정본 verify 재실행 `python
+  runs/_issue15_adjudication/final_verify.py F` 그리고 `D` (desk 포함, E는 완료),
+  ②D/F 정직 최종 status 확정(§16 — F는 TRUE_CORE_GAP 2로 acceptance FAIL 예상,
+  D는 평가기 한계=Factory defect blocker 기록), ③dashboard smoke+§22 최종,
+  ④pytest ×2·atlas ×2·check(코드 변경 0), ⑤REENTRY/CANON(§23.2 해당 없음 예상),
+  §29 보고 댓글+이슈 close. §28 추천 후보 = 빈 entity 컬렉션 vacuous 평가기 수리
+  (D의 유일 잔여 Factory defect, §28 규칙 1).
+  주의: Factory production/test 코드 변경 여전히 0(모든 수리는 runs/ 제품 child 내부).
+  scenario_replay/golden gate는 ok/errors를 비교하지 않음 — F apply_fix 거부 확장은
+  golden_003의 no-op 의미(final_state/events/summary)를 유지한다.
 - Issue #14 done (Fresh Blind Batch 3, 커밋 4aaca59 fix+test / 마감 docs 커밋):
   선정 = Fresh-D #49 Spec-Driven 파이프라인(순서·의존성)/Fresh-E #95 스킬 번들 빌더
   (구성·선택)/Fresh-F #98 미니 린터(변환·검증) — 기존 10 사례·도메인과 비중복,
@@ -337,10 +347,11 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 이슈 #15 마감 재개 (OPEN, Phase A~C 완료·Phase D 부분): RECENT_SEMANTIC_CHANGES의
-   Issue #15 IN PROGRESS 블록 잔여 ①~⑦ 순서대로. 판정·적용은 완료 상태이므로 재판정
-   금지(판정 근거 = runs/_issue15_adjudication/state.json). 진행 중이던 F loop
-   (child 045751_2)은 중단됨 — fresh loop부터.
+1. 이슈 #15 마감 재개 (OPEN, Phase A~C + Phase D~E 대부분 완료): RECENT_SEMANTIC_CHANGES의
+   Issue #15 블록 **잔여 ①~⑤** 순서대로 — F/D 정본 verify 재실행부터
+   (runs/_issue15_adjudication/final_verify.py, E는 PRODUCT_CANDIDATE 확정이라 재실행
+   불필요). 판정·적용·수리는 완료 상태이므로 재판정/재수리 금지(근거 =
+   runs/_issue15_adjudication/state.json phase_b/phase_c/phase_d_session2).
    (그 외 deferred: 빈 entity 컬렉션 vacuous NOT_EXPOSED 귀속 — D의 남은 blocker이기도
    함, golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
