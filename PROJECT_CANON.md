@@ -130,6 +130,11 @@ NOTES:
   REVIEW_READY < PROMOTE_TO_CODEX
 - runner stdout must be ASCII-safe JSON (Windows cp949 pipe)
 - expected_summary is always a string at harness level
+- state-invariant entity resolution: entity-name key match is case-insensitive and
+  collection scan descends into nested dict values (bounded depth) — values the runner
+  actually exposes are evaluated, never reported NOT_EXPOSED; field-subset matching and
+  the no-auto-PASS rule stay (a genuinely missing entity, including an empty collection
+  that cannot be attributed to the entity, remains INVARIANT_NOT_EXPOSED)
 
 QUERY:
 - architecture-context --canon CANON-04
@@ -171,6 +176,11 @@ NOTES:
   `spec_repair_scenario_decisions.json`); blocked scenarios are preserved as deferred,
   and green promotion is forbidden while any deferred scenario remains
 - an empty repair_plan.steps is honest when requires_spec_repair=true (spec-only failures)
+- golden↔runner disagreement is spec-family regardless of shape: value-level mismatches
+  ("기대≠실제") carry requires_spec_repair=true exactly like extra-key mismatches — the
+  SPEC_REPAIR_REQUIRED marker is the only trigger for closed-loop lane escalation, so a
+  patch-lane classification of a frozen-golden disagreement is a routing defect, not a
+  patch opportunity
 - a child copy inherits the parent's apply report; provenance via `child_run_origin.json`
 
 QUERY:

@@ -527,7 +527,7 @@
    "path_pattern": "build_review.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 935,
+   "source_line": 938,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -869,7 +869,7 @@
    "path_pattern": "continuation_run_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 786,
+   "source_line": 789,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -1301,7 +1301,7 @@
    "path_pattern": "dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 762,
+   "source_line": 765,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -1787,7 +1787,7 @@
    "path_pattern": "failure_classification.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 616,
+   "source_line": 619,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -2192,7 +2192,7 @@
    "path_pattern": "gate_rerun_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 686,
+   "source_line": 689,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -2345,7 +2345,7 @@
    "path_pattern": "green_base.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 717,
+   "source_line": 720,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -2462,7 +2462,7 @@
    "path_pattern": "green_base_promotion.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 732,
+   "source_line": 735,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -3380,7 +3380,7 @@
    "path_pattern": "patch_rejection_report.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 655,
+   "source_line": 658,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -3389,7 +3389,7 @@
    "path_pattern": "patch_task_packet.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 638,
+   "source_line": 641,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -3416,7 +3416,7 @@
    "path_pattern": "phase17_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 761,
+   "source_line": 764,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -3479,7 +3479,7 @@
    "path_pattern": "phase2a_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 763,
+   "source_line": 766,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -4433,7 +4433,7 @@
    "path_pattern": "product_layer_recheck.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 670,
+   "source_line": 673,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -4946,7 +4946,7 @@
    "path_pattern": "repair_plan.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 621,
+   "source_line": 624,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -7088,7 +7088,7 @@
    "path_pattern": "spec_repair_proposal.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 746,
+   "source_line": 749,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -7142,7 +7142,7 @@
    "path_pattern": "spec_repair_review.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 747,
+   "source_line": 750,
    "source_path": "repo_idea_miner/factory_continue.py",
    "symbol_id": "repo_idea_miner.factory_continue"
   },
@@ -8841,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1205,
+  "test_count": 1207,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -11213,7 +11213,7 @@
      ]
     }
    ],
-   "loc": 1001,
+   "loc": 1004,
    "module": "repo_idea_miner.factory_continue",
    "path": "repo_idea_miner/factory_continue.py",
    "private_symbols": [
@@ -11320,7 +11320,7 @@
      ]
     }
    ],
-   "loc": 1179,
+   "loc": 1194,
    "module": "repo_idea_miner.factory_core_gates",
    "path": "repo_idea_miner/factory_core_gates.py",
    "private_symbols": [
@@ -15881,7 +15881,7 @@
   }
  ],
  "repository": {
-  "head": "4327eff4e6b1b99be17516f1651a17e07fb7e57b",
+  "head": "4aaca59c6a6daece8a456e9653bdd3728aeb3ead",
   "structural_diff": false,
   "structural_fingerprint": "0c553a95525dcb1877042e96248cc8abd47392cdf6771caf67f0831850977352",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
@@ -16953,7 +16953,7 @@
     "CANON-10"
    ],
    "component_id": "repair",
-   "end_line": 817,
+   "end_line": 820,
    "kind": "function",
    "path": "repo_idea_miner/factory_continue.py",
    "related_tests": [
@@ -16966,7 +16966,7 @@
     "orchestrator"
    ],
    "signature": "def run_continuation(base_run_dir: str | Path | None=None, base_run_id: int | None=None, mode: str='mock', max_patches: int=MAX_CONTINUATION_PATCH_ATTEMPTS, output_dir: str | Path='runs', db_conn=None, settings: Settings | None=None, factory_settings: FactorySettings | None=None, scheduler=None, llm=None, sleep_fn=time.sleep) -> dict",
-   "start_line": 483,
+   "start_line": 486,
    "symbol_id": "repo_idea_miner.factory_continue.run_continuation"
   },
   {

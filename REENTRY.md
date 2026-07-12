@@ -11,7 +11,11 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1295개 (flaky 0) at issue #13 마감 (structured console
+- tests: full suite PASS ×2 연속 1297개 (flaky 0) at issue #14 마감 (blind batch 3 회귀
+  테스트 2종 포함); smoke = dashboard(/, /products, /product/36 200) + Fresh-C structured
+  console 회귀(valid object 왕복 보존, wrong type 400 fail-closed) + Fresh-D/F viewer
+  replay 실렌더 + Fresh-E RUNNER_UNAVAILABLE 정직 표시
+- (이전 기록) full suite PASS ×2 연속 1295개 (flaky 0) at issue #13 마감 (structured console
   input 테스트 20종 포함); smoke = dashboard(/, /products, /product/36 200) + Fresh-C
   child 165952 scratchpad 복사본 콘솔 browser 실조작(§15 전 항목: valid object/array,
   invalid JSON, wrong type 3종, primitive, 375px) + synthetic structured run
@@ -36,6 +40,31 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #14 done (Fresh Blind Batch 3, 커밋 4aaca59 fix+test / 마감 docs 커밋):
+  선정 = Fresh-D #49 Spec-Driven 파이프라인(순서·의존성)/Fresh-E #95 스킬 번들 빌더
+  (구성·선택)/Fresh-F #98 미니 린터(변환·검증) — 기존 10 사례·도메인과 비중복,
+  selection digest 고정. Round 1(무수정) = 3/3 base build 완주(D 5/7, E·F 6/7 gates,
+  전부 golden_output FAIL 계열) → closed loop 3/3 AUTOPILOT_HOLD_FOR_HUMAN.
+  실원인 = 3/3 공통으로 Gemma 생성 golden↔runner 정합(D: 미작성 Draft 하위 단계의
+  Outdated 전이 의미, E: golden 4/4에 runner final_state.skills 키 부재, F: range
+  off-by-one·공백 값) — frozen golden 보호 설계상 사람 spec 결정 지점 = 3/3 VALID_HOLD.
+  INVALID_SUCCESS 0, mock 0, 신규 lane/executor/hardcode 0.
+  Repair gate 충족(§10.1 A: D·F 반복 + D: 결정론 모순) → generic repair 1회(2 files,
+  +30/-12): (1) classify_failures가 golden 값 수준 불일치를 requires_spec_repair=False로
+  분류해 SPEC_REPAIR_REQUIRED 마커 미생성 → loop escalation 미발화(§4.4/§6.2 NEVER_PATCH
+  계약과 코드 모순) → True로 정합, (2) _entity_instances가 entity명 대소문자
+  ('Pipeline'↔'pipeline')·중첩 컬렉션(pipeline.stages) 미해석으로 INVARIANT_NOT_EXPOSED
+  오탐 → 대소문자 무시+한정 깊이 중첩 탐색(자동 PASS 금지 불변). Round 2(fresh child
+  3종) = 3/3 SPEC_REPAIR_REQUIRED escalation 정상 발화·child verdict SPEC_REPAIR_REQUIRED/
+  PATCH_BLOCKED_SPEC(proposal 생성)·blocking_gaps에 SPEC_REPAIR_REQUIRED 정확 표면화.
+  generalization = YELLOW(PC 0/3이나 3/3 hold 판정이 실원인과 일치), Batch 2 대비 trend =
+  STABLE(완주 0→0이나 repair burden 감소: 이슈 2개 규모→1 round 2 files, batch 2 수리
+  항목 재발 0). 회귀 = 9 run validate PASS + digest/mtime 불변 + Fresh-C structured
+  console 회귀 smoke PASS. 남은 인간 결정 = D/E/F golden spec repair proposal 3건.
+  잔여 defect 후보(미수리) = 빈 entity 컬렉션 vacuous 미귀속 NOT_EXPOSED(1제품),
+  golden-only 실패에서 CORE_PATCH first-choice가 high-risk 예산을 선소모(설계 한도).
+  CANON-04(entity resolution)·CANON-05(golden 값 괴리=spec-family) 불변식 기록.
+  증거: runs/_issue14_blind_batch3/state.json
 - Issue #13 done (Schema-Aware Structured Console Input, 커밋 aa83568 + 마감 커밋):
   결함 판정 = 복합(UI_RENDERING_GAP+CLIENT_PARSE_GAP: action console이 전 필드 text
   input→string 전송 + SERVER_VALIDATION_GAP: 서버 schema 재검증 0 — 서버→runner JSON
@@ -283,8 +312,12 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. Fresh Blind Batch 3 (이슈 #13 주문서 §17.3 지시 — 특별한 새 blocker 없음).
-   (그 외 deferred: 대형 파일 분해, literal-only artifact 실증 승격, db verdict stale)
+1. Fresh-D/E/F golden spec repair 사람 결정 + Phase 2B apply 배치 (이슈 #14 §26
+   priority 3 — 3제품 전부 spec 결정만 남아 VALID_HOLD, proposal 3건 생성돼 있음.
+   base: D=194219/E=022630/F=030726, 최신 child에 proposal). 사람 결정 없이 진행 금지.
+   (그 외 deferred: 빈 entity 컬렉션 vacuous NOT_EXPOSED 귀속, golden-only 실패의
+   CORE_PATCH first-choice rung 검토, 대형 파일 분해, literal-only artifact 실증 승격,
+   db verdict stale)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
@@ -293,6 +326,11 @@ DO_NOT_REPEAT:
 - do not touch #47/#54/fresh(190458·193103·194814) base runs on disk (tmp copies only)
 - do not touch blind batch 2 base runs(124224·151426·142713)와 Round 1 loop artifact —
   fresh child로만 진행 (이슈 #11 Round 1 기록은 불변 증거)
+- do not touch blind batch 3 base runs(194219·022630·030726)와 Round 1/2 loop·child
+  artifact — spec repair는 사람 결정 + Phase 2B apply 절차로만 (이슈 #14 기록은 불변 증거)
+- frozen golden↔runner 값 괴리를 patch lane으로 분류하지 않는다 — GOLDEN_SCHEMA_MISMATCH는
+  형태 불문 requires_spec_repair=true(CANON-05), SPEC_REPAIR_REQUIRED 마커가 loop
+  escalation의 유일한 트리거다
 - do not copy requires_human_approval_before_apply into human_decision_required —
   semantic 결정과 apply 승인은 다른 의미다(CANON-07 INV-HUMAN-DECISION-NORMALIZED);
   raw live 값은 normalize_human_decision을 거치지 않고 loop 판정에 쓰지 않는다
