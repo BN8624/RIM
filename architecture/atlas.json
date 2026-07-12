@@ -509,7 +509,7 @@
    "path_pattern": "base_hash_check.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 606,
+   "source_line": 618,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2858,7 +2858,7 @@
    "path_pattern": "lane_result.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 503,
+   "source_line": 513,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -2885,7 +2885,7 @@
    "path_pattern": "lineage.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 607,
+   "source_line": 619,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -3020,7 +3020,7 @@
    "path_pattern": "loop_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 641,
+   "source_line": 653,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4109,7 +4109,7 @@
    "path_pattern": "phase2d1_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 642,
+   "source_line": 654,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -4676,7 +4676,7 @@
    "path_pattern": "progress_comparison.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 571,
+   "source_line": 583,
    "source_path": "repo_idea_miner/factory_loop_executor.py",
    "symbol_id": "repo_idea_miner.factory_loop_executor"
   },
@@ -8841,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1214,
+  "test_count": 1217,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -11642,7 +11642,7 @@
      ]
     }
    ],
-   "loc": 1260,
+   "loc": 1269,
    "module": "repo_idea_miner.factory_core_prompts",
    "path": "repo_idea_miner/factory_core_prompts.py",
    "private_symbols": [
@@ -11738,7 +11738,7 @@
     "repo_idea_miner.factory_spec_repair"
    ],
    "imports": [],
-   "loc": 529,
+   "loc": 545,
    "module": "repo_idea_miner.factory_core_schemas",
    "path": "repo_idea_miner/factory_core_schemas.py",
    "private_symbols": [
@@ -11773,6 +11773,7 @@
     "ProductLayerReview",
     "RUNNER_REQUIRED_OUTPUT_FIELDS",
     "RunnerContract",
+    "SANDBOX_RUNNER_INTERPRETERS",
     "SCENARIO_CASE_TYPES",
     "Scenario",
     "ScenarioAction",
@@ -12661,7 +12662,7 @@
      ]
     }
    ],
-   "loc": 672,
+   "loc": 684,
    "module": "repo_idea_miner.factory_loop_executor",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "private_symbols": [
@@ -15884,9 +15885,9 @@
   }
  ],
  "repository": {
-  "head": "033cd94574e90e4f79239a89bf286520ee937859",
-  "structural_diff": false,
-  "structural_fingerprint": "0c553a95525dcb1877042e96248cc8abd47392cdf6771caf67f0831850977352",
+  "head": "ad293b9a84bdacf5d483916185f087b330a00550",
+  "structural_diff": true,
+  "structural_fingerprint": "7c5565e8372ad1955e8d5a3c1f9263561c6464535ba45a40b3d257acb2654615",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
@@ -17054,7 +17055,7 @@
     "CANON-04"
    ],
    "component_id": "product_build",
-   "end_line": 205,
+   "end_line": 221,
    "kind": "class",
    "path": "repo_idea_miner/factory_core_schemas.py",
    "related_tests": [
@@ -17067,7 +17068,7 @@
     "invariant_target"
    ],
    "signature": "class GoldenExpected(_Base)",
-   "start_line": 200,
+   "start_line": 216,
    "symbol_id": "repo_idea_miner.factory_core_schemas.GoldenExpected"
   },
   {
@@ -17096,7 +17097,7 @@
     "CANON-04"
    ],
    "component_id": "product_build",
-   "end_line": 163,
+   "end_line": 179,
    "kind": "class",
    "path": "repo_idea_miner/factory_core_schemas.py",
    "related_tests": [
@@ -17109,7 +17110,7 @@
     "contract_owner"
    ],
    "signature": "class RunnerContract(_Base)",
-   "start_line": 157,
+   "start_line": 162,
    "symbol_id": "repo_idea_miner.factory_core_schemas.RunnerContract"
   },
   {
@@ -17117,7 +17118,7 @@
     "CANON-04"
    ],
    "component_id": "product_build",
-   "end_line": 221,
+   "end_line": 237,
    "kind": "class",
    "path": "repo_idea_miner/factory_core_schemas.py",
    "related_tests": [
@@ -17130,7 +17131,7 @@
     "contract_owner"
    ],
    "signature": "class ScenarioGoldenOutput(_Base)",
-   "start_line": 218,
+   "start_line": 234,
    "symbol_id": "repo_idea_miner.factory_core_schemas.ScenarioGoldenOutput"
   },
   {
@@ -17186,7 +17187,7 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 672,
+   "end_line": 684,
    "kind": "function",
    "path": "repo_idea_miner/factory_loop_executor.py",
    "related_tests": [

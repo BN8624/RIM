@@ -11,7 +11,12 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1304개 (flaky 0) at issue #17 마감 (Factory production/
+- tests: full suite PASS ×2 연속 (flaky 0) at issue #18 마감 (blind batch 4 repair 테스트
+  3종 추가 — RunnerContract interpreter fail-closed/프롬프트 계약 토큰/BLOCKED lane 재선택
+  금지); smoke = dashboard(/, /products 200) + Fresh-G child 104032 browser 실조작
+  (unlock→complete state 전이, 375px overflow 0) + 회귀 8종 digest/mtime/validate 전부
+  baseline 일치
+- (이전 기록) full suite PASS ×2 연속 1304개 (flaky 0) at issue #17 마감 (Factory production/
   test 코드 변경 0 — 구현은 전부 Fresh-F child 090748 제품 workspace); smoke =
   dashboard(/, /products 200) + Fresh-F child 090748 diagnostic UI browser 실조작
   (단일/복수 diagnostic 카드→하이라이트, keyboard Tab+Enter 선택, mark 클릭 역방향,
@@ -58,6 +63,30 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #18 done (Fresh Blind Batch 4 — 커밋 0c67ac5 fix / ad293b9 test / docs 마감 커밋.
+  session state = runs/_batch4_blind/state.json, selection digest 794d7c3c…10f7):
+  선정(결정론: product_runs 등장 challenge 전제외+ID 오름차순+계층화 A/B/C) = Fresh-G #7
+  스킬트리(A)/H #6 Mini-Vue(B)/I #5 코딩랩(C), 후보 6+제외 8 기록.
+  Round 1(무수정) = PC 0/3, zero-repair 0 — G: base 첫 7/7 zero-patch 완주(사상 최초) 후
+  loop INTERACTION까지, runner가 필수 input 누락을 ok=true·errors=[]로 silent-accept →
+  PARTIAL_PRODUCT(9/14). H: Gemma가 node runner_command 채택 — sandbox에 node 부재(127)
+  +FROZEN 계약이라 회복 불가 → 전 gate FAIL FACTORY_DEFECT. I: golden 논리 timestamp↔
+  time.time() 의미 충돌(Fresh-A 계열 반복) → VALID_HOLD. INVALID_SUCCESS 0.
+  Generic repair 1회(3 production 파일): D1 RunnerContract interpreter fail-closed
+  (SANDBOX_RUNNER_INTERPRETERS=python)+프롬프트 명시, D2 구조적 무효 action의 errors
+  채널 명시 거부를 생성 프롬프트에 추가(has_error_signal 검출기 무변경), A1 전제조건
+  부재 BLOCKED lane 재선택 차단(EXECUTION_BLOCKED 정직 HOLD). hardcode 0, 신규
+  lane/executor/module 0.
+  Round 2(fresh) = H: python 계약 7/7 zero-patch(D1 실측 효과) → INTERACTION+RUNNER_BACKED
+  APPLIED → EXECUTION_CANDIDATE 12/14 PARTIAL_PRODUCT(잔여 2건은 coverage matrix 절차
+  영역). I: spec review 정직 중단 2회 후 7/7 완주 → loop 4 iter(RBDE APPLIED 포함)
+  9/14 INTERACTION_CANDIDATE PARTIAL_PRODUCT. G: 빌드 7/7 재완주했으나 loop이
+  **factory_product_evidence.viewer_reads_replay_evidence의 nodes dict 가정(list면
+  AttributeError)으로 crash — FACTORY_DEFECT 잔존(repair 예산 소진, 후속 1순위)**.
+  판정 = GENERALIZATION_YELLOW(판정 정확·INVALID_SUCCESS 0·예산 준수), trend = STABLE
+  (zero-repair PC 0/3 동일하나 base build 완주 최초 등장·H 0/7→12/14). 회귀 8종
+  digest/mtime/validate 전부 baseline 일치. 남은 인간 결정 = I 시간 의미(반복),
+  H R2 검수. 다음 추천(정확히 1개): Fresh-G 평가기 crash 수리 후 G 재판정.
 - Issue #17 done (Fresh-F #98 Product UI Completion — Factory production/test 코드 변경 0,
   구현 전부 fresh child 내부. 커밋 = docs/atlas만):
   fresh child = runs/factory_20260712_090748 (parent 060752 복사, parent digest
@@ -402,9 +431,14 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. Fresh Blind Batch 4 (이슈 #17 §31 규칙 3에 따른 유일 추천): Factory 무수정 블라인드
-   fresh 사례 3종 — 기존 13 사례(#47/#54/SRS27/Table17/77/Fresh-A 1/B 99/C 41/D 49/
-   E 95/F 98 등)·도메인과 비중복 선정, INVALID_SUCCESS 0 원칙, batch 3 대비 trend 기록.
+1. Fresh-G(#7) 평가기 crash 수리 후 G 재판정 (이슈 #18 §28 유일 추천):
+   factory_product_evidence.viewer_reads_replay_evidence:165가 final_state.nodes를
+   dict로 가정(nodes.values()) — list면 AttributeError로 loop 전체 crash(HOLD packet
+   조차 없음, G R2 실측 loop_20260713_012820). graph-형 가정 제거(list/비graph state
+   허용, crash 대신 명시 처리) 후 G(base 134413, 7/7 zero-patch ×2)를 fresh loop으로
+   재판정. 부수 관찰(후속 후보): continuation child 기록 형식(failure_types/steps
+   부재)이 validate FAIL 유발(I R2 iter03), I(#5) 시간 의미 결정은 Fresh-A와 동일
+   계열 반복 — 의미 결정 배치 후보.
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
@@ -420,6 +454,9 @@ DO_NOT_REPEAT:
 - do not touch Fresh-F parent 060752와 정본 child 090748(이슈 #17 PRODUCT_CANDIDATE
   verify 근거) — 추가 작업은 새 fresh child로만; diagnostic range는 UI에서 절대
   보정하지 않는다(CANON-06 diagnostic card/highlight semantics)
+- do not touch blind batch 4 base/child runs(G 100335·134413/104032, H 105004·150755/
+  153036, I 124428·161230/165512)와 loop artifact — 후속 작업은 fresh child/loop로만
+  (이슈 #18 Round 1/2 기록은 불변 증거); runs/_batch4_blind/state.json이 attempt 정본
 - frozen golden↔runner 값 괴리를 patch lane으로 분류하지 않는다 — GOLDEN_SCHEMA_MISMATCH는
   형태 불문 requires_spec_repair=true(CANON-05), SPEC_REPAIR_REQUIRED 마커가 loop
   escalation의 유일한 트리거다
