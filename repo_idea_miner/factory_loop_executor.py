@@ -374,6 +374,7 @@ def run_closed_product_loop(
     infra_retries = 0
     consecutive_no_progress = 0
     signatures_seen: dict[str, int] = {}
+    blocked_lanes: set[str] = set()  # 전제조건 부재 BLOCKED lane — 재선택 금지 (blind batch 4 A1)
     attempt_diffs: list[dict] = []
     stop: list[str] = []
     hold_reason = None
@@ -477,6 +478,15 @@ def run_closed_product_loop(
             result["iterations"].append(it)
             break
 
+        # blind batch 4 A1: 전제조건 부재로 BLOCKED된 lane은 parent가 그대로인 한 다시
+        # 실행해도 같은 이유로 막힌다 — 재선택으로 예산을 태우지 않고 즉시 정직 HOLD.
+        if lane in blocked_lanes:
+            stop.append(f"lane {lane} 전제조건 부재 (BLOCKED 반복 차단)")
+            hold_reason = f"lane {lane}이 전제조건 부재로 BLOCKED — 사람 개입 없이는 실행 불가"
+            hold_reason_class = "EXECUTION_BLOCKED"
+            result["iterations"].append(it)
+            break
+
         # ---- 예산 (§10)
         if lane_attempts.get(lane, 0) >= b["max_attempts_per_lane"]:
             stop.append(f"lane {lane} 시도 예산 초과 ({b['max_attempts_per_lane']})")
@@ -545,6 +555,8 @@ def run_closed_product_loop(
             hold_reason_class = "EXECUTION_BLOCKED"
             result["iterations"].append(it)
             break
+        if lane_result["status"] == "BLOCKED":
+            blocked_lanes.add(lane)
         if lane_result["status"] != "APPLIED" or child is None:
             consecutive_no_progress += 1
             it["progress"] = "NO_CHILD_OR_NOT_APPLIED"

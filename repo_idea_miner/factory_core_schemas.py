@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ---------------------------------------------------------------- 상수 (§5.6, §11.4)
 
@@ -154,6 +154,11 @@ class CoreContract(_Base):
     forbidden_shortcuts: list[str] = Field(default_factory=list)
 
 
+# sandbox가 실제로 실행할 수 있는 runner interpreter (blind batch 4 D1).
+# runner_contract는 동결(FROZEN_FILES)이라 여기서 거부하지 않으면 하류 patch로 회복 불가능하다.
+SANDBOX_RUNNER_INTERPRETERS = ("python",)
+
+
 class RunnerContract(_Base):
     runner_command: str = Field(min_length=1)
     input_format: str = "scenario_json"
@@ -161,6 +166,17 @@ class RunnerContract(_Base):
     required_output_fields: list[str] = Field(
         default_factory=lambda: list(RUNNER_REQUIRED_OUTPUT_FIELDS)
     )
+
+    @field_validator("runner_command")
+    @classmethod
+    def _runner_command_executable_in_sandbox(cls, value: str) -> str:
+        interpreter = value.strip().split()[0] if value.strip() else ""
+        if interpreter not in SANDBOX_RUNNER_INTERPRETERS:
+            raise ValueError(
+                f"runner_command interpreter {interpreter!r}는 sandbox에서 실행 불가 — "
+                f"허용: {', '.join(SANDBOX_RUNNER_INTERPRETERS)} "
+                "(동결 계약이라 이후 patch로 회복할 수 없다)")
+        return value
 
 
 class CoreContractDraft(_Base):

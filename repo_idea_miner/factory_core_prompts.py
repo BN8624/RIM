@@ -205,7 +205,13 @@ def build_core_contract_prompt(normalized_json: str, classification_json: str) -
 - actions의 name은 코드에 그대로 등장할 식별자여야 한다.
 - determinism: random 금지 또는 seed 필수.
 - runner_command는 fixtures/scenario_001.json을 입력으로 실행 가능한 실제 명령이어야 한다.
+  sandbox에는 python만 설치되어 있다 — 반드시 "python "으로 시작해야 하며
+  node/npm/deno 등 다른 런타임은 실행 불가라 계약 자체가 거부된다 (blind batch 4 D1).
 - runner 출력은 ok/final_state/events/summary/errors 필드를 가진 JSON이어야 한다 (§8.4).
+- 구조적으로 무효한 action(선언되지 않은 action type, 선언 action의 필수 input 누락)은
+  상태를 오염시키지 않고 errors 배열에 명시적으로 기록해야 한다 — silent-accept 금지,
+  거부 event만 남기는 방식(예: REJECTED event + errors=[])도 불충분하다 (blind batch 4 D2).
+  도메인 규칙 위반(선행조건 미충족 등)의 표현은 output_representation 계약을 따른다.
 - output_representation은 구현과 정답지(golden)가 공유할 표현 계약이다. 반드시 구체적으로 선언하라:
   event_item_type(이벤트가 object인지 string인지), event_required_keys, event_kind_key,
   event_kinds(actions[].output의 이벤트 이름과 정확히 일치), summary_format(구체 예시),
@@ -428,6 +434,9 @@ def build_core_build_prompt(
 build task packet에 따라 core-first 시제품 파일들을 생성하라.
 - runner는 scenario json 하나를 받아 ok/final_state/events/summary/errors JSON을 stdout에 출력해야 한다.
 - runner의 JSON 출력은 ASCII-safe여야 한다 (python이면 json.dumps 기본값/ensure_ascii=True 사용).
+- runner는 python 스크립트여야 한다 — sandbox에는 python만 있다 (node 등 다른 런타임 금지).
+- 구조적으로 무효한 action(미선언 action type, 필수 input 누락)은 상태 변경 없이 errors
+  배열에 명시적으로 기록하라 — silent-accept 금지, 거부 event만으로는 불충분하다.
 - 모든 scenario fixture를 재생할 수 있어야 한다. fixture id로 분기하지 마라.
 - golden expected 문자열을 코드에 박지 마라. 실제 로직으로 계산하라.
 - events의 각 항목과 summary는 core contract의 output_representation 형식을 정확히 따라라.
