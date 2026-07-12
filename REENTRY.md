@@ -40,6 +40,31 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- **Issue #15 IN PROGRESS (Fresh-D/E/F Golden–Runner Adjudication + Phase 2B Apply,
+  이슈 OPEN — 다음 세션이 이어서 마감. Factory production/test 변경 0, 전부 run artifact
+  작업)**: Phase A(정본 조사)·B(독립 판정)·C(승인 repair apply) 완료 / Phase D 부분.
+  판정 3건(독립, 근거는 runs/_issue15_adjudication/state.json phase_a/phase_b) =
+  (D #49) APPROVE_RUNNER_REPAIR + proposal REJECT — 정본 의미: DEP_INVALIDATED 이벤트는
+  전 하위 발화(통지), Outdated 상태는 기존 결과물(content 비어있지 않음) 있는 단계만
+  (golden 001/002를 동시에 만족하는 유일한 일관 의미). (E #95) APPROVE_GOLDEN_REPAIR —
+  golden 4/4가 계약 state field(skills) 누락(schema omission), 표준 harness 적용.
+  (F #98) APPROVE_GOLDEN_REPAIR — golden 산술 오류(range off-by-one·문장 절단·공백
+  모순·rule_id 표기), 정본 관례 = start-inclusive/end-exclusive + 문장·후행 공백 제거,
+  §8 값-훼손 차단 부류라 위임 판정 수동 보정(독립 slicing 계산 evidence, 이슈 #5 선례).
+  적용(fresh child 3종, base/parent/R1/R2 불변): D=045751(engine.py 수리, golden 무수정
+  3/3 PASS, 6/7 — state_invariant 잔여는 빈 tasks[] vacuous 평가기 한계 = 이슈 #14
+  deferred defect, §12상 이번 이슈 수리 금지), E=045751_1(factory-spec-repair-apply
+  --apply live, 7/7 + validate PASS), F=045751_2(golden 5값 보정, 7/7 PASS).
+  Phase D loop: D=HOLD(REVIEWABLE — 평가기 한계로 CORE_PATCH rung 재선택, 제품 결함
+  아님), E=INTERACTION_CANDIDATE 전진(grandchild 051718, INTERACTION_UI×2+RUNNER_BACKED
+  APPLIED, lane 예산 stop), F=loop 중단됨(세션 종료, partial loop dir 140434/140951/
+  142439 보존 — fresh loop 재실행 필요).
+  **잔여(다음 세션)**: ①F loop fresh 재실행(runs/factory_20260712_045751_2), ②E는
+  051718에서 loop 재개 또는 남은 gap lane 직접 실행 → coverage/acceptance/status 정본
+  계산(§15~16), ③D는 남은 blocker가 평가기 한계임을 §16 기준으로 정직 status 판정,
+  ④§14 제품별 필수 검증+§20 runtime 실증(browser), ⑤기존 5종 회귀+§19 계약 회귀,
+  ⑥pytest ×2·atlas ×2·check, ⑦REENTRY/CANON(§23.2 해당 시), §29 보고 댓글+이슈 close.
+  주의: 커밋은 아직 0(모든 변경이 gitignored runs/ 내부) — 마감 시 docs 커밋만 예상.
 - Issue #14 done (Fresh Blind Batch 3, 커밋 4aaca59 fix+test / 마감 docs 커밋):
   선정 = Fresh-D #49 Spec-Driven 파이프라인(순서·의존성)/Fresh-E #95 스킬 번들 빌더
   (구성·선택)/Fresh-F #98 미니 린터(변환·검증) — 기존 10 사례·도메인과 비중복,
@@ -312,12 +337,13 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. Fresh-D/E/F golden spec repair 사람 결정 + Phase 2B apply 배치 (이슈 #14 §26
-   priority 3 — 3제품 전부 spec 결정만 남아 VALID_HOLD, proposal 3건 생성돼 있음.
-   base: D=194219/E=022630/F=030726, 최신 child에 proposal). 사람 결정 없이 진행 금지.
-   (그 외 deferred: 빈 entity 컬렉션 vacuous NOT_EXPOSED 귀속, golden-only 실패의
-   CORE_PATCH first-choice rung 검토, 대형 파일 분해, literal-only artifact 실증 승격,
-   db verdict stale)
+1. 이슈 #15 마감 재개 (OPEN, Phase A~C 완료·Phase D 부분): RECENT_SEMANTIC_CHANGES의
+   Issue #15 IN PROGRESS 블록 잔여 ①~⑦ 순서대로. 판정·적용은 완료 상태이므로 재판정
+   금지(판정 근거 = runs/_issue15_adjudication/state.json). 진행 중이던 F loop
+   (child 045751_2)은 중단됨 — fresh loop부터.
+   (그 외 deferred: 빈 entity 컬렉션 vacuous NOT_EXPOSED 귀속 — D의 남은 blocker이기도
+   함, golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
+   literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
