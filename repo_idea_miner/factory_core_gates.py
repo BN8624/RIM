@@ -715,6 +715,81 @@ def _entity_instances(entity: dict, final_state: dict) -> list[dict]:
     return out
 
 
+def _named_collection_candidates(entity: dict, final_state: dict) -> list[tuple[str, object]]:
+    """entity 이름(단수/복수 s, 대소문자 무시)과 일치하는 canonical collection 후보 경로를 찾는다.
+
+    이슈 #16 §6: 범용 inflector를 만들지 않는다 — 정확 일치와 '+s'만 인정.
+    무차별 병합 금지 — 후보 (path, value)를 모두 반환하고 판정은 호출부가 한다.
+    """
+    name = (entity.get("name") or "").lower()
+    if not name:
+        return []
+    aliases = {name, name + "s"}
+    found: list[tuple[str, object]] = []
+
+    def walk(node, prefix: str, depth: int) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                path = f"{prefix}.{key}" if prefix else str(key)
+                if str(key).lower() in aliases:
+                    found.append((path, value))
+                if depth > 0 and isinstance(value, (dict, list)):
+                    walk(value, path, depth - 1)
+        elif isinstance(node, list):
+            for i, item in enumerate(node):
+                if isinstance(item, dict):
+                    walk(item, f"{prefix}[{i}]", depth)
+
+    walk(final_state, "", 2)
+    return found
+
+
+def _entity_collection_exposure(entity: dict, final_state: dict) -> dict:
+    """entity collection 노출 상태와 instance 목록을 분리해 판정한다 (이슈 #16 §5).
+
+    INV-4: EXPOSED_EMPTY ≠ NOT_EXPOSED. INV-6: instance 0개라는 이유만으로
+    exposure를 실패시키지 않는다. 빈 dict는 collection으로 자동 승격하지 않는다.
+    반환 keys: status, instances, resolved_path, collection_type.
+    """
+    instances = _entity_instances(entity, final_state)
+    if instances:
+        return {"status": "EXPOSED_NONEMPTY", "instances": instances,
+                "resolved_path": None, "collection_type": "list"}
+    candidates = _named_collection_candidates(entity, final_state)
+    if not candidates:
+        return {"status": "NOT_EXPOSED", "instances": [],
+                "resolved_path": None, "collection_type": None}
+    if len(candidates) > 1:
+        # 정본 경로를 결정할 수 없음 — 임의 첫 번째 선택·병합 금지 (fail-closed)
+        return {"status": "AMBIGUOUS_EXPOSURE", "instances": [],
+                "resolved_path": sorted(p for p, _ in candidates), "collection_type": None}
+    path, value = candidates[0]
+    if isinstance(value, list):
+        status = "EXPOSED_EMPTY" if not value else "EXPOSED_NONEMPTY"
+        return {"status": status, "instances": [],
+                "resolved_path": path, "collection_type": "list"}
+    return {"status": "EXPOSED_WRONG_TYPE", "instances": [],
+            "resolved_path": path, "collection_type": type(value).__name__}
+
+
+def _is_universal_field_invariant(entity: dict, invariant: str) -> bool:
+    """invariant가 entity 선언 필드에 대한 universal per-instance 술어인지 판정한다.
+
+    vacuous PASS는 이 형태에만 허용된다 (이슈 #16 §7). collection 경로 자체를
+    참조하는 invariant(예: tasks.length >= 1 — cardinality 의미)는 제외한다.
+    """
+    inv = (invariant or "").strip()
+    if inv.startswith("exists:"):
+        path = inv[len("exists:"):].strip()
+    else:
+        m = _INV_CMP_RE.match(inv)
+        if not m:
+            return False
+        path = m.group(1)
+    first = path.split(".")[0]
+    return first in set(entity.get("fields") or [])
+
+
 def run_state_invariant_gate(
     core_contract: dict, replay_outputs: dict[str, dict]
 ) -> tuple[GateResult, dict]:
@@ -724,6 +799,7 @@ def run_state_invariant_gate(
     not_exposed: list[dict] = []
     failed: list[dict] = []
     unevaluated = []
+    vacuous_passes: list[dict] = []
     checked = 0
     for sid, run in replay_outputs.items():
         parsed = run.get("parsed")
@@ -741,9 +817,12 @@ def run_state_invariant_gate(
                 ok, msg = check_invariant(final_state, inv)
                 category = invariant_category(ok, msg)
                 # Phase 2B-1 §9: top-level에 없으면 entity 인스턴스(컬렉션 원소) 기준으로 최소 해석.
-                # 인스턴스도 못 찾으면 NOT_EXPOSED 유지 (자동 PASS 금지), 값 위반은 FAIL로 구분.
+                # 인스턴스도 못 찾으면 exposure 상태로 구분한다 (이슈 #16 §5):
+                # EXPOSED_EMPTY + universal field invariant → vacuous PASS,
+                # NOT_EXPOSED/WRONG_TYPE/AMBIGUOUS → 기존대로 실패 유지 (자동 PASS 금지).
                 if ok is False and category == "INVARIANT_NOT_EXPOSED":
-                    instances = _entity_instances(entity, final_state)
+                    exposure = _entity_collection_exposure(entity, final_state)
+                    instances = exposure["instances"]
                     if instances:
                         bad = None
                         for inst in instances:
@@ -753,6 +832,26 @@ def run_state_invariant_gate(
                                 break
                         ok, msg = (True, "") if bad is None else bad
                         category = invariant_category(ok, msg)
+                    elif (exposure["status"] == "EXPOSED_EMPTY"
+                          and _is_universal_field_invariant(entity, inv)):
+                        # instance 0개 → 위반 instance 0개. cardinality 의미
+                        # (collection 경로 참조·length 비교)는 이 분기에 오지 않는다.
+                        ok, msg = True, ""
+                        category = "INVARIANT_PASS"
+                        vacuous_passes.append({
+                            "scenario_id": sid,
+                            "entity_name": entity.get("name"),
+                            "invariant": inv,
+                            "invariant_kind": "universal_field",
+                            "resolved_path": exposure["resolved_path"],
+                            "exposure_status": exposure["status"],
+                            "collection_type": exposure["collection_type"],
+                            "evaluated_instance_count": 0,
+                            "violating_instance_count": 0,
+                            "cardinality_requirement": None,
+                            "result": "PASS",
+                            "reason_code": "VACUOUS_PASS_EMPTY_COLLECTION",
+                        })
                 if ok is None:
                     if msg not in unevaluated:
                         unevaluated.append(msg)
@@ -766,6 +865,9 @@ def run_state_invariant_gate(
         r.problems.append(f"{v['scenario_id']}: {v['message']}")
     r.notes += unevaluated
     r.notes.append(f"invariant 평가 {checked}건 (노출 안 됨 {len(not_exposed)} / 위반 {len(failed)})")
+    if vacuous_passes:
+        r.notes.append(
+            f"vacuous PASS {len(vacuous_passes)}건 (EXPOSED_EMPTY collection, 평가 instance 0)")
     summary = {
         "status": "PASS" if not violations else "FAIL",
         "checked": checked,
@@ -773,10 +875,12 @@ def run_state_invariant_gate(
         "not_exposed": not_exposed,
         "failed": failed,
         "unevaluated": unevaluated,
+        "vacuous_passes": vacuous_passes,
         "counts": {
             "not_exposed": len(not_exposed),
             "failed": len(failed),
             "uncheckable": len(unevaluated),
+            "vacuous_pass": len(vacuous_passes),
         },
     }
     r.ok = not r.problems
