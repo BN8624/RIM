@@ -11,7 +11,11 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1297개 (flaky 0) at issue #14 마감 (blind batch 3 회귀
+- tests: full suite PASS ×2 연속 1297개 (flaky 0) at issue #15 마감 (Factory production/test
+  코드 변경 0 배치 — 모든 수리는 runs/ 제품 child 내부); smoke = dashboard(/, /products
+  200) + D viewer 상태 전이/E 병합·S999 거부·replay/F analyze·apply_fix·diag_999 거부
+  browser 실조작 + 기존 성공 9종 validate PASS·digest/mtime 불변
+- (이전 기록) full suite PASS ×2 연속 1297개 (flaky 0) at issue #14 마감 (blind batch 3 회귀
   테스트 2종 포함); smoke = dashboard(/, /products, /product/36 200) + Fresh-C structured
   console 회귀(valid object 왕복 보존, wrong type 400 fail-closed) + Fresh-D/F viewer
   replay 실렌더 + Fresh-E RUNNER_UNAVAILABLE 정직 표시
@@ -40,41 +44,28 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
-- **Issue #15 IN PROGRESS (Fresh-D/E/F Golden–Runner Adjudication + Phase 2B Apply,
-  이슈 OPEN — 다음 세션이 이어서 마감. Factory production/test 변경 0, 전부 run artifact
-  작업)**: Phase A·B·C 완료 / Phase D~E 대부분 완료(세션 2), 마감 검증만 잔여.
-  판정 3건(독립, 근거는 runs/_issue15_adjudication/state.json phase_a/phase_b) =
-  (D #49) APPROVE_RUNNER_REPAIR + proposal REJECT, (E #95) APPROVE_GOLDEN_REPAIR(표준
-  harness), (F #98) APPROVE_GOLDEN_REPAIR(위임 보정) — 상세는 state.json.
-  **세션 2 결과(정본 근거 = state.json phase_d_session2)**:
-  E = PRODUCT_CANDIDATE 확정 — child 060018(= 055548 + VIEWER_POLISH + UX_POLISH 직접
-  실행), coverage matrix 3/3·3/3, issue15_final_verify에서 stage/effective
-  PRODUCT_CANDIDATE·gates 7/7·acceptance 14/14·desk PASS·mock 0. browser 실조작
-  (순서 반영 병합, S999 거부, 375px, viewer replay) 완료.
-  F = 후보 060752(EXECUTION_CANDIDATE) — fresh loop에서 RUNNER_BACKED 2회 실패 원인
-  (runner가 invalid 입력을 조용히 기본값 처리)을 hold packet 권고 옵션대로 제품 child
-  core 최소 수리(055022: analyze code_text 필수 + apply_fix unknown id 명시 거부,
-  golden 무수정 7/7·validate PASS, 기록 core_gap_repair.json) → RUNNER_BACKED APPLIED.
-  위임 golden repair의 §17 after-apply hash 기록 누락을 보완(frozen guard validate
-  PASS). coverage matrix = critical 2/3·anchor 2/3·TRUE_CORE_GAP 2(SC2/DA2 경고
-  카드↔에디터 전용 UI 부재 — 정직 NOT_COVERED, 이슈 #9 선례상 별도 주문 권고).
-  browser 실조작(375px analyze/apply_fix range 정확·invalid 거부) 완료.
-  D = coverage matrix 4/4·3/3, state_invariant 잔여가 빈 tasks[] 평가기 한계임을 실측
-  확정(scenario_002/003 exists:parent_plan_id NOT_EXPOSED 2건, failed 0), viewer
-  browser 실증 완료. 1차 verify: gates 6/7·validate PASS·acceptance 11/14.
-  발견 수리: E/F 자식 체인에 normalized_challenge.json 부재(coverage 공허 1.0 위험)
-  → base 정본 복원. 회귀 완료: 기존 9종 validate PASS+digest/mtime 불변, 이슈 #15
-  불변 9종 MATCH, §19 targeted 306 tests PASS.
-  **잔여(다음 세션)**: ①F/D 정본 verify 재실행 `python
-  runs/_issue15_adjudication/final_verify.py F` 그리고 `D` (desk 포함, E는 완료),
-  ②D/F 정직 최종 status 확정(§16 — F는 TRUE_CORE_GAP 2로 acceptance FAIL 예상,
-  D는 평가기 한계=Factory defect blocker 기록), ③dashboard smoke+§22 최종,
-  ④pytest ×2·atlas ×2·check(코드 변경 0), ⑤REENTRY/CANON(§23.2 해당 없음 예상),
-  §29 보고 댓글+이슈 close. §28 추천 후보 = 빈 entity 컬렉션 vacuous 평가기 수리
-  (D의 유일 잔여 Factory defect, §28 규칙 1).
-  주의: Factory production/test 코드 변경 여전히 0(모든 수리는 runs/ 제품 child 내부).
-  scenario_replay/golden gate는 ok/errors를 비교하지 않음 — F apply_fix 거부 확장은
-  golden_003의 no-op 의미(final_state/events/summary)를 유지한다.
+- Issue #15 done (Fresh-D/E/F Golden–Runner Adjudication + Phase 2B Apply — Factory
+  production/test 코드 변경 0, 전부 runs/ 제품 child 내부 작업. 정본 근거 =
+  runs/_issue15_adjudication/state.json):
+  판정·적용 (D #49) APPROVE_RUNNER_REPAIR + proposal(golden 갱신) REJECT — engine.py
+  content-조건부 Outdated(무수정 golden 3/3 PASS), child 045751.
+  (E #95) APPROVE_GOLDEN_REPAIR 표준 Phase 2B harness — golden 4종에 계약 state
+  field(skills)만 추가, 최종 child 060018.
+  (F #98) APPROVE_GOLDEN_REPAIR 위임 판정 보정 — range/공백 산술 오류 정정(독립
+  slicing 계산 evidence), 최종 child 060752(+ core gap 최소 수리 055022).
+  최종 status (정본 verify, desk 포함): E = PRODUCT_CANDIDATE(gates 7/7, acceptance
+  14/14, coverage 3/3·3/3). F = PRODUCT_CORE_GAP(gates 7/7·validate PASS이나
+  TRUE_CORE_GAP 2 = SC2/DA2 경고 카드↔에디터 하이라이트 전용 UI 부재, acceptance
+  10/14 — 별도 제품 completion 주문 권고). D = FACTORY_DEFECT(제품 의미 결함 0,
+  coverage 4/4·3/3, blocker = state_invariant 빈 tasks[] vacuous 평가기 한계 →
+  core gate FAIL → loop이 interaction 체인 미진입. packet =
+  045751/review/phase2d1/issue15_final_verify/final_status_packet.json).
+  집계: PRODUCT_CANDIDATE 1, 남은 VALID_HOLD 0, golden repair 2(E 표준/F 위임),
+  runner repair 1(D), combined 0, rejected proposal 1(D), Factory defect 1(빈
+  entity 컬렉션 vacuous 귀속 — 이슈 #14 deferred 재확인). §27 판정 =
+  PARTIAL_COMPLETION(invalid success 0, mock 0, 기존 성공 9종 digest/mtime 불변).
+  다음 추천 작업(정확히 1개, §28 규칙 1): 빈 entity 컬렉션 vacuous 귀속 평가기
+  수리 후 D phase2d1 loop 재실행.
 - Issue #14 done (Fresh Blind Batch 3, 커밋 4aaca59 fix+test / 마감 docs 커밋):
   선정 = Fresh-D #49 Spec-Driven 파이프라인(순서·의존성)/Fresh-E #95 스킬 번들 빌더
   (구성·선택)/Fresh-F #98 미니 린터(변환·검증) — 기존 10 사례·도메인과 비중복,

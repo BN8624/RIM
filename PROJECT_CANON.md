@@ -182,6 +182,15 @@ NOTES:
   patch-lane classification of a frozen-golden disagreement is a routing defect, not a
   patch opportunity
 - a child copy inherits the parent's apply report; provenance via `child_run_origin.json`
+- golden↔runner conflict adjudication priority (descending): challenge 원문 →
+  difficulty anchor·forbidden simplification → core contract → 독립 scenario/golden
+  evidence → runner contract → runtime behavior → generated proposal → 과거 보고.
+  하위 근거가 상위 근거와 충돌하면 상위가 이긴다
+- frozen golden은 불변 진리가 아니라 "보호된 정본 후보" — adjudication이 golden 결함을
+  확정하면 golden repair가 승인될 수 있다(표준 Phase 2B 또는 위임 판정 보정 + §17
+  after-apply hash 기록). 보호의 목적은 무단 변경 차단이지 오류 영구화가 아니다
+- Phase 2B apply는 승인된 repair에만 허용 — 현재 구현에 유리한 golden 변경 proposal과
+  difficulty anchor를 축소(검증 항목 삭제·완화)하는 proposal은 거부가 정본이다
 
 QUERY:
 - architecture-context --canon CANON-05
