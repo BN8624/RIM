@@ -11,7 +11,15 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1304개 (flaky 0) at issue #16 마감 (empty collection
+- tests: full suite PASS ×2 연속 1304개 (flaky 0) at issue #17 마감 (Factory production/
+  test 코드 변경 0 — 구현은 전부 Fresh-F child 090748 제품 workspace); smoke =
+  dashboard(/, /products 200) + Fresh-F child 090748 diagnostic UI browser 실조작
+  (단일/복수 diagnostic 카드→하이라이트, keyboard Tab+Enter 선택, mark 클릭 역방향,
+  leading/trailing whitespace trim 0, stale→재실행, 진단 0건, invalid range fail-closed,
+  375px overflow 0) + viewer replay(scenario_001/002 이벤트 {type,id}·final_state.
+  CodeState.content·남은 진단 range 렌더, undefined 0) + generic 콘솔 회귀(analyze
+  큐 실행 state 변화, apply_fix diag_999 명시 거부)
+- (이전 기록) full suite PASS ×2 연속 1304개 (flaky 0) at issue #16 마감 (empty collection
   exposure 계약 테스트 7종 포함); smoke = dashboard(/, /products 200) + Fresh-D child
   080138 scratchpad 복사본 interaction console 실조작(초기 state에 tasks:[] 노출,
   update_stage_content → AFTER_ACTIONS 상태 변화 + DEP 이벤트 4건, 오류 0) + viewer
@@ -50,6 +58,31 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #17 done (Fresh-F #98 Product UI Completion — Factory production/test 코드 변경 0,
+  구현 전부 fresh child 내부. 커밋 = docs/atlas만):
+  fresh child = runs/factory_20260712_090748 (parent 060752 복사, parent digest
+  b843e7e5…21ba·세션 중 mutation 0). 순서 = (1) factory_interaction_ui 재적용으로
+  stale interaction_smoke 해소(invalid_action_rejected true, 핸드오프 예측 일치),
+  (2) 제품별 diagnostic 패널을 generic 콘솔 위(첫 화면)에 추가 — 단일 정본
+  final_state.DiagnosticStore.issues에서 warning cards(카드=button, aria-pressed,
+  Enter/Space keydown 명시 처리)와 highlight pane(분석 시점 스냅샷에 mark, 좌표 보정 0,
+  INVALID_DIAGNOSTIC_RANGE fail-closed, 겹침 invalid)을 함께 그림; 소스 수정 →
+  STALE(선택 해제·하이라이트 제거·카드 비활성) → 재실행 → fresh mapping,
+  (3) viewer 수리 — ev.message/final_code 결함 제거({type,id}·CodeState.content 정본),
+  남은 진단 range 렌더 + meta viewport + 640px 스택.
+  coverage = P10/P11 신설(runner 정본 diagnostic check + static substring 복합,
+  §19.3에 따라 browser 실증 review/issue17_ui/browser_runtime_evidence.json 병행) →
+  SC2/DA2 COVERED, critical 3/3·anchor 3/3·forbidden 0, TRUE_CORE_GAP 0.
+  정본 최종 verify(desk 포함 live, 090748/review/phase2d1/issue17_final_verify) =
+  gates 7/7, validate PASS, anti_hardcode PASS, acceptance 14/14(10/14에서 승격),
+  desk PASS·primary_gap None·hard blocker 0, stage=effective_stage=PRODUCT_CANDIDATE
+  (정본 계산, 직접 설정 0). Google API 500 transient 3회는 전부 재시도 회복(mock 대체 0).
+  회귀 = 이슈15 immutable 9종 digest MATCH + 기존 성공 7종(#47/#54/SRS27/Table17/
+  Fresh-C 41/Fresh-D 49/Fresh-E 95) validate PASS·세션 중 mutation 0 + generic 콘솔
+  구조화 입력/모바일 overflow 회귀 0. invalid success 0, mock success 0, 신규
+  lane/executor 0, Factory production hardcode 0.
+  CANON-06에 diagnostic card/highlight 계약, CANON-10에 static-only coverage 금지 추가.
+  다음 추천 작업(정확히 1개, §31 규칙 3): Fresh Blind Batch 4.
 - Issue #16 done (Empty Entity Collection Vacuous Attribution Repair, 커밋 1a732a3 fix /
   fedbf7c test / docs 마감 커밋):
   root cause = EXPOSURE_AND_INSTANCE_CONFLATION + VACUOUS_EVALUATION_MISSING 복합 —
@@ -369,53 +402,9 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. Fresh-F #98 diagnostic warning card 및 editor highlight UI completion (이슈 #17,
-   진행 중 — Phase 0/A 완료, Phase B~G 미착수): TRUE_CORE_GAP 2건 제거 —
-   adjudicated diagnostic 정본을 단일 소스로 card↔highlight 연결, fresh child에서
-   coverage·acceptance·status 재계산. 이슈 #15는 종결(재개 금지), 빈 entity 컬렉션
-   vacuous 귀속은 이슈 #16에서 수리 완료.
-   ISSUE17_HANDOFF (Phase A 조사 확정 사실 — 재조사 불필요):
-   - 정본 parent = runs/factory_20260712_060752 (기존 artifact 수정 금지, fresh child로만).
-     주문서 = gh issue view 17 (본문 저장: 주문서 커밋 금지).
-   - acceptance 10/14 실패 4건의 실측 root cause:
-     (a) LNT-SC2/LNT-DA2 coverage missing = 진짜 UI 부재(GAP-A 카드·GAP-B highlight) —
-         review/coverage/coverage_matrix.json rows 참조.
-     (b) product_loop_closed=false ← 유일 원인 can_validate_input=false ←
-         review/interaction_ui/interaction_ui_report.json의 interaction_smoke가 stale
-         (이슈 #15 core-gap 수리 이전 기록, invalid_action_rejected=false). 현재
-         final_artifact runner는 명시 거부 구현 완료 — temp copy에서 run_interaction_smoke
-         재실행 시 pass=true·invalid_action_rejected=true 실측 확인됨. fresh child에서
-         factory_interaction_ui.run_interaction_ui(child, apply=True)로 콘솔+report 정본
-         재생성하면 해소(그 후 제품별 UI 확장을 그 위에 얹기).
-     (c) first_screen_cta_present=false ← quality.first_screen_understandable=false ←
-         viewer mismatch 1건: product/viewer/index.html이 ev.message(없는 키)와
-         data.final_code(없는 키, 정본은 final_state.CodeState.content)를 읽음 — child에서
-         viewer 수리 필요(이벤트는 {type,id}만 존재).
-   - diagnostic 정본 schema: DiagnosticStore.issues = [{id, range:[start,end), rule_id,
-     fix_text}], SymbolTable.symbols={name:{range,references,type}}, events {type,id},
-     summary "Found: N, Fixed: M", errors[]. range = 0-based end-exclusive slice 의미
-     (실측: 'let a = 1; let b = 2;'[11:21]='let b = 2;'). UI에서 ±1/trim 보정 절대 금지.
-   - 핵심 함정: apply_fix 후 남은 issues/symbols의 range는 "분석 시점 원본 좌표"(정본 의미,
-     골든 3/3 PASS) — content 변경 후엔 stale. UI highlight는 분석 시점 소스 스냅샷에만
-     그리고, apply_fix 후엔 반환 content로 재분석(analyze)해 fresh 진단으로 갱신할 것
-     (coverage P2 probe와 동일 체인).
-   - 구현 위치: child의 product/interaction/index.html에 제품별 diagnostic 패널 추가
-     (generic 콘솔 블록은 그대로 보존 — 이슈 #13 structured console 회귀 유지, 검증 키
-     {"valid"}), product/viewer/index.html 이벤트/코드 렌더 수리. Factory production 변경 0.
-     mock 검출기: catch 블록에 RUNNER_UNAVAILABLE 등 상태 토큰 필수, demo/mock/sample 명명 금지.
-   - coverage 경로: child의 review/coverage/coverage_adjudication.json(rows) +
-     coverage_probe_spec.json(P10+ 신설: runner+static_substring_count 복합) →
-     factory_coverage.run_coverage_probes → build_coverage_matrix(전 행 정본 대조,
-     COVERED는 PASS probe ref 필수). §19.3: static만으로 COVERED 금지 — browser 실증
-     evidence(review/issue17_ui/ 등)와 병행.
-   - 최종 verify: 이슈 #16과 동일 패턴 verify_candidate(desk 포함) → child/review/phase2d1/
-     issue17_final_verify (스크립트 참고: 이슈16 scratchpad issue16_final_verify.py 패턴,
-     targets만 교체). child 생성은 factory_lane_executors.copy_run_as_child(parent, None).
-   - 회귀 §24: 기존 성공 7종 factory-validate + digest(이슈15 state.json immutable 9종,
-     digest 방식 = sha256(json.dumps({rel:sha256}, sort_keys)) over final_artifact,
-     golden은 final_artifact/golden). baseline pytest = 1304 ×2 (ee9bdfa에서 실측).
-   - 완료 후 §31 다음 추천 규칙: F가 PRODUCT_CANDIDATE + 공통 blocker 없으면
-     Fresh Blind Batch 4 정확히 1개만 기록.
+1. Fresh Blind Batch 4 (이슈 #17 §31 규칙 3에 따른 유일 추천): Factory 무수정 블라인드
+   fresh 사례 3종 — 기존 13 사례(#47/#54/SRS27/Table17/77/Fresh-A 1/B 99/C 41/D 49/
+   E 95/F 98 등)·도메인과 비중복 선정, INVALID_SUCCESS 0 원칙, batch 3 대비 trend 기록.
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
@@ -428,6 +417,9 @@ DO_NOT_REPEAT:
   fresh child로만 진행 (이슈 #11 Round 1 기록은 불변 증거)
 - do not touch blind batch 3 base runs(194219·022630·030726)와 Round 1/2 loop·child
   artifact — spec repair는 사람 결정 + Phase 2B apply 절차로만 (이슈 #14 기록은 불변 증거)
+- do not touch Fresh-F parent 060752와 정본 child 090748(이슈 #17 PRODUCT_CANDIDATE
+  verify 근거) — 추가 작업은 새 fresh child로만; diagnostic range는 UI에서 절대
+  보정하지 않는다(CANON-06 diagnostic card/highlight semantics)
 - frozen golden↔runner 값 괴리를 patch lane으로 분류하지 않는다 — GOLDEN_SCHEMA_MISMATCH는
   형태 불문 requires_spec_repair=true(CANON-05), SPEC_REPAIR_REQUIRED 마커가 loop
   escalation의 유일한 트리거다

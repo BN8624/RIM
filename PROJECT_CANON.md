@@ -265,6 +265,16 @@ NOTES:
   with their original JSON types preserved (string-flattening is a forbidden
   simplification); smoke records structured input evidence (schema kinds, value kind,
   digest, type_preserved) and the validator blocks type-loss regressions
+- diagnostic card/highlight semantics (이슈 #17): warning cards and editor range
+  highlights must render from one canonical normalized diagnostic collection (the
+  runner's diagnostic state, stable identity = canonical diagnostic id, deterministic
+  order) — cards and highlights never compute ranges separately; the UI consumes
+  runner-canonical range coordinates verbatim (start-inclusive/end-exclusive over the
+  analysis-time source snapshot) and never adjusts them (±1, trim, whitespace recompute,
+  message-search relocation are forbidden); out-of-bounds/inverted/overlapping ranges
+  are INVALID_DIAGNOSTIC_RANGE fail-closed (no highlight, explicit error — silent clamp
+  forbidden); source edits mark existing diagnostics stale (selection cleared,
+  highlights removed) until a fresh lint run rebuilds cards and highlights together
 - interaction runtime fallback policy: valid artifact → real UI; missing/invalid/
   unsupported → explicit state; mock fixtures only on test/dev paths; production
   runtime never shows automatic mock success
@@ -543,6 +553,9 @@ REQUIREMENT_COVERAGE (이슈 #9, factory_coverage):
   — enum 밖 값·미분류 FAIL은 matrix 검증이 거부한다
 - evidence 우선순위: 결정론적 runner probe(fresh, artifact fingerprint 일치) >
   기록물. COVERED는 PASS probe ref 필수, 사람 설명·과거 복사 evidence 불인정
+- UI requirement의 COVERED는 static 존재 증거만으로 인정하지 않는다 — static substring
+  check는 runner 정본 check와 복합 probe로만 쓰고, 실제 runtime 실증(browser 실조작
+  evidence)과 병행해야 한다 (이슈 #17 §19.3)
 - evidence와 implementation 분리: matrix는 판정 기록일 뿐 제품을 수정하지 않는다
 - partial 승격 금지: PARTIALLY_COVERED는 coverage 집계에 미산입(judge 매핑 missing)
 - Difficulty Anchor는 축소·재해석하지 않는다 — 의미 모호는 AMBIGUOUS로 남긴다
