@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from repo_idea_miner.factory_core_gates import (
+    _entity_collection_exposure,
+    _is_universal_field_invariant,
     compare_golden,
     check_invariant,
     run_anti_hardcode_gate,
@@ -216,6 +218,109 @@ def test_state_invariant_singleton_entity_exposed():
                if v["invariant"] in ("version >= 0", "exists:root_node")]
     assert fs_viol
     assert all(v["category"] == "INVARIANT_NOT_EXPOSED" for v in fs_viol)
+
+
+# ------------------------------------------------- Empty Collection Exposure (이슈 #16 §5~§8)
+
+_ITEM_ENTITY = {"name": "Item", "fields": ["id"], "invariants": ["exists:id"]}
+
+
+def _gate(final_state: dict, entity: dict = None):
+    core = {"state_entities": [entity or _ITEM_ENTITY]}
+    return run_state_invariant_gate(core, {"s1": {"parsed": {"final_state": final_state}}})
+
+
+def test_exposure_contract_states():
+    """NOT_EXPOSED / EXPOSED_EMPTY / EXPOSED_NONEMPTY / WRONG_TYPE / AMBIGUOUS 분리 (INV-1~6)."""
+    e = _ITEM_ENTITY
+    assert _entity_collection_exposure(e, {})["status"] == "NOT_EXPOSED"
+    empty = _entity_collection_exposure(e, {"items": []})
+    assert empty["status"] == "EXPOSED_EMPTY"
+    assert empty["resolved_path"] == "items"
+    assert empty["collection_type"] == "list"
+    nonempty = _entity_collection_exposure(e, {"items": [{"id": "a"}]})
+    assert nonempty["status"] == "EXPOSED_NONEMPTY"
+    assert len(nonempty["instances"]) == 1
+    # 빈 dict는 collection으로 자동 승격 금지 → WRONG_TYPE
+    assert _entity_collection_exposure(e, {"items": {}})["status"] == "EXPOSED_WRONG_TYPE"
+    # 복수 후보 경로 → 병합·임의 선택 금지, fail-closed
+    amb = _entity_collection_exposure(e, {"items": [], "group": {"items": []}})
+    assert amb["status"] == "AMBIGUOUS_EXPOSURE"
+    assert amb["resolved_path"] == ["group.items", "items"]
+
+
+def test_exposure_singular_plural_case_nested():
+    """Task↔tasks 단수/복수·대소문자 정규화, dict/list 중첩 경로 발견 (§6)."""
+    task = {"name": "Task", "fields": ["id", "parent_plan_id"], "invariants": []}
+    assert _entity_collection_exposure(task, {"tasks": []})["status"] == "EXPOSED_EMPTY"
+    assert _entity_collection_exposure(task, {"Tasks": []})["status"] == "EXPOSED_EMPTY"
+    nested = _entity_collection_exposure(task, {"pipeline": {"tasks": []}})
+    assert nested["status"] == "EXPOSED_EMPTY"
+    assert nested["resolved_path"] == "pipeline.tasks"
+    in_list = _entity_collection_exposure(task, {"pipelines": [{"tasks": []}]})
+    assert in_list["status"] == "EXPOSED_EMPTY"
+    assert in_list["resolved_path"] == "pipelines[0].tasks"
+
+
+def test_universal_field_invariant_predicate():
+    """vacuous 대상은 entity 선언 필드 술어만 — collection 경로 참조는 제외 (§7)."""
+    task = {"name": "Task", "fields": ["id", "parent_plan_id"], "invariants": []}
+    assert _is_universal_field_invariant(task, "exists:parent_plan_id")
+    assert _is_universal_field_invariant(task, "id >= 0")
+    assert not _is_universal_field_invariant(task, "tasks.length >= 1")  # cardinality 의미
+    assert not _is_universal_field_invariant(task, "exists:tasks")
+    assert not _is_universal_field_invariant(task, "자연어 불변조건")
+
+
+def test_state_invariant_vacuous_pass_empty_collection():
+    """EXPOSED_EMPTY + universal field invariant → VACUOUS_PASS, evidence 포함 (§7·§9)."""
+    result, summary = _gate({"items": []})
+    assert result.ok, result.problems
+    assert summary["counts"]["vacuous_pass"] == 1
+    v = summary["vacuous_passes"][0]
+    assert v["exposure_status"] == "EXPOSED_EMPTY"
+    assert v["reason_code"] == "VACUOUS_PASS_EMPTY_COLLECTION"
+    assert v["evaluated_instance_count"] == 0
+    assert v["violating_instance_count"] == 0
+    # 중첩 empty collection도 동일
+    result2, summary2 = _gate({"group": {"items": []}})
+    assert result2.ok, result2.problems
+    assert summary2["counts"]["vacuous_pass"] == 1
+    assert summary2["vacuous_passes"][0]["resolved_path"] == "group.items"
+
+
+def test_state_invariant_no_vacuous_for_missing_wrong_type_ambiguous():
+    """missing collection·wrong type·ambiguous는 vacuous PASS 금지 — 기존 실패 유지 (§7.3)."""
+    for state in ({}, {"items": {}}, {"items": [], "group": {"items": []}}):
+        result, summary = _gate(state)
+        assert not result.ok, state
+        assert summary["counts"]["vacuous_pass"] == 0
+        assert summary["counts"]["not_exposed"] == 1
+
+
+def test_state_invariant_cardinality_independent_of_vacuous():
+    """minimum-existence(length) 요구는 빈 collection에서 계속 FAIL — vacuous 우회 금지 (§8)."""
+    entity = {"name": "Item", "fields": ["id"],
+              "invariants": ["exists:id", "items.length >= 1"]}
+    result, summary = _gate({"items": []}, entity)
+    assert not result.ok
+    # exists:id는 vacuous PASS, items.length >= 1은 INVARIANT_FAIL로 남는다
+    assert summary["counts"]["vacuous_pass"] == 1
+    assert [v["category"] for v in summary["violations"]] == ["INVARIANT_FAIL"]
+    # 채워지면 둘 다 PASS
+    result2, summary2 = _gate({"items": [{"id": "a"}]}, entity)
+    assert result2.ok, result2.problems
+    assert summary2["counts"]["vacuous_pass"] == 0
+
+
+def test_state_invariant_nonempty_semantics_unchanged():
+    """non-empty 평가 의미 회귀 — valid/invalid instance 판정 유지 (§12)."""
+    valid, s_valid = _gate({"items": [{"id": "a"}, {"id": "b"}]})
+    assert valid.ok, valid.problems
+    assert s_valid["counts"]["vacuous_pass"] == 0
+    invalid, s_invalid = _gate({"items": [{"id": "a"}, {}]})
+    assert not invalid.ok
+    assert s_invalid["counts"]["vacuous_pass"] == 0
 
 
 # ---------------------------------------------------------------- Determinism Gate (§16-29)
