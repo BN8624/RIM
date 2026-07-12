@@ -369,13 +369,54 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. 이슈 #15 마감 재개 (OPEN, Phase A~C + Phase D~E 대부분 완료): RECENT_SEMANTIC_CHANGES의
-   Issue #15 블록 **잔여 ①~⑤** 순서대로 — F/D 정본 verify 재실행부터
-   (runs/_issue15_adjudication/final_verify.py, E는 PRODUCT_CANDIDATE 확정이라 재실행
-   불필요). 판정·적용·수리는 완료 상태이므로 재판정/재수리 금지(근거 =
-   runs/_issue15_adjudication/state.json phase_b/phase_c/phase_d_session2).
-   (그 외 deferred: 빈 entity 컬렉션 vacuous NOT_EXPOSED 귀속 — D의 남은 blocker이기도
-   함, golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
+1. Fresh-F #98 diagnostic warning card 및 editor highlight UI completion (이슈 #17,
+   진행 중 — Phase 0/A 완료, Phase B~G 미착수): TRUE_CORE_GAP 2건 제거 —
+   adjudicated diagnostic 정본을 단일 소스로 card↔highlight 연결, fresh child에서
+   coverage·acceptance·status 재계산. 이슈 #15는 종결(재개 금지), 빈 entity 컬렉션
+   vacuous 귀속은 이슈 #16에서 수리 완료.
+   ISSUE17_HANDOFF (Phase A 조사 확정 사실 — 재조사 불필요):
+   - 정본 parent = runs/factory_20260712_060752 (기존 artifact 수정 금지, fresh child로만).
+     주문서 = gh issue view 17 (본문 저장: 주문서 커밋 금지).
+   - acceptance 10/14 실패 4건의 실측 root cause:
+     (a) LNT-SC2/LNT-DA2 coverage missing = 진짜 UI 부재(GAP-A 카드·GAP-B highlight) —
+         review/coverage/coverage_matrix.json rows 참조.
+     (b) product_loop_closed=false ← 유일 원인 can_validate_input=false ←
+         review/interaction_ui/interaction_ui_report.json의 interaction_smoke가 stale
+         (이슈 #15 core-gap 수리 이전 기록, invalid_action_rejected=false). 현재
+         final_artifact runner는 명시 거부 구현 완료 — temp copy에서 run_interaction_smoke
+         재실행 시 pass=true·invalid_action_rejected=true 실측 확인됨. fresh child에서
+         factory_interaction_ui.run_interaction_ui(child, apply=True)로 콘솔+report 정본
+         재생성하면 해소(그 후 제품별 UI 확장을 그 위에 얹기).
+     (c) first_screen_cta_present=false ← quality.first_screen_understandable=false ←
+         viewer mismatch 1건: product/viewer/index.html이 ev.message(없는 키)와
+         data.final_code(없는 키, 정본은 final_state.CodeState.content)를 읽음 — child에서
+         viewer 수리 필요(이벤트는 {type,id}만 존재).
+   - diagnostic 정본 schema: DiagnosticStore.issues = [{id, range:[start,end), rule_id,
+     fix_text}], SymbolTable.symbols={name:{range,references,type}}, events {type,id},
+     summary "Found: N, Fixed: M", errors[]. range = 0-based end-exclusive slice 의미
+     (실측: 'let a = 1; let b = 2;'[11:21]='let b = 2;'). UI에서 ±1/trim 보정 절대 금지.
+   - 핵심 함정: apply_fix 후 남은 issues/symbols의 range는 "분석 시점 원본 좌표"(정본 의미,
+     골든 3/3 PASS) — content 변경 후엔 stale. UI highlight는 분석 시점 소스 스냅샷에만
+     그리고, apply_fix 후엔 반환 content로 재분석(analyze)해 fresh 진단으로 갱신할 것
+     (coverage P2 probe와 동일 체인).
+   - 구현 위치: child의 product/interaction/index.html에 제품별 diagnostic 패널 추가
+     (generic 콘솔 블록은 그대로 보존 — 이슈 #13 structured console 회귀 유지, 검증 키
+     {"valid"}), product/viewer/index.html 이벤트/코드 렌더 수리. Factory production 변경 0.
+     mock 검출기: catch 블록에 RUNNER_UNAVAILABLE 등 상태 토큰 필수, demo/mock/sample 명명 금지.
+   - coverage 경로: child의 review/coverage/coverage_adjudication.json(rows) +
+     coverage_probe_spec.json(P10+ 신설: runner+static_substring_count 복합) →
+     factory_coverage.run_coverage_probes → build_coverage_matrix(전 행 정본 대조,
+     COVERED는 PASS probe ref 필수). §19.3: static만으로 COVERED 금지 — browser 실증
+     evidence(review/issue17_ui/ 등)와 병행.
+   - 최종 verify: 이슈 #16과 동일 패턴 verify_candidate(desk 포함) → child/review/phase2d1/
+     issue17_final_verify (스크립트 참고: 이슈16 scratchpad issue16_final_verify.py 패턴,
+     targets만 교체). child 생성은 factory_lane_executors.copy_run_as_child(parent, None).
+   - 회귀 §24: 기존 성공 7종 factory-validate + digest(이슈15 state.json immutable 9종,
+     digest 방식 = sha256(json.dumps({rel:sha256}, sort_keys)) over final_artifact,
+     golden은 final_artifact/golden). baseline pytest = 1304 ×2 (ee9bdfa에서 실측).
+   - 완료 후 §31 다음 추천 규칙: F가 PRODUCT_CANDIDATE + 공통 blocker 없으면
+     Fresh Blind Batch 4 정확히 1개만 기록.
+   (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
