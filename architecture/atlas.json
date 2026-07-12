@@ -8841,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1207,
+  "test_count": 1214,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -11320,7 +11320,7 @@
      ]
     }
    ],
-   "loc": 1194,
+   "loc": 1298,
    "module": "repo_idea_miner.factory_core_gates",
    "path": "repo_idea_miner/factory_core_gates.py",
    "private_symbols": [
@@ -11343,8 +11343,11 @@
     "_diff_invariant_keys",
     "_diff_partial",
     "_enclosing_scope",
+    "_entity_collection_exposure",
     "_entity_instances",
+    "_is_universal_field_invariant",
     "_localize_python",
+    "_named_collection_candidates",
     "_resolve_docker",
     "_resolve_path",
     "_runner_wiring_problem",
@@ -15881,7 +15884,7 @@
   }
  ],
  "repository": {
-  "head": "4aaca59c6a6daece8a456e9653bdd3728aeb3ead",
+  "head": "fedbf7c601561ff5fe9e8583924492ee862e05dc",
   "structural_diff": false,
   "structural_fingerprint": "0c553a95525dcb1877042e96248cc8abd47392cdf6771caf67f0831850977352",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"

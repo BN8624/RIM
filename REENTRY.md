@@ -11,7 +11,13 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1297개 (flaky 0) at issue #15 마감 (Factory production/test
+- tests: full suite PASS ×2 연속 1304개 (flaky 0) at issue #16 마감 (empty collection
+  exposure 계약 테스트 7종 포함); smoke = dashboard(/, /products 200) + Fresh-D child
+  080138 scratchpad 복사본 interaction console 실조작(초기 state에 tasks:[] 노출,
+  update_stage_content → AFTER_ACTIONS 상태 변화 + DEP 이벤트 4건, 오류 0) + viewer
+  replay(scenario_001/002 로드, 빈 tasks 상태 렌더) + 기존 성공 7종 validate PASS·
+  수리된 evaluator로 state_invariant 재평가 전부 PASS(vacuous 발화 0)·digest 불변
+- (이전 기록) full suite PASS ×2 연속 1297개 (flaky 0) at issue #15 마감 (Factory production/test
   코드 변경 0 배치 — 모든 수리는 runs/ 제품 child 내부); smoke = dashboard(/, /products
   200) + D viewer 상태 전이/E 병합·S999 거부·replay/F analyze·apply_fix·diag_999 거부
   browser 실조작 + 기존 성공 9종 validate PASS·digest/mtime 불변
@@ -44,6 +50,31 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #16 done (Empty Entity Collection Vacuous Attribution Repair, 커밋 1a732a3 fix /
+  fedbf7c test / docs 마감 커밋):
+  root cause = EXPOSURE_AND_INSTANCE_CONFLATION + VACUOUS_EVALUATION_MISSING 복합 —
+  _entity_instances의 `if items` 필터가 빈 collection을 발견 단계에서 폐기, scenario_002/
+  003의 tasks:[]가 exists:parent_plan_id에서 INVARIANT_NOT_EXPOSED 오판(이슈 #14 deferred
+  defect). 수리(production 1파일 factory_core_gates.py) = exposure 5상태 분리
+  (NOT_EXPOSED/EXPOSED_EMPTY/EXPOSED_NONEMPTY/EXPOSED_WRONG_TYPE/AMBIGUOUS_EXPOSURE;
+  이름 정규화 = 대소문자 무시+'+s'만, dict/list 한정 깊이 탐색, 복수 후보 fail-closed,
+  빈 dict 자동 승격 금지) + universal field invariant(entity 선언 필드 술어만)의
+  VACUOUS_PASS_EMPTY_COLLECTION(instance 0 evidence) + cardinality(length 비교) 독립
+  평가 유지·vacuous 우회 불가. CANON-04 exposure 계약 갱신.
+  Fresh-D 재검증 = parent 045751 fresh loop(loop_20260712_165424): gates 6/7→7/7 전환
+  → INTERACTION_UI APPLIED(child 075810) → RUNNER_BACKED_DRAFT_EXECUTION APPLIED(child
+  080138) → strict PRODUCT_CANDIDATE. 정본 최종 verify(desk 포함, 080138/review/phase2d1/
+  issue16_final_verify) = gates 7/7, validate PASS, acceptance 14/14(11/14에서 승격),
+  coverage critical 1.0·anchor 1.0·forbidden 0, mock 0, gap None, hd None — 정본 계산,
+  직접 설정 없음. parent 스냅샷 190파일 변경 0(신규는 loop dir 내부만), base hash PASS.
+  vacuous evidence artifact = issue16_final_verify/state_invariant_evidence.json
+  (EXPOSED_EMPTY·VACUOUS_PASS_EMPTY_COLLECTION·evaluated 0·cardinality none).
+  회귀 = 기존 성공 7종(#47/#54/SRS27/Table17/Fresh-C 41/Fresh-E 95/Fresh-F 98) validate
+  PASS + state_invariant 재평가 전부 PASS(vacuous 발화 0 — non-empty 의미 불변) + 이슈
+  #15 immutable 9종 content digest MATCH. Fresh-F = PRODUCT_CORE_GAP 유지(UI gap 범위 외).
+  invalid success 0, mock success 0, Fresh-D hardcode 0, 신규 lane/executor 0.
+  다음 추천 작업(정확히 1개, §27 규칙 2): Fresh-F #98 제품별 UI completion
+  (경고 카드↔에디터 하이라이트 전용 UI) 별도 주문.
 - Issue #15 done (Fresh-D/E/F Golden–Runner Adjudication + Phase 2B Apply — Factory
   production/test 코드 변경 0, 전부 runs/ 제품 child 내부 작업. 정본 근거 =
   runs/_issue15_adjudication/state.json):

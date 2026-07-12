@@ -133,8 +133,15 @@ NOTES:
 - state-invariant entity resolution: entity-name key match is case-insensitive and
   collection scan descends into nested dict values (bounded depth) — values the runner
   actually exposes are evaluated, never reported NOT_EXPOSED; field-subset matching and
-  the no-auto-PASS rule stay (a genuinely missing entity, including an empty collection
-  that cannot be attributed to the entity, remains INVARIANT_NOT_EXPOSED)
+  the no-auto-PASS rule stay (a genuinely missing entity remains INVARIANT_NOT_EXPOSED)
+- entity collection exposure is separate from instance count: NOT_EXPOSED (path absent)
+  ≠ EXPOSED_EMPTY (name-attributed collection path present with []) ≠ EXPOSED_NONEMPTY;
+  a universal field invariant over declared entity fields evaluates VACUOUS_PASS on
+  EXPOSED_EMPTY (reason_code VACUOUS_PASS_EMPTY_COLLECTION, evaluated_instance_count 0);
+  cardinality/minimum-existence requirements (e.g. length comparisons) are evaluated
+  independently and never bypassed by vacuous truth; missing collection paths, wrong
+  collection types ({} is never auto-promoted to a collection), and ambiguous multi-path
+  candidates all stay fail-closed
 
 QUERY:
 - architecture-context --canon CANON-04
