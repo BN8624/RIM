@@ -94,6 +94,28 @@ def test_entity_invariants_resolved_from_collections():
     assert summary["checked"] > 0
 
 
+def test_entity_invariants_case_insensitive_name_and_nested_collection():
+    """blind batch 3 Fresh-D 회귀: 계약 'Pipeline'↔runner 'pipeline' 대소문자와
+    중첩 컬렉션(pipeline.stages)이 실제 노출인데 NOT_EXPOSED로 오탐하지 않는다."""
+    contract = {"state_entities": [
+        {"name": "Pipeline", "fields": ["current_stage_index", "stages"],
+         "invariants": ["current_stage_index >= 0", "exists:stages"]},
+        {"name": "Stage", "fields": ["id", "content", "status"],
+         "invariants": ["exists:id"]},
+    ]}
+    fs = {"pipeline": {"current_stage_index": 0,
+                       "stages": [{"id": 0, "content": "x", "status": "Draft"}]}}
+    result, summary = run_state_invariant_gate(contract, _replay(fs))
+    assert result.ok, result.problems
+    assert summary["status"] == "PASS"
+    assert summary["checked"] > 0
+    # 진짜 미노출은 여전히 NOT_EXPOSED — 오탐 제거이지 자동 PASS가 아니다
+    _, summary2 = run_state_invariant_gate(contract, _replay({"other": 1}))
+    assert summary2["status"] == "FAIL"
+    cats = {v["category"] for v in summary2["violations"]}
+    assert cats == {"INVARIANT_NOT_EXPOSED"}
+
+
 def test_entity_invariant_fail_vs_not_exposed():
     """§18-31: INVARIANT_FAIL과 INVARIANT_NOT_EXPOSED 구분 유지."""
     # global_tick 음수 → 값 위반 (FAIL)

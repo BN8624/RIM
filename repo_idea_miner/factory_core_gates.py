@@ -684,19 +684,34 @@ def _entity_instances(entity: dict, final_state: dict) -> list[dict]:
         return []
     # entity 이름 키 singleton: golden expected_final_state와 같은 중첩 구조를 해석한다.
     # 필드가 하나라도 없으면 매칭하지 않는다 — NOT_EXPOSED 유지 (자동 PASS 금지).
-    named = final_state.get(entity.get("name") or "")
+    # 이름 매칭은 대소문자를 무시한다 — 계약 'Pipeline' ↔ runner 'pipeline' 오탐 제거
+    # (blind batch 3 Fresh-D, FD-3 singleton 오탐과 같은 계보)
+    name = (entity.get("name") or "").lower()
+    named = None
+    for key, value in final_state.items():
+        if str(key).lower() == name and isinstance(value, dict):
+            named = value
+            break
     if isinstance(named, dict) and fields <= set(named.keys()):
         return [named]
+
+    def _collect(container: dict, depth: int, out: list[dict]) -> None:
+        # top-level뿐 아니라 중첩 dict 내부 컬렉션(예: pipeline.stages)도 한정 깊이로 탐색한다.
+        for value in container.values():
+            if isinstance(value, list):
+                items = value
+            elif isinstance(value, dict) and value and all(isinstance(v, dict) for v in value.values()):
+                items = list(value.values())
+            elif isinstance(value, dict) and depth > 0:
+                _collect(value, depth - 1, out)
+                continue
+            else:
+                continue
+            if items and all(isinstance(e, dict) and fields <= set(e.keys()) for e in items):
+                out.extend(items)
+
     out: list[dict] = []
-    for value in final_state.values():
-        if isinstance(value, list):
-            items = value
-        elif isinstance(value, dict) and value and all(isinstance(v, dict) for v in value.values()):
-            items = list(value.values())
-        else:
-            continue
-        if items and all(isinstance(e, dict) and fields <= set(e.keys()) for e in items):
-            out.extend(items)
+    _collect(final_state, 2, out)
     return out
 
 

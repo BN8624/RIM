@@ -52,6 +52,20 @@ def test_classify_golden_extra_field_requires_spec_repair():
     assert extra["requires_spec_repair"] is True
 
 
+def test_classify_golden_value_mismatch_requires_spec_repair():
+    """blind batch 3 Fresh-D/F 회귀: 값 수준 golden 불일치도 spec repair 표식 —
+    frozen golden↔runner 값 괴리는 §4.4/§6.2상 자동 patch 대상이 아니고,
+    SPEC_REPAIR_REQUIRED 마커가 있어야 loop escalation이 승급한다."""
+    golden_diff = {"status": "FAIL", "diffs": [
+        {"scenario_id": "scenario_001",
+         "diffs": ["final_state.pipeline.stages[3].status: 기대 'Draft' ≠ 실제 'Outdated'"]},
+    ]}
+    fs = classify_failures({}, golden_diff, {}, {}, {}, {}, product_layer_problems=[])
+    golden = next(f for f in fs if f["type"] == "GOLDEN_SCHEMA_MISMATCH")
+    assert golden["requires_spec_repair"] is True
+    assert any(f["type"] == "SPEC_REPAIR_REQUIRED" for f in fs)
+
+
 def test_classify_invariant_not_exposed():
     """§20-6,19: not_exposed invariant → STATE_INVARIANT_NOT_EXPOSED (spec repair 불필요)."""
     inv = {"status": "FAIL", "not_exposed": [

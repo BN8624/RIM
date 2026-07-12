@@ -362,13 +362,16 @@ def classify_failures(
             _add("RUNNER_OUTPUT_MISSING_FIELD",
                  "runner output missing fields the golden expects",
                  repairable=True, requires_spec_repair=False)
-        # 값/이벤트/summary 불일치가 남아 있으면 golden 스키마 자체 불일치
+        # 값/이벤트/summary 불일치가 남아 있으면 golden 스키마 자체 불일치.
+        # frozen golden ↔ 자기일관 runner의 값 괴리는 §4.4/§6.2(NEVER_PATCH) 계약상
+        # 자동 patch 대상이 아니다 — 값 수준 불일치도 spec repair 표식이 있어야
+        # loop escalation이 SPEC_REPAIR로 승급한다 (blind batch 3 Fresh-D/F 반복 오진)
         value_mismatch = any("기대" in ln and "실제" in ln for ln in diff_lines)
         extra_key = "골든에 없는 키" in blob or "golden에 없는 키" in blob
         if value_mismatch or extra_key:
             _add("GOLDEN_SCHEMA_MISMATCH",
                  "golden expected schema disagrees with runner output (golden behind runner)",
-                 repairable=True, requires_spec_repair=extra_key)
+                 repairable=True, requires_spec_repair=True)
 
     # State invariant 노출 실패
     if invariant_summary and invariant_summary.get("status") == "FAIL":
