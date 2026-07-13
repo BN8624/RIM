@@ -11,7 +11,13 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 (flaky 0) at issue #18 마감 (blind batch 4 repair 테스트
+- tests: full suite PASS ×2 연속 1336개 (flaky 0) at issue #19 마감 (replay node evidence
+  shape 테스트 29종 추가 — dict/list/empty/missing/malformed/mixed/non-graph/vacuous);
+  smoke = dashboard(/, /products 200) + Fresh-G parent 134413 scratchpad 복사본 runner
+  실증(valid action UNVISITED→COMPLETED, 무효 3종 명시 거부+state 불변) + viewer browser
+  실조작(list nodes replay 로드, 실결함 4건 정직 관측) + 회귀 8종 digest/mtime/validate
+  전부 baseline 일치
+- (이전 기록) full suite PASS ×2 연속 (flaky 0) at issue #18 마감 (blind batch 4 repair 테스트
   3종 추가 — RunnerContract interpreter fail-closed/프롬프트 계약 토큰/BLOCKED lane 재선택
   금지); smoke = dashboard(/, /products 200) + Fresh-G child 104032 browser 실조작
   (unlock→complete state 전이, 375px overflow 0) + 회귀 8종 digest/mtime/validate 전부
@@ -63,6 +69,27 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #19 done (Replay Evidence Shape-Safe Evaluator Repair — 커밋 a37bf48 fix /
+  609eae2 test / d148955 fix(editor) / docs 마감 커밋):
+  root cause = 복합(NODE_COLLECTION_TYPE_UNGUARDED 주 + ADJACENT_EVALUATOR_CONTRACT_DRIFT
+  + MALFORMED_AND_EMPTY_CONFLATION) — viewer_reads_replay_evidence:165 nodes.values()가
+  dict 가정, G R2 replay 3종 전부 list of dicts(정본: state_contract "nodes.length>=0")
+  → AttributeError → loop verify crash. 인접 drift: viewer_field_mismatches는 dict guard로
+  list 조용히 스킵, _consistency_fields .items() 동일 crash, editor
+  extract_supported_node_types .values() crash(fresh loop INTERACTION_UI 실측).
+  수리(production 3파일 — evidence/review/editor) = classify_node_collection 정본 helper
+  (NODE_MAP/NODE_LIST/EMPTY/MISSING/MALFORMED 분리, 비dict entry는 malformed_entries로
+  계수, 순서 보존 결정론; AMBIGUOUS는 canonical 경로가 final_state.nodes 단일이라 예약만),
+  malformed collection/entry fail-closed mismatch, 빈 evidence에 원인 metadata
+  (smoke_review.replay_node_collection), vacuous status evidence/consistency 억제(INV-7),
+  node.status 미렌더링 검출(x/y와 동일 원칙). Fresh-G hardcode 0, 신규 lane/module 0.
+  Fresh-G 재판정(fresh loop 093644, parent 134413 불변 digest+base_hash PASS) =
+  crash 0, HOLD packet 정상 생성, gates 7/7, acceptance 9/14, stage POLISHABLE_PROTOTYPE,
+  mock 0, invalid success 0 → 정직 PARTIAL_PRODUCT (§26 REPAIR_AND_REEVALUATION).
+  잔여 blocker = graph 도메인 INTERACTION_UI 라우팅(legacy editor adapter 전제조건이
+  autopilot과 불일치 → EXECUTION_BLOCKED) + 제품 viewer 실결함 4건(browser 실증).
+  blocked_lanes parent carry-over는 세션-로컬 상태라 구조적으로 재현 불가 확인.
+  CANON-06에 replay node evidence shape safety 계약 추가. H/I 상태 불변(validate PASS).
 - Issue #18 done (Fresh Blind Batch 4 — 커밋 0c67ac5 fix / ad293b9 test / docs 마감 커밋.
   session state = runs/_batch4_blind/state.json, selection digest 794d7c3c…10f7):
   선정(결정론: product_runs 등장 challenge 전제외+ID 오름차순+계층화 A/B/C) = Fresh-G #7
@@ -431,14 +458,17 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. Fresh-G(#7) 평가기 crash 수리 후 G 재판정 (이슈 #18 §28 유일 추천):
-   factory_product_evidence.viewer_reads_replay_evidence:165가 final_state.nodes를
-   dict로 가정(nodes.values()) — list면 AttributeError로 loop 전체 crash(HOLD packet
-   조차 없음, G R2 실측 loop_20260713_012820). graph-형 가정 제거(list/비graph state
-   허용, crash 대신 명시 처리) 후 G(base 134413, 7/7 zero-patch ×2)를 fresh loop으로
-   재판정. 부수 관찰(후속 후보): continuation child 기록 형식(failure_types/steps
-   부재)이 validate FAIL 유발(I R2 iter03), I(#5) 시간 의미 결정은 Fresh-A와 동일
-   계열 반복 — 의미 결정 배치 후보.
+1. graph 도메인 INTERACTION_UI lane 경로 수리 후 Fresh-G 재판정 (이슈 #19 §27 규칙 1
+   유일 추천): lane 라우터가 state에 nodes+edges만 있으면 legacy 2C-2 editor adapter로
+   보내는데, editor는 2C-1 polish 산출물·user_review_decision.md(human gate)·
+   supported_node_types(contract/replay type 필드)를 전제 — autopilot fresh 제품은
+   전부 결여라 graph-형 신규 제품의 interaction gap이 구조적으로 EXECUTION_BLOCKED
+   (G fresh loop 실측: 정직 CANNOT_EDIT → A1 재선택 차단 → HOLD). generic interaction
+   console은 graph 도메인을 설계상 거부(factory_interaction_ui:1438). 이 라우팅/전제
+   불일치를 수리해야 G가 진행 가능. 부수 관찰(후속 후보): G 제품 viewer 실결함 4건
+   (파일명 조립 404, data.nodes vs final_state.nodes shape, node.status vs 정본 state,
+   event 필드 불일치 — 전부 제품 workspace 영역), continuation child 기록 형식
+   validate FAIL(I R2 iter03), I(#5) 시간 의미 결정 반복.
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 

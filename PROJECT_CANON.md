@@ -343,6 +343,16 @@ NOTES:
 - viewer mismatch detection requires only the keys the viewer actually reads
   (a `.type`-only viewer never requires `message`) — the graph-schema assumption
   that flagged every non-graph domain was an accidental coupling
+- replay node evidence shape safety (이슈 #19): graph node evidence applies only when
+  a node collection is actually present/declared — a `nodes` key alone never makes a
+  product a graph product, and non-graph products are never forced to provide node
+  evidence; the canonical node collection is dict (NODE_MAP) or list (NODE_LIST) —
+  both are normal shapes with identical evidence semantics; NOT_APPLICABLE, EMPTY,
+  MISSING, and MALFORMED are distinct states (empty evidence must keep its cause);
+  malformed collections (scalar/null/unsupported) and non-dict entries are fail-closed
+  evidence problems, never crashes and never silently empty; unknown shapes never PASS
+  silently; status-less node collections are vacuous — an all-None status match is
+  neither reads-replay evidence nor runner↔viewer consistency proof
 - generic ux polish (`factory_ux_polish`): product surfaces → canonical UX contract
   (reuses interaction/viewer/runner contracts; ux_target_id/source_artifact_refs with
   sha256/primary_task/primary_actions/state_indicators/feedback_channels/error_channels/
