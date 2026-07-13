@@ -11,7 +11,16 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1360개 (flaky 0) at issue #22 마감 (first-screen CTA
+- tests: full suite PASS ×2 연속 1365개 (flaky 0) at issue #23 마감 (viewer polish에
+  graph를 4번째 도메인으로 추가, legacy 라우팅 테스트 3건 canonical 교체, canonical
+  surface selection 회귀 4종); architecture-build 2회 byte-identical + architecture-check
+  PASS; smoke = Fresh-G canonical viewer child 142648 browser 실조작(replay 목록 3종·
+  frame 5종 next/prev/reset·frame 1↔5 REPLAY_COMPLETE·before/after state에 실제 node
+  state 값 렌더·검증 결과 표시·console 오류 0·undefined/[object Object] 0·375px
+  overflow 0·CTA→Interaction Console 연결 유지) + **stage PRODUCT_CANDIDATE**
+  (closed loop 233249 "엄격한 PRODUCT_CANDIDATE 도달", acceptance 14/14, hard blocker
+  0, factory-validate PASS) + parent 134413 146파일 digest·mtime 불변
+- (이전 기록) full suite PASS ×2 연속 1360개 (flaky 0) at issue #22 마감 (first-screen CTA
   테스트 13종 추가 — 진단 fixable/fail-closed·operation 주입/거부·숨김/더미/marker-only
   불인정·end-to-end evidence·acceptance additive·validator 과장/marker-only 차단);
   smoke = Fresh-G fresh loop 192058(parent 134413) UX_POLISH lane **APPLIED** — child
@@ -92,6 +101,34 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #23 done (Graph VIEWER_POLISH Canonicalization — 커밋 fdf25fc fix / docs 마감
+  커밋): root cause = graph 우회 2개소(_exec_viewer_polish의 legacy 2C-1 분기 +
+  run_viewer_polish의 PRECONDITION_GRAPH_DOMAIN 거부) — legacy adapter는 #47 계보
+  viewer shape(node.status·map·Object.keys·2C-0 report·REVIEW_READY·green_base)를
+  전제해 Fresh-G(list nodes·state 필드)와 불일치 → node.status mismatch →
+  first_screen_understandable/60s hard blocker.
+  수리(production 4파일) = 두 분기 제거(마지막 legacy lane 분기 — 이제 어떤 lane도
+  interaction kind로 라우팅하지 않음), canonical 경로(replay discovery → schema-shape
+  adapter: events[].type=standard/events[].event=graph legacy → canonical viewer
+  contract → contract-only viewer core) 전 도메인 사용. mismatch는 state→status
+  변환이 아니라 canonical viewer가 raw node 필드를 아예 읽지 않음으로써 제거.
+  _static_viewer_facts에 canonical surface selection(applied+included viewer report
+  존재 시 product/viewer/index.html이 품질/mismatch 정본 — 정렬 순서 오선택 차단,
+  report 없으면 기존 fallback 불변). legacy adapter/CLI/2C-1 artifact validation 보존.
+  graph=4번째 viewer 도메인 테스트+surface 회귀 4종, pytest ×2 **1365** flaky 0,
+  atlas 2회 byte-identical.
+  Fresh-G 재실증: loop는 judge가 60s gap을 UX_POLISH로만 귀속해 VIEWER_POLISH를
+  선택하지 못함(6-iter에서 lane 예산 초과 HOLD — 실측 신규 결함, 아래 추천). 문서화된
+  execute_lane 직접 실행 패턴으로 candidate 142000→child 142603(VIEWER_POLISH
+  **APPLIED**, canonical route 기록, standard adapter, 8 frames, navigation PASS,
+  state transition 3종) → canonical viewer가 CTA 실은 구 viewer를 교체하자 #22
+  validator가 stale CTA 주장(marker-only)을 정확히 차단 → UX_POLISH 재실행 child
+  **142648**(CTA 재주입, validate PASS). 재계산: mismatch []·first_screen_
+  understandable true·60s true·hard blocker 0. 공식 재판정: judge-only
+  PRODUCT_CANDIDATE(gap None) + closed loop 233249 = **PRODUCT_CANDIDATE, acceptance
+  14/14, "엄격한 PRODUCT_CANDIDATE 도달"**, browser 실조작 전 항목 PASS, parent
+  134413 불변. CANON: viewer polish canonical 전환·canonical surface selection·
+  viewer↔UX 순서(viewer가 CTA 무효화→UX 재주입이 안정 순서) 계약 추가.
 - Issue #22 done (UX_POLISH First-Screen CTA Canonical Execution — 커밋 43e6d30 feat /
   docs 마감 커밋):
   root cause = UX_POLISH lane이 진단만 생성(loop NO_CHANGE 설계 한도) + acceptance
@@ -556,17 +593,16 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. graph VIEWER_POLISH lane canonical 전환(마지막 legacy 2C-1 분기) + Fresh-G viewer
-   실결함 수리 후 PRODUCT_CANDIDATE 재판정 (이슈 #22 실측 유일 추천): acceptance는
-   14/14로 완주했으나 stage 승격을 막는 결정론 hard blocker 2건
-   (first_screen_understandable·60s)의 유일 원인이 viewer mismatch(viewer는
-   node.status를 읽지만 replay 노드 키는 state — #19 때 관측된 G 제품 viewer 실결함
-   계열)다. VIEWER_POLISH는 graph를 여전히 legacy 2C-1 adapter(run_product_polish)로
-   라우팅하는 마지막 lane — #20(INTERACTION_UI)/#21(RBDE)과 동일한 canonical 전환
-   패턴을 적용하고 canonical viewer 경로에서 mismatch를 수리하면 hard blocker가
-   해소된다. 부수 관찰(후속 후보): difficulty anchor coverage desk 판정 요동(unknown
-   보수 처리 — 결정론화 검토), I(#5) 시간 의미 결정 반복, hold_reason_class 기본값
-   표기 한계(stop_conditions가 정본).
+1. loop lane 선택 결함 수리: viewer-원인 60s gap의 UX_POLISH 고정 귀속 해소 (이슈 #23
+   실측 유일 추천): Fresh-G는 PRODUCT_CANDIDATE에 도달했지만 autopilot loop 스스로는
+   완주하지 못했다 — live judge가 user_can_understand_value_in_60s=false gap을 항상
+   UX_POLISH_REQUIRED로 귀속(원인은 viewer mismatch인데도)해 VIEWER_POLISH lane이
+   선택되지 않았고, UX lane 예산(2회) 소진 후 대체 lane 시도 없이 HOLD(6-iter 실측,
+   loop 230346). 결정론 ladder(derive_primary_gap)는 mismatch를 먼저 보지만 live
+   judge 출력이 이를 넘어선다 — gap_override 또는 hard rung으로 mismatch 존재 시
+   VIEWER_POLISH 우선을 강제하는 결정론 보강을 검토. 부수 관찰(후속 후보):
+   difficulty anchor coverage desk 판정 요동(unknown 보수 처리 — 결정론화 검토),
+   I(#5) 시간 의미 결정 반복, hold_reason_class 기본값 표기 한계.
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
@@ -585,6 +621,11 @@ DO_NOT_REPEAT:
 - do not touch blind batch 4 base/child runs(G 100335·134413/104032, H 105004·150755/
   153036, I 124428·161230/165512)와 loop artifact — 후속 작업은 fresh child/loop로만
   (이슈 #18 Round 1/2 기록은 불변 증거); runs/_batch4_blind/state.json이 attempt 정본
+- do not touch Fresh-G PRODUCT_CANDIDATE 정본 child 142648(+선행 142603/142000,
+  loop 230346/233249/223831) — 이슈 #23 canonical viewer·CTA·PRODUCT_CANDIDATE
+  실증 근거; 추가 작업은 새 fresh child/loop로만. canonical VIEWER_POLISH는
+  viewer 표면을 재작성하므로 CTA보다 먼저 실행돼야 한다(viewer 후 UX 재실행이
+  안정 순서 — stale CTA 주장은 validator가 차단)
 - do not touch Fresh-G fresh child 103657와 loop 192058 artifact (이슈 #22 CTA
   APPLIED·acceptance 14/14 실증 근거; 101154/185632는 동일 패치의 선행 실증) —
   추가 작업은 새 fresh child/loop로만; CTA acceptance는 marker가 아니라 실제 요소

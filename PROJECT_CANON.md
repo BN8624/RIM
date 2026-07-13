@@ -239,8 +239,9 @@ NOTES:
   actually contains a nodes+edges container, top-level or entity-nested) gets the
   canonical graph renderer inside the same executor (issue #20 — legacy 2C-2 adapter
   routing removed from the INTERACTION_UI lane; issue #21 removed the legacy 2C-3
-  routing from the RUNNER_BACKED_DRAFT_EXECUTION lane; only VIEWER_POLISH still
-  routes graph to its legacy adapter),
+  routing from the RUNNER_BACKED_DRAFT_EXECUTION lane; issue #23 removed the legacy
+  2C-1 routing from the VIEWER_POLISH lane — no lane routes by interaction kind
+  anymore),
   the tabular domain (state fields declare columns+rows AND the fixture
   initial_state actually contains dict-of-dict columns/rows entities) gets the
   table-grid executor, everything else gets the action-console executor; no
@@ -333,8 +334,13 @@ NOTES:
   domain adapter → canonical viewer contract (viewer_id/viewer_kind/source_artifact_refs
   with sha256/replays[frames]/capabilities/validation_rules/evidence_requirements) →
   generic viewer core (reads only `product/viewer/viewer_contract.json`, never raw
-  replay keys) → navigation evidence → validator. The graph domain routes to the
-  legacy 2C-1 adapter at the lane router by artifact shape
+  replay keys) → navigation evidence → validator. All domains including graph use
+  this canonical path (issue #23 — the lane router no longer branches graph to the
+  legacy 2C-1 adapter and the executor has no interaction-kind rejection; legacy
+  2C-1 adapter, its standalone CLI, and past phase2c1 artifact validation stay);
+  the Fresh-G class mismatch (legacy viewer reading `node.status` against replays
+  whose nodes carry `state`) is removed by the viewer not reading raw node fields
+  at all, never by a state→status conversion
 - replay artifact ref priority: explicit `replay/index.json` manifest refs first;
   compatibility discovery only without an index and only with exactly one candidate
   (provenance recorded); multiple candidates = AMBIGUOUS, never auto-picked; glob or
@@ -363,6 +369,17 @@ NOTES:
   clean (viewer exists, no mismatches) and replay reading is evidenced either by the
   viewer surface itself or by an applied+included viewer polish report (the
   contract-reading viewer has no raw replay fetch to observe statically)
+- canonical viewer surface selection (issue #23): when an applied+included viewer
+  polish report exists and `product/viewer/index.html` is present, that surface is
+  the canonical basis for viewer-source, mismatch, and user-facing-quality judgment
+  — an unrelated interaction surface never becomes the quality surface just because
+  it sorts first among product HTML files; without such a report the existing
+  fallback (raw-replay-reading surface first, then find_product_viewer) is unchanged
+- viewer↔UX ordering: canonical VIEWER_POLISH rewrites `product/viewer/index.html`,
+  which honestly invalidates a previously injected first-screen CTA on that surface
+  — the #22 validator's marker-only recheck catches the stale claim and a fresh
+  UX_POLISH pass re-injects the CTA on the canonical viewer (CTA before viewer is
+  stale; viewer then UX is the stable order)
 - viewer mismatch detection requires only the keys the viewer actually reads
   (a `.type`-only viewer never requires `message`) — the graph-schema assumption
   that flagged every non-graph domain was an accidental coupling
