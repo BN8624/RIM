@@ -379,7 +379,10 @@ NOTES:
   which honestly invalidates a previously injected first-screen CTA on that surface
   — the #22 validator's marker-only recheck catches the stale claim and a fresh
   UX_POLISH pass re-injects the CTA on the canonical viewer (CTA before viewer is
-  stale; viewer then UX is the stable order)
+  stale; viewer then UX is the stable order); issue #24 enforces this at the evidence
+  level: loop evidence extraction verifies the report's CTA claim against the actual
+  surface (recheck_first_screen_cta) — a stale claim invalidates the UX report as loop
+  evidence and hard-blocks PRODUCT_CANDIDATE until a fresh UX pass re-injects the CTA
 - viewer mismatch detection requires only the keys the viewer actually reads
   (a `.type`-only viewer never requires `message`) — the graph-schema assumption
   that flagged every non-graph domain was an accidental coupling
@@ -496,8 +499,28 @@ NOTES:
 - product UI surface recognition (probe/static facts) reads all product/ html surfaces —
   a first-index.html-only read misses multi-surface products (interaction console +
   replay viewer); replay reads/mismatch judgments follow the surface that reads replay
-- hard rungs (EVIDENCE_INSUFFICIENT/ARCHIVE/SPEC_REPAIR/CORE_PATCH/RUNNER_PATCH): deterministic
-  ladder overrides live judgment (`gap_override` recorded), live lane desk skipped
+- deterministic gap override (issue #24): two objective override kinds replace the live gap.
+  HARD_EVIDENCE_RUNG — ladder indicates EVIDENCE_INSUFFICIENT/ARCHIVE/SPEC_REPAIR/
+  CORE_PATCH/RUNNER_PATCH (unchanged semantics). OBJECTIVE_VIEWER_FAULT — ladder indicates
+  VIEWER_POLISH_REQUIRED and a machine-checkable viewer fault exists (viewer missing,
+  viewer not reading replay, or mismatch_count >= 1): the root-cause fault outranks derived
+  UX symptoms (first_screen/60s false, live UX_POLISH_REQUIRED attribution). Subjective
+  judgments (ugly screen, weak product feel, CTA wording, aesthetics, 60s-only lack without
+  mismatch, healthy viewer with missing UX evidence) are never promoted to overrides.
+  `gap_override` records live_gap/deterministic_gap/enforced_gap/override_kind/reason/
+  viewer_faults/evidence_refs and is validated fail-closed (validate_gap_override: a viewer
+  fault claim without an actual fact-level fault, empty reason, or refs outside known refs
+  → AUTOPILOT_INVALID_OUTPUT). On any override the lane is the canonical GAP_TO_LANE
+  mapping and the live lane desk is skipped; overrides fix lane selection only — stage,
+  acceptance, hard blockers, and lane budgets are never bypassed
+- stale UX CTA evidence (issue #24): evidence extraction re-derives a UX report's
+  first_screen CTA claim from the actual surface (recheck_first_screen_cta); a stale claim
+  yields first_screen_cta_evidence=false + ux_first_screen_cta_stale=true, invalidates the
+  UX report as loop evidence (the UX rung reopens), and adds a hard blocker (no
+  PRODUCT_CANDIDATE on a stale CTA claim) — so a canonical viewer rewrite deterministically
+  leads the next fresh rejudge to select UX_POLISH (viewer → UX autonomous stable order,
+  proven live by loop_20260714_010808: UX misattribution → VIEWER override → APPLIED →
+  fresh rejudge selects UX → APPLIED → strict PRODUCT_CANDIDATE, acceptance 14/14)
 - CORE_PATCH rung fires on gate_fail only — green_base absence alone is not a core-defect
   signal (a gates-green unpromoted run must fall through to soft rungs)
 - lane-result escalation: if a lane result classifies SPEC_REPAIR_REQUIRED, the next iteration

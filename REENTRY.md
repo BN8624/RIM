@@ -11,7 +11,22 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1365개 (flaky 0) at issue #23 마감 (viewer polish에
+- tests: full suite PASS ×2 연속 1379개 (flaky 0) at issue #24 마감 (viewer gap override
+  테스트 14종 추가 — objective mismatch/viewer 부재/replay 미연결 override, 정상 viewer
+  UX 유지, 주관 판정 비승격, hard rung 회귀, validator fail-closed, stale CTA 무효화
+  +blocker, closed loop VIEWER→UX→PC 자율 완주 합성 fixture); architecture-build 2회
+  byte-identical + architecture-check PASS; smoke = Fresh-G 계보 parent 142000에서
+  fresh live closed loop 010808 **자율 완주** — iter1 live 오판(UX_POLISH_REQUIRED) →
+  OBJECTIVE_VIEWER_FAULT override → VIEWER_POLISH APPLIED(child 161321) → iter2 fresh
+  rejudge가 stale CTA 검출로 UX_POLISH 자체 선택 → APPLIED(child 161757) → **엄격한
+  PRODUCT_CANDIDATE 도달**(acceptance 14/14, gates 7/7, coverage 1.0/1.0, factory-validate
+  PASS(CLI 재확인), mock 0, 기본 예산, manual execute_lane 0회) + browser 실조작 전 항목
+  PASS(첫 화면 CTA 표시→클릭→콘솔 진입, replay 3종, frame 1↔5 REPLAY_COMPLETE, 실제
+  node state 렌더, valid action state 전이, invalid 명시 거부, revise 결과 변화, 성공/
+  실패 feedback, console 오류 0, undefined/[object Object] 0, 375px overflow 0) + 보호
+  대상 4종(142000 기존 166파일·134413 586파일·142603 173파일·142648 229파일)
+  digest·mtime 전부 불변
+- (이전 기록) full suite PASS ×2 연속 1365개 (flaky 0) at issue #23 마감 (viewer polish에
   graph를 4번째 도메인으로 추가, legacy 라우팅 테스트 3건 canonical 교체, canonical
   surface selection 회귀 4종); architecture-build 2회 byte-identical + architecture-check
   PASS; smoke = Fresh-G canonical viewer child 142648 browser 실조작(replay 목록 3종·
@@ -101,6 +116,42 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #24 done (Deterministic Viewer Gap Routing + Autonomous Fresh Loop Completion —
+  커밋 f26a069 fix / 6494d7e fix / docs 마감 커밋):
+  root cause = enforce_evidence_ladder가 hard rung만 override — objective viewer
+  mismatch가 있어도 live desk의 파생 UX 귀속(60s→UX_POLISH_REQUIRED)이 그대로 채택돼
+  UX lane 예산 소진 HOLD (#23 실측 결함).
+  수리 1(f26a069) = OBJECTIVE_VIEWER_FAULT override — machine-checkable fault(viewer
+  부재/replay 미연결/mismatch>=1)이고 결정론 ladder=VIEWER_POLISH_REQUIRED일 때만
+  live gap 교체. gap_override에 live/deterministic/enforced/override_kind/viewer_faults/
+  evidence_refs 기록(silent mutation 금지), validate_gap_override fail-closed(사실 없는
+  fault 주장·빈 reason·foreign refs → AUTOPILOT_INVALID_OUTPUT), override lane은
+  GAP_TO_LANE 고정 매핑(live lane desk skip). 주관 판정(미관·제품 느낌·CTA 문구·
+  mismatch 없는 60s-only·정상 viewer의 UX evidence 부족)은 비승격. hard rung 의미·
+  lane budget·stop policy 불변.
+  실측 결함 2(수리 후 live loop 002250에서 발견) = viewer 수리 child에서 parent 복사
+  stale UX report가 CTA 실증을 계속 주장 → live judge stage=PC 조기 선언 → gap None
+  HOLD (UX 재선택 구조적 불가). 수리 2(6494d7e) = evidence 추출이 report의 CTA 주장을
+  recheck_first_screen_cta(실표면 재도출, validator와 동일 helper)로 검증 — stale이면
+  first_screen_cta_evidence=false + has_ux_polish_report 무효화(UX rung 재개방) +
+  ux_first_screen_cta_stale hard blocker(stale 실증으로 PC 주장 불가).
+  Fresh 실증 = 시작 parent 142000(objective mismatch 1건) fresh live closed loop
+  **010808**: iter1 live_gap=UX_POLISH_REQUIRED(실제 live Gemma 오판 실측) → override →
+  VIEWER_POLISH APPLIED(child 161321) → iter2 fresh rejudge stale CTA 검출 →
+  UX_POLISH(override 없이 live desk 자체 선택) APPLIED(child 161757) → stop "엄격한
+  PRODUCT_CANDIDATE 도달", acceptance 14/14, hard blocker 0, 기본 예산, manual
+  execute_lane/수동 파일 수정 0회, lane sequence lineage.json 기록. 이전 시도 정직
+  기록: 002250(수리 2 이전 stale 결함 실측), 003925(최종 verify에서 coverage desk
+  Google 500 transient 3회 소진 → 12/14 HOLD), 005306(coverage desk 판정 요동
+  0.67/0.33 → 12/14 HOLD — #22에서 관찰된 기존 결함 잔존). browser 실조작 전 항목
+  PASS, 보호 대상 4종(142000/134413/142603/142648) digest·mtime 불변(신규는 loop
+  bookkeeping만). 증거: runs/_issue24_viewer_gap_routing/state.json.
+  CANON-07에 deterministic gap override 계약(2종 override_kind·검증·경계), CANON-06에
+  viewer↔UX evidence-레벨 stale 차단 추가.
+  다음 추천 작업(정확히 1개): requirement coverage desk 비결정성 수리 — transient
+  LLM 500 소진과 판정 요동(1.0↔0.33)이 최종 acceptance를 좌우함(이번 이슈에서 live
+  loop 2회가 이것만으로 HOLD). 결정론적 coverage matrix(이슈 #9 계약)를 closed loop가
+  자동 생성·재사용하도록 승격.
 - Issue #23 done (Graph VIEWER_POLISH Canonicalization — 커밋 fdf25fc fix / docs 마감
   커밋): root cause = graph 우회 2개소(_exec_viewer_polish의 legacy 2C-1 분기 +
   run_viewer_polish의 PRECONDITION_GRAPH_DOMAIN 거부) — legacy adapter는 #47 계보
