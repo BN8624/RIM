@@ -238,8 +238,9 @@ NOTES:
   the graph domain (state fields declare nodes+edges AND the fixture initial_state
   actually contains a nodes+edges container, top-level or entity-nested) gets the
   canonical graph renderer inside the same executor (issue #20 — legacy 2C-2 adapter
-  routing removed from the INTERACTION_UI lane; VIEWER_POLISH and
-  RUNNER_BACKED_DRAFT_EXECUTION lanes still route graph to their legacy adapters),
+  routing removed from the INTERACTION_UI lane; issue #21 removed the legacy 2C-3
+  routing from the RUNNER_BACKED_DRAFT_EXECUTION lane; only VIEWER_POLISH still
+  routes graph to its legacy adapter),
   the tabular domain (state fields declare columns+rows AND the fixture
   initial_state actually contains dict-of-dict columns/rows entities) gets the
   table-grid executor, everything else gets the action-console executor; no
@@ -305,9 +306,13 @@ NOTES:
   runner_ref/execution_kind/input_payload/initial_state/allowed_actions/expected_outputs/
   side_effect_policy/timeout_policy/validation_rules/evidence_requirements — reuses
   existing structures, no invented fields) → temp-copy runner execution via
-  `run_scenario_once` → side effect manifest → validation → fresh evidence. The graph
-  domain routes to the legacy 2C-3 adapter at the lane router by artifact shape;
-  domain meaning never lives in the executor
+  `run_scenario_once` → side effect manifest → validation → fresh evidence. All
+  domains including graph use this canonical path (issue #21 — the lane router no
+  longer branches graph to the legacy 2C-3 adapter, and the executor has no
+  interaction-kind branch; legacy 2C-3 artifacts and its standalone CLI stay valid);
+  execution grounds are the draft interaction contract, the runner contract, and
+  fixtures — 2C-2 reports, editor markers, human gates, REVIEW_READY, and green_base
+  are never required of new products; domain meaning never lives in the executor
 - execution status semantics: pre-execution states (READY_TO_EXECUTE/INVALID_DRAFT/
   MISSING_RUNNER/UNSUPPORTED_EXECUTION_KIND/MISSING_INPUT/UNSAFE_SIDE_EFFECT/
   MISSING_VALIDATION_CONTRACT) are never success; EXECUTED only means the runner

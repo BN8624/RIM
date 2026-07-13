@@ -11,7 +11,15 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1347개 (flaky 0) at issue #20 마감 (graph renderer/
+- tests: full suite PASS ×2 연속 1347개 (flaky 0) at issue #21 마감 (RBDE 테스트에 graph를
+  4번째 실행 도메인으로 추가 — 4도메인 동일 executor EXECUTED·graph canonical contract·
+  전 도메인 canonical routing 검증, legacy 전제 테스트 2건 교체); smoke = Fresh-G fresh
+  loop 171003(parent 134413) RBDE lane **APPLIED**(이전 EXECUTION_BLOCKED) — fresh child
+  082117 canonical 실행 evidence(EXECUTED, validation 7체크 전부 PASS, state 전이 digest
+  변화, invalid missing-input 명시 거부, revise different-result, side effect 위반 0,
+  fresh provenance) + factory-validate PASS(loop 내 + CLI 재확인) + architecture-check
+  PASS + parent 134413 스냅샷 146파일 digest·mtime·추가/삭제 전부 불변
+- (이전 기록) full suite PASS ×2 연속 1347개 (flaky 0) at issue #20 마감 (graph renderer/
   shape/probe/routing 테스트 11종 추가 — map/list/empty/missing/malformed/mixed/no-id/
   edge 4종/console 폴백/probe 2종/lane 라우팅); smoke = dashboard(/, /products 200) +
   Fresh-G fresh child 021959 canonical graph console runner 실증(valid action state 전이,
@@ -76,6 +84,30 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #21 done (Graph RUNNER_BACKED_DRAFT_EXECUTION Canonicalization — 커밋 64f06c4
+  fix / docs 마감 커밋):
+  root cause = graph 우회 2개소 — (1) factory_lane_executors._exec_draft_execution이
+  graph kind를 legacy 2C-3 adapter(run_draft_execution — 2C-2 report·REVIEW_READY·
+  green_base·human gate·editor 마커 전제)로 분기, (2) factory_runner_backed_execution.
+  build_execution_contract가 graph를 UNSUPPORTED_EXECUTION_KIND로 설계상 거부 →
+  autopilot fresh graph 제품과 구조적 불일치로 EXECUTION_BLOCKED 잔존.
+  수리(production 2파일) = 두 분기 제거, 전 도메인이 canonical 경로(draft interaction
+  contract·runner contract·fixture 근거 → temp-copy 실행 → validation → fresh evidence)
+  사용. #20 canonical interaction artifact가 실행 근거로 그대로 재사용됨(중복 생성 0,
+  Fresh-G contract shape 실물 검증: supported/available_actions 4종/validation_rules 14/
+  runner_command 전부 canonical 요구와 일치). legacy 2C-3 adapter·CLI(factory-draft-
+  execution)·과거 artifact·UNSUPPORTED_EXECUTION_KIND enum(과거 report 호환)은 보존.
+  graph 전용 특례/challenge 분기/신규 lane 추가 0.
+  Fresh-G 재실증(fresh loop 171003, parent 134413 불변 base_hash PASS) = RBDE lane
+  **APPLIED**(이전 BLOCKED), fresh child 082117: EXECUTED + validation 7체크 PASS
+  (state 전이·invalid 거부·revise different-result·side effect 0·evidence complete),
+  stage INTERACTION_CANDIDATE→**EXECUTION_CANDIDATE**(rank 3→4), acceptance 12→**13/14**
+  (잔여 1 = first_screen_cta_present), difficulty anchor coverage 0.33→1.0, hard blocker
+  3→2, crash 0. loop hold는 잔존하나 원인이 이동: UX_POLISH lane NO_CHANGE ×2(UX_READY
+  진단만 — 설계 한도, DO_NOT_REPEAT 기존 항목)로 인한 연속 무개선 정지이며 RBDE
+  EXECUTION_BLOCKED는 제거됨(hold_reason_class 표기는 기본값 EXECUTION_BLOCKED로
+  남는 필드 한계 — stop_conditions가 정본). CANON generic runner-backed draft execution
+  절을 canonical 전환으로 갱신.
 - Issue #20 done (Graph INTERACTION_UI Canonicalization — 커밋 e8526c8 feat /
   8133104 fix / docs 마감 커밋):
   root cause = graph INTERACTION_UI lane이 legacy 2C-2 editor adapter로 라우팅되는데
@@ -489,16 +521,14 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. graph 도메인 RUNNER_BACKED_DRAFT_EXECUTION lane 경로 수리 후 Fresh-G 재판정
-   (이슈 #20 실측 유일 추천): INTERACTION_UI 수리로 G가 INTERACTION_CANDIDATE 13/14까지
-   진행했으나, RBDE lane이 legacy 2C-3 adapter(run_draft_execution)로 라우팅되고 그 전제
-   (2C-2 editor report·verdict REVIEW_READY·green_base·user_review_decision.md·viewer
-   editor 마커)가 autopilot fresh 제품과 구조적으로 불일치 → 동일 패턴의 EXECUTION_BLOCKED
-   잔존 (G fresh loop 111407 iter2 실측 CANNOT_EXECUTE, blocker 5건). 이슈 #20에서
-   INTERACTION_UI에 적용한 canonical 전환 패턴(generic 거부 제거 + lane 분기 제거)을
-   generic factory_runner_backed_execution 경로에 적용. 부수 관찰(후속 후보): acceptance
-   잔여 1건 first_screen_cta_present(UX), G 제품 viewer 실결함 4건(제품 workspace 영역),
-   I(#5) 시간 의미 결정 반복.
+1. Fresh-G acceptance 잔여 1건 first_screen_cta_present 해소 후 PRODUCT_CANDIDATE
+   재판정 (이슈 #21 실측 유일 추천): RBDE canonical 전환으로 G가 EXECUTION_CANDIDATE
+   13/14까지 진행했고 남은 gap은 UX 1건뿐. UX_POLISH lane은 진단만(UX_READY→loop
+   NO_CHANGE 설계 한도)이라 자동 승격 불가 — DO_NOT_REPEAT 규칙대로 execute_lane 직접
+   실행(data-ux-op marker block 주입만)으로 fresh child에 CTA patch를 남기고 재판정.
+   부수 관찰(후속 후보): G 제품 viewer 실결함 4건(제품 workspace 영역), I(#5) 시간 의미
+   결정 반복, hold_reason_class가 무개선 정지에서도 기본값 EXECUTION_BLOCKED로 찍히는
+   표기 한계(stop_conditions가 정본).
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
@@ -517,6 +547,9 @@ DO_NOT_REPEAT:
 - do not touch blind batch 4 base/child runs(G 100335·134413/104032, H 105004·150755/
   153036, I 124428·161230/165512)와 loop artifact — 후속 작업은 fresh child/loop로만
   (이슈 #18 Round 1/2 기록은 불변 증거); runs/_batch4_blind/state.json이 attempt 정본
+- do not touch Fresh-G fresh child 082117와 loop 171003 artifact (이슈 #21 RBDE
+  canonical EXECUTED·EXECUTION_CANDIDATE 13/14 실증 근거) — 추가 작업은 새 fresh
+  child/loop로만
 - do not touch Fresh-G fresh child 021959와 loop 111407 artifact (이슈 #20
   INTERACTION_CANDIDATE 13/14 실증 근거) — 추가 작업은 새 fresh child/loop로만;
   graph interaction UI는 계약 밖 action을 노출하지 않는다(Add/Delete Node 류 하드코드
