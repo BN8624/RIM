@@ -578,6 +578,18 @@ def _artifact_context_for_prompt(run_dir: Path) -> dict:
         data = _load_json(Path(root) / name)
         if data is not None:
             ctx[name] = data
+    # 실제 scenario/golden 예시 — initial_state와 final_state의 정본 shape는 이것이다.
+    # state_contract entity 이름으로 감싼 추측 shape는 runner가 거부한다 (live 실측 결함).
+    scenarios = sorted(Path(root).glob("fixtures/scenario_*.json"))
+    if scenarios:
+        sample = _load_json(scenarios[0]) or {}
+        ctx["example_scenario"] = {k: sample.get(k) for k in ("initial_state", "actions")}
+    goldens = sorted(Path(root).glob("golden/expected_*.json"))
+    if goldens:
+        sample_out = _load_json(goldens[0]) or {}
+        ctx["example_runner_output"] = {
+            k: sample_out.get(k) for k in ("final_state", "events", "errors")
+            if k in sample_out}
     ctx["product_files"] = sorted(
         p.relative_to(root).as_posix() for p in Path(root).glob("product/**/*")
         if p.is_file())[:40]
@@ -611,6 +623,9 @@ def _build_probe_spec_prompt(run_dir: Path, entries: list[dict]) -> str:
 - probe는 후보 제안일 뿐이다. 실제 실행 결과만 정본이며, 네 설명은 근거가 아니다.
 - runner probe는 runner.py --scenario 계약을 따른다: 입력 {{initial_state, actions:[{{type,payload}}]}},
   출력 {{ok, final_state, events, errors}}. action type은 아래 계약의 action만 사용.
+- initial_state와 final_state_path의 경로는 아래 ARTIFACT CONTRACTS의 example_scenario /
+  example_runner_output과 **완전히 같은 구조**를 따른다. state_contract의 entity 이름으로
+  임의로 감싸거나 경로를 추측하지 마라 — 예시에 없는 최상위 키는 존재하지 않는다.
 - DSL로 참·거짓을 기계 판정할 수 없는 requirement는 SEMANTIC_ADJUDICATION_REQUIRED로 분류하고 probe를 만들지 마라.
 - 판정 가능한 형태가 아닌 requirement는 INVALID_OR_AMBIGUOUS_REQUIREMENT.
 - forbidden simplification은 '그 단순화가 없음'을 증명하는 probe(정적 eq0 또는 runtime 거부)로 판정한다.
