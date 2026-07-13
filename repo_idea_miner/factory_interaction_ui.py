@@ -8,6 +8,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from repo_idea_miner.factory_product_evidence import (
+    NODE_COLLECTION_MALFORMED,
+    NODE_MAP,
+    classify_node_collection,
+)
 from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
 INTERACTION_SUBDIR = "review/interaction_ui"
@@ -17,7 +22,9 @@ SERVER_REL = "product/interaction_server.py"
 REPORT_JSON = "interaction_ui_report.json"
 EVIDENCE_JSON = "interaction_evidence.json"
 
-# canonical interaction kind (§6.2). graph_editor는 legacy graph 도메인 adapter(2C-2)로 라우팅.
+# canonical interaction kind (§6.2). graph_editor(이슈 #20)는 이 executor의 graph renderer로
+# 처리한다 — legacy 2C-2 adapter 라우팅은 INTERACTION_UI lane에서 제거됨 (VIEWER_POLISH·
+# RUNNER_BACKED_DRAFT_EXECUTION lane의 legacy graph adapter 분기는 비범위로 유지).
 # table_grid(이슈 #10)는 state 모양(columns+rows)으로만 감지하는 tabular 특화 렌더 — 제품 분기 없음.
 KIND_ACTION_CONSOLE = "action_console"
 KIND_GRAPH_EDITOR = "graph_editor"
@@ -38,7 +45,8 @@ def _dump(data) -> str:
 def detect_interaction_kind(artifact_root: Path) -> str | None:
     """도메인 어댑터 경계 (§6.3): artifact 모양으로 interaction kind를 고른다.
 
-    graph 도메인(state에 nodes+edges 컬렉션)은 legacy graph adapter(2C-2 editor)로,
+    graph 도메인(state에 nodes+edges 컬렉션)은 graph 렌더(이슈 #20 — INTERACTION_UI는
+    canonical executor, VIEWER_POLISH/RBDE lane만 legacy adapter 라우팅에 이 판정을 유지)로,
     tabular 도메인(state에 columns+rows 컬렉션)은 grid 렌더로, action_contract가 있는
     일반 도메인은 generic action console로. 둘 다 아니면 None."""
     state = _load_json(artifact_root / "state_contract.json") or {}
@@ -76,6 +84,78 @@ def grid_render_hints(initial_state: dict) -> dict | None:
         return None
     return {"schema_entity": schema_entity, "columns_field": "columns",
             "data_entity": data_entity, "rows_field": "rows"}
+
+
+def _graph_node_identities(info: dict) -> list[str | None]:
+    """node 자체 id 우선, map key는 id 없는 entry의 fallback (이슈 #20 §3).
+
+    list에서 id 없는 node는 None — 임의 id를 조용히 생성하지 않는다."""
+    out: list[str | None] = []
+    for fallback, node in zip(info["identities"], info["nodes"]):
+        own = node.get("id")
+        if isinstance(own, (str, int)) and not isinstance(own, bool):
+            out.append(str(own))
+        elif info["shape"] == NODE_MAP:
+            out.append(str(fallback))
+        else:
+            out.append(None)
+    return out
+
+
+def graph_render_hints(initial_state) -> dict | None:
+    """initial_state 모양에서 graph 렌더 대상 컨테이너를 찾는다 (이슈 #20 §2~§3).
+
+    nodes+edges 키를 모두 가진 실제 컨테이너(최상위 또는 entity dict)만 대상 —
+    이름을 지어내지 않고, 못 찾으면 None(action console 폴백). node collection 분류는
+    이슈 #19 정본 helper(classify_node_collection)를 재사용한다 — 판정 로직 복제 없음.
+    edge는 endpoints가 실제 node identity로 해석되는 entry만 renderable로 세고,
+    malformed/미해석 edge는 조용히 버리지 않고 계수한다 (machine-readable evidence)."""
+    def _container(val):
+        return val if isinstance(val, dict) and "nodes" in val and "edges" in val else None
+
+    entity = None
+    container = _container(initial_state)
+    if container is None:
+        for name, val in sorted((initial_state or {}).items()):
+            found = _container(val)
+            if found is not None:
+                entity, container = name, found
+                break
+        if container is None:
+            return None
+    info = classify_node_collection(container)
+    identities = _graph_node_identities(info)
+    known = {i for i in identities if i is not None}
+
+    raw_edges = container.get("edges")
+    if isinstance(raw_edges, dict):
+        edge_entries = [raw_edges[k] for k in raw_edges]
+    elif isinstance(raw_edges, list):
+        edge_entries = list(raw_edges)
+    else:
+        edge_entries = None
+    renderable = unresolved = 0
+    malformed_edges = 0 if edge_entries is not None else 1
+    for e in edge_entries or []:
+        if not isinstance(e, dict) or "from" not in e or "to" not in e:
+            malformed_edges += 1
+        elif str(e["from"]) in known and str(e["to"]) in known:
+            renderable += 1
+        else:
+            unresolved += 1
+
+    return {
+        "state_entity": entity, "nodes_field": "nodes", "edges_field": "edges",
+        "node_collection_shape": info["shape"],
+        "node_count": len(info["nodes"]),
+        "node_identities": sorted(known),
+        "nodes_without_id": identities.count(None),
+        "malformed_node_entries": info["malformed_entries"],
+        "edge_collection_kind": _json_kind(raw_edges),
+        "renderable_edge_count": renderable,
+        "unresolved_edge_refs": unresolved,
+        "malformed_edge_entries": malformed_edges,
+    }
 
 
 # ---------------------------------------------------------------- structured input 타입 관측 (이슈 #13)
@@ -189,23 +269,30 @@ def build_interaction_contract(artifact_root: Path) -> dict:
         for inv in e.get("invariants") or []:
             validation_rules.append({"entity": e.get("name"), "rule": inv})
 
+    # graph 감지(이슈 #20): state 필드에 nodes+edges가 있고 initial_state에서 실제
+    # 컨테이너를 찾을 수 있을 때만 graph renderer — 못 찾으면 정직하게 action console 폴백.
     # tabular 감지(이슈 #10): state 필드에 columns+rows가 있고 initial_state에서 대상
     # entity를 실제로 찾을 수 있을 때만 grid — 못 찾으면 정직하게 action console 폴백.
     fields: set[str] = set()
     for e in entities:
         fields |= set(e.get("fields") or [])
+    graph = graph_render_hints(fixture["initial_state"]) \
+        if {"nodes", "edges"} <= fields else None
     grid = grid_render_hints(fixture["initial_state"]) \
-        if {"columns", "rows"} <= fields else None
-    kind = KIND_TABLE_GRID if grid else KIND_ACTION_CONSOLE
+        if graph is None and {"columns", "rows"} <= fields else None
+    kind = KIND_GRAPH_EDITOR if graph else (KIND_TABLE_GRID if grid else KIND_ACTION_CONSOLE)
 
     render_hints = {"entities": [e.get("name") for e in entities],
                     "primary_actions": [a.get("name") for a in actions]}
+    if graph:
+        render_hints["graph"] = graph
     if grid:
         render_hints["grid"] = grid
 
     return {
         "supported": True,
-        "interaction_id": "core_table_grid" if grid else "core_action_console",
+        "interaction_id": "core_graph_editor" if graph
+        else ("core_table_grid" if grid else "core_action_console"),
         "interaction_kind": kind,
         "target": [e.get("name") for e in entities],
         "available_actions": [
@@ -249,9 +336,13 @@ def generate_interaction_ui(contract: dict) -> str:
     """contract 데이터만으로 렌더되는 generic 조작 UI. 도메인 이름·값 하드코드 없음.
 
     fallback 정책(§6.5): 서버 불가/artifact 문제는 명시적 오류 상태(RUNNER_UNAVAILABLE 등)로만
-    표시한다 — 성공처럼 보이는 대체 데이터는 없다."""
+    표시한다 — 성공처럼 보이는 대체 데이터는 없다.
+
+    graph kind(이슈 #20)는 같은 console에 graph 렌더 패널만 추가한다 — action 노출·payload·
+    허용 여부·상태 전이는 전부 contract와 runner 소유이며 graph라고 action을 지어내지 않는다."""
     if contract.get("interaction_kind") == KIND_TABLE_GRID:
         return generate_table_grid_ui(contract)
+    is_graph = contract.get("interaction_kind") == KIND_GRAPH_EDITOR
     contract_json = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     head = """<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
@@ -610,7 +701,169 @@ if (!restoreState()) {
 }
 </script></body></html>
 """
+    if is_graph:
+        head = head.replace(
+            "</style>",
+            _GRAPH_CSS + "</style>",
+        ).replace(
+            '<pre id="state-view"></pre></div>\n',
+            '<pre id="state-view"></pre></div>\n' + _GRAPH_PANEL_HTML,
+        )
+        script = script.replace("</script></body></html>",
+                                _GRAPH_RENDER_JS + "</script></body></html>")
     return head + script.replace("__CONTRACT_JSON__", contract_json)
+
+
+# graph 렌더 패널 (이슈 #20) — 화면 표현만 담당. 분류 규칙은 #19 정본(classify_node_collection)의
+# JS 미러: map/list 동등, node 자체 id 우선·map key fallback, 임의 id 미생성, malformed 계수.
+_GRAPH_PANEL_HTML = """<div class="panel"><h2>Graph</h2>
+<div id="graph-banner" class="graph-banner"></div>
+<svg id="graph-view" viewBox="0 0 640 400" preserveAspectRatio="xMidYMid meet" role="img"></svg></div>
+"""
+
+_GRAPH_CSS = """.graph-banner{font-size:12px;color:#8b949e;margin-bottom:6px;white-space:pre-wrap}
+.graph-banner.bad{color:#ff7b72}
+#graph-view{width:100%;max-height:420px;background:#1b1b1b;border-radius:4px}
+.graph-edge{stroke:#8b949e;stroke-width:1.5}
+.graph-node{fill:#1f6feb;stroke:#eee;stroke-width:1}
+.graph-label{fill:#eee;font-size:11px}
+"""
+
+_GRAPH_RENDER_JS = """// ---- graph renderer (이슈 #20): 화면 표현만 담당 — action·payload·전이는 contract와 runner 소유.
+const GRAPH_HINTS = (CONTRACT["render_hints"] || {})["graph"] || null;
+function isPlainObject(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
+function graphContainer(state) {
+  if (!GRAPH_HINTS) { return null; }
+  const c = GRAPH_HINTS["state_entity"] ? (state || {})[GRAPH_HINTS["state_entity"]] : state;
+  return isPlainObject(c) ? c : null;
+}
+function ownIdentity(node, fallback) {
+  const own = node["id"];
+  if (typeof own === "string" || (typeof own === "number" && isFinite(own))) { return String(own); }
+  return fallback;  // map key fallback | null(list) — 임의 id 생성 없음 (#19 규칙)
+}
+function classifyNodes(container) {
+  if (!isPlainObject(container) || !(GRAPH_HINTS["nodes_field"] in container)) {
+    return {"shape": "NODE_COLLECTION_MISSING", "entries": [], "malformed": 0};
+  }
+  const raw = container[GRAPH_HINTS["nodes_field"]];
+  const entries = [];
+  let malformed = 0;
+  if (isPlainObject(raw)) {
+    const keys = Object.keys(raw);
+    if (!keys.length) { return {"shape": "NODE_COLLECTION_EMPTY", "entries": [], "malformed": 0}; }
+    for (const k of keys) {
+      if (isPlainObject(raw[k])) { entries.push({"identity": ownIdentity(raw[k], String(k)), "node": raw[k]}); }
+      else { malformed += 1; }
+    }
+    return {"shape": "NODE_MAP", "entries": entries, "malformed": malformed};
+  }
+  if (Array.isArray(raw)) {
+    if (!raw.length) { return {"shape": "NODE_COLLECTION_EMPTY", "entries": [], "malformed": 0}; }
+    for (const v of raw) {
+      if (isPlainObject(v)) { entries.push({"identity": ownIdentity(v, null), "node": v}); }
+      else { malformed += 1; }
+    }
+    return {"shape": "NODE_LIST", "entries": entries, "malformed": malformed};
+  }
+  return {"shape": "NODE_COLLECTION_MALFORMED", "entries": [], "malformed": 1};
+}
+function classifyEdges(container, known) {
+  const raw = isPlainObject(container) ? container[GRAPH_HINTS["edges_field"]] : undefined;
+  let list = null;
+  if (Array.isArray(raw)) { list = raw; }
+  else if (isPlainObject(raw)) { list = Object.keys(raw).map((k) => raw[k]); }
+  const out = {"renderable": [], "malformed": 0, "unresolved": 0};
+  if (list === null) {
+    if (raw !== undefined) { out["malformed"] = 1; }  // scalar/null edges — collection이 아님
+    return out;
+  }
+  for (const e of list) {
+    if (!isPlainObject(e) || !("from" in e) || !("to" in e)) { out["malformed"] += 1; continue; }
+    const a = String(e["from"]), b = String(e["to"]);
+    if (known.has(a) && known.has(b)) { out["renderable"].push({"from": a, "to": b}); }
+    else { out["unresolved"] += 1; }  // 존재하지 않는 node 참조 — 조용히 그리지 않고 계수
+  }
+  return out;
+}
+function nodePosition(node, index, total) {
+  if (typeof node["x"] === "number" && isFinite(node["x"]) &&
+      typeof node["y"] === "number" && isFinite(node["y"])) {
+    return {"x": node["x"], "y": node["y"]};
+  }
+  // 좌표가 state에 없으면 index 기반 결정론적 원형 배치 — 표현 전용, 데이터 생성 아님
+  const angle = (2 * Math.PI * index) / Math.max(total, 1);
+  return {"x": Math.cos(angle) * 100, "y": Math.sin(angle) * 100};
+}
+function svgEl(tag) { return document.createElementNS("http://www.w3.org/2000/svg", tag); }
+function renderGraph(state) {
+  const svg = document.getElementById("graph-view");
+  const banner = document.getElementById("graph-banner");
+  if (!svg || !banner || !GRAPH_HINTS) { return; }
+  while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+  const container = graphContainer(state);
+  const nodes = classifyNodes(container);
+  const known = new Set();
+  for (const e of nodes["entries"]) { if (e["identity"] !== null) { known.add(e["identity"]); } }
+  const edges = classifyEdges(container, known);
+  const noId = nodes["entries"].filter((e) => e["identity"] === null).length;
+  const parts = ["shape: " + nodes["shape"], "nodes: " + nodes["entries"].length,
+                 "edges(renderable): " + edges["renderable"].length];
+  if (noId) { parts.push("id 없는 node: " + noId + " (임의 id 미생성)"); }
+  if (nodes["malformed"]) { parts.push("malformed node entry: " + nodes["malformed"]); }
+  if (edges["unresolved"]) { parts.push("미해석 edge 참조: " + edges["unresolved"]); }
+  if (edges["malformed"]) { parts.push("malformed edge: " + edges["malformed"]); }
+  banner.textContent = parts.join(" · ");
+  const bad = nodes["shape"] === "NODE_COLLECTION_MISSING" ||
+    nodes["shape"] === "NODE_COLLECTION_MALFORMED" ||
+    nodes["malformed"] > 0 || edges["malformed"] > 0 || edges["unresolved"] > 0;
+  banner.className = "graph-banner" + (bad ? " bad" : "");
+  if (!nodes["entries"].length) { return; }  // 빈 graph는 정상 빈 상태 — banner만 표시
+  const placed = nodes["entries"].map((e, i) => (
+    {"entry": e, "p": nodePosition(e["node"], i, nodes["entries"].length)}));
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const it of placed) {
+    minX = Math.min(minX, it["p"]["x"]); maxX = Math.max(maxX, it["p"]["x"]);
+    minY = Math.min(minY, it["p"]["y"]); maxY = Math.max(maxY, it["p"]["y"]);
+  }
+  const spanX = Math.max(maxX - minX, 1), spanY = Math.max(maxY - minY, 1);
+  const sx = (x) => 40 + ((x - minX) / spanX) * 560;
+  const sy = (y) => 40 + ((y - minY) / spanY) * 320;
+  const pos = {};
+  for (const it of placed) { if (it["entry"]["identity"] !== null) { pos[it["entry"]["identity"]] = it; } }
+  for (const e of edges["renderable"]) {
+    const a = pos[e["from"]], b = pos[e["to"]];
+    if (!a || !b) { continue; }
+    const line = svgEl("line");
+    line.setAttribute("x1", sx(a["p"]["x"])); line.setAttribute("y1", sy(a["p"]["y"]));
+    line.setAttribute("x2", sx(b["p"]["x"])); line.setAttribute("y2", sy(b["p"]["y"]));
+    line.setAttribute("class", "graph-edge");
+    svg.appendChild(line);
+  }
+  for (const it of placed) {
+    const g = svgEl("g");
+    const title = svgEl("title");
+    title.textContent = (it["entry"]["identity"] === null ? "(id 없음)" : it["entry"]["identity"]) +
+      " " + JSON.stringify(it["entry"]["node"]);
+    const c = svgEl("circle");
+    c.setAttribute("cx", sx(it["p"]["x"])); c.setAttribute("cy", sy(it["p"]["y"]));
+    c.setAttribute("r", "14");
+    c.setAttribute("class", "graph-node");
+    const t = svgEl("text");
+    t.setAttribute("x", sx(it["p"]["x"])); t.setAttribute("y", sy(it["p"]["y"]) + 28);
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("class", "graph-label");
+    const label = typeof it["entry"]["node"]["label"] === "string" ? it["entry"]["node"]["label"] : null;
+    t.textContent = label !== null ? label :
+      (it["entry"]["identity"] !== null ? it["entry"]["identity"] : "(id 없음)");
+    g.appendChild(title); g.appendChild(c); g.appendChild(t);
+    svg.appendChild(g);
+  }
+}
+const baseRenderState = renderState;
+renderState = function(state, label) { baseRenderState(state, label); renderGraph(state); };
+renderGraph(lastState);
+"""
 
 
 def generate_table_grid_ui(contract: dict) -> str:
@@ -1323,11 +1576,66 @@ def structured_input_evidence(contract: dict, actions: list[dict]) -> list[dict]
     return out
 
 
+def _graph_invalid_probes(contract: dict, fixture_actions: list[dict],
+                          exchange, initial, problems: list[str]) -> dict:
+    """graph interaction의 무효 조작을 runner로 실증한다 (이슈 #20 §5).
+
+    존재하지 않는 action·존재하지 않는 node 참조가 명시적으로 거부되고 state가 변하지
+    않아야 한다. probe 값은 contract/fixture에서 결정론적으로 유도한다 — 제품 이름·
+    challenge 하드코드 없음. 실증 못 하면 문제로 남긴다 (조용한 성공 승격 금지)."""
+    declared = {a["name"] for a in contract["available_actions"]}
+    out = {"nonexistent_action_rejected": False, "nonexistent_node_rejected": False}
+
+    def rejected(parsed) -> bool:
+        if parsed is None:
+            return False
+        final = parsed.get("final_state")
+        return has_error_signal(parsed) and (final is None or final == initial)
+
+    name = "undeclared_probe_action"
+    while name in declared:
+        name += "_x"
+    out["nonexistent_action_rejected"] = rejected(
+        exchange("invalid_nonexistent_action", [{"type": name, "payload": {}}]))
+    if not out["nonexistent_action_rejected"]:
+        problems.append("존재하지 않는 action이 명시적으로 거부되지 않음 (graph probe)")
+
+    identities = set(((contract.get("render_hints") or {}).get("graph") or {})
+                     .get("node_identities") or [])
+    missing_id = "missing_node_probe"
+    while missing_id in identities:
+        missing_id += "_x"
+    probe_action = None
+    for a in fixture_actions:
+        payload = a.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for field in sorted(payload):
+            value = payload[field]
+            if isinstance(value, (str, int)) and not isinstance(value, bool) \
+                    and str(value) in identities:
+                probe_action = {"type": a.get("type"), "payload": {**payload, field: missing_id}}
+                break
+        if probe_action:
+            break
+    if probe_action is None:
+        problems.append("존재하지 않는 node 참조 거부를 실증할 수 없음 — "
+                        "fixture action payload에서 node identity 참조 field를 못 찾음")
+    else:
+        out["nonexistent_node_rejected"] = rejected(
+            exchange("invalid_nonexistent_node", [probe_action]))
+        if not out["nonexistent_node_rejected"]:
+            problems.append("존재하지 않는 node 참조가 명시적으로 거부되지 않음 (graph probe)")
+    return out
+
+
 def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 60.0) -> dict:
     """browser 없이 interaction 계약을 runner로 실증한다 (§6.4).
 
     1) fixture의 실제 action → state 변경, 2) 필수 input이 빠진 action → 명시적 거부,
-    3) action 목록 수정 → 결과 변화. 실증 못 하면 false로 남긴다 — 과장 금지."""
+    3) action 목록 수정 → 결과 변화. 실증 못 하면 false로 남긴다 — 과장 금지.
+    graph kind(이슈 #20)는 추가로 존재하지 않는 action/node 거부를 probe하고,
+    fixture graph의 malformed shape를 fail-closed로 남긴다 — generic/table 결과는 불변."""
     fixture = first_fixture(artifact_root) or {}
     fixture_actions = [a for a in (fixture.get("actions") or [])
                        if isinstance(a, dict) and a.get("type")]
@@ -1381,6 +1689,25 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
             if not invalid_rejected:
                 problems.append("필수 input이 빠진 action이 거부되지 않음")
 
+    # 이슈 #20: graph kind 전용 추가 실증 — generic/table 도메인의 evidence는 바꾸지 않는다
+    graph_probes = None
+    if contract.get("interaction_kind") == KIND_GRAPH_EDITOR:
+        hints = (contract.get("render_hints") or {}).get("graph") or {}
+        if hints.get("node_collection_shape") == NODE_COLLECTION_MALFORMED:
+            problems.append("fixture graph의 node collection이 dict/list가 아님 — "
+                            "graph evidence 판정 불가 (fail-closed)")
+        if hints.get("malformed_node_entries"):
+            problems.append(f"fixture graph에 canonical node object가 아닌 entry "
+                            f"{hints['malformed_node_entries']}개 (fail-closed)")
+        if hints.get("malformed_edge_entries"):
+            problems.append(f"fixture graph에 malformed edge entry "
+                            f"{hints['malformed_edge_entries']}개 (fail-closed)")
+        if hints.get("unresolved_edge_refs"):
+            problems.append(f"fixture graph edge가 존재하지 않는 node를 참조 "
+                            f"{hints['unresolved_edge_refs']}건 (fail-closed)")
+        graph_probes = _graph_invalid_probes(contract, fixture_actions, exchange,
+                                             initial, problems)
+
     # 이슈 #13 §9.3: object/array schema field가 runner로 문자열 변질돼 가면 실패다
     structured = structured_input_evidence(contract, fixture_actions)
     for entry in structured:
@@ -1389,7 +1716,7 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
                 f"structured input 타입 손실: {entry['action']}.{entry['field']} = "
                 f"{entry['value_kind']} (기대: {'|'.join(entry['schema_kinds'])})")
 
-    return {
+    result = {
         "interaction_kind": contract["interaction_kind"],
         "available_actions": action_names,
         "exchanges": exchanges,
@@ -1402,6 +1729,9 @@ def run_interaction_smoke(artifact_root: Path, contract: dict, timeout: float = 
         "problems": problems,
         "pass": state_changed and invalid_rejected and not problems,
     }
+    if graph_probes is not None:  # graph kind에서만 — generic/table 결과 dict 불변
+        result["graph_probes"] = graph_probes
+    return result
 
 
 # ---------------------------------------------------------------- executor 본체 (§6)
@@ -1413,7 +1743,8 @@ def _roots(run_dir: Path) -> list[Path]:
 
 def run_interaction_ui(run_dir=None, run_id=None, apply: bool = False, db_conn=None,
                        timeout: float = 60.0) -> dict:
-    """도메인 중립 INTERACTION_UI executor (§6). graph 도메인은 lane 라우터가 legacy adapter로 보낸다.
+    """도메인 중립 INTERACTION_UI executor (§6). graph 도메인도 여기서 처리한다 (이슈 #20 —
+    contract 기반 graph renderer, legacy 2C-2 adapter 라우팅 제거).
 
     반환 계약은 lane executor(_exec_apply_tool)와 동일: applied/patched_files/problems/error/ok/status."""
     result: dict = {"ok": False, "status": None, "applied": False, "patched_files": [],
@@ -1430,13 +1761,6 @@ def run_interaction_ui(run_dir=None, run_id=None, apply: bool = False, db_conn=N
         result["error"] = "artifact root(workspace/final_artifact) 없음 — explicit missing state"
         return result
     artifact_root = Path(artifact_root)
-
-    kind = detect_interaction_kind(artifact_root)
-    if kind == KIND_GRAPH_EDITOR:
-        result["status"] = "PRECONDITION_GRAPH_DOMAIN"
-        result["interaction_kind"] = kind
-        result["error"] = "graph 도메인은 graph adapter(2C-2 editor)가 담당 — lane 라우터에서 분기"
-        return result
 
     contract = build_interaction_contract(artifact_root)
     if not contract.get("supported"):
@@ -1475,13 +1799,20 @@ def run_interaction_ui(run_dir=None, run_id=None, apply: bool = False, db_conn=N
 
     out_dir = run_dir / INTERACTION_SUBDIR
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / EVIDENCE_JSON).write_text(_dump({
+    evidence = {
         "interaction_kind": contract["interaction_kind"],
         "exchanges": smoke["exchanges"],
         "state_change_observed": smoke["state_change_observed"],
         "invalid_action_rejected": smoke["invalid_action_rejected"],
         "revise_changes_result": smoke["revise_changes_result"],
-    }) + "\n", encoding="utf-8")
+    }
+    if contract["interaction_kind"] == KIND_GRAPH_EDITOR:
+        # 이슈 #20: graph shape 분류(#19 정본)와 무효 probe 결과를 machine-readable로 남긴다
+        evidence["graph"] = {
+            "render_hints": (contract.get("render_hints") or {}).get("graph"),
+            "graph_probes": smoke.get("graph_probes"),
+        }
+    (out_dir / EVIDENCE_JSON).write_text(_dump(evidence) + "\n", encoding="utf-8")
     report = {
         "applied": True,
         "interaction_kind": contract["interaction_kind"],

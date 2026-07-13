@@ -5,7 +5,7 @@
    "path_pattern": "action_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 50,
+   "source_line": 58,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -6422,7 +6422,7 @@
    "path_pattern": "runner_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 166,
+   "source_line": 246,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -7187,7 +7187,7 @@
    "path_pattern": "state_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 44,
+   "source_line": 52,
    "source_path": "repo_idea_miner/factory_interaction_ui.py",
    "symbol_id": "repo_idea_miner.factory_interaction_ui"
   },
@@ -8841,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1239,
+  "test_count": 1249,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -12274,19 +12274,32 @@
    ],
    "imports": [
     {
+     "from": "repo_idea_miner.factory_product_evidence",
+     "names": [
+      "NODE_COLLECTION_MALFORMED",
+      "NODE_MAP",
+      "classify_node_collection"
+     ]
+    },
+    {
      "from": "repo_idea_miner.factory_run_layout",
      "names": [
       "resolve_artifact_root"
      ]
     }
    ],
-   "loc": 1499,
+   "loc": 1830,
    "module": "repo_idea_miner.factory_interaction_ui",
    "path": "repo_idea_miner/factory_interaction_ui.py",
    "private_symbols": [
+    "_GRAPH_CSS",
+    "_GRAPH_PANEL_HTML",
+    "_GRAPH_RENDER_JS",
     "_SERVER_SOURCE",
     "_TYPE_OBSERVE_MAX_DEPTH",
     "_dump",
+    "_graph_invalid_probes",
+    "_graph_node_identities",
     "_json_kind",
     "_load_json",
     "_merge_type_descriptor",
@@ -12308,6 +12321,7 @@
     "first_fixture",
     "generate_interaction_ui",
     "generate_table_grid_ui",
+    "graph_render_hints",
     "grid_render_hints",
     "has_error_signal",
     "observe_input_types",
@@ -13169,6 +13183,7 @@
    "imported_by": [
     "repo_idea_miner.factory_anti_hardcode",
     "repo_idea_miner.factory_draft_execution",
+    "repo_idea_miner.factory_interaction_ui",
     "repo_idea_miner.factory_product_editor",
     "repo_idea_miner.factory_product_loop",
     "repo_idea_miner.factory_product_polish",
@@ -15896,9 +15911,9 @@
   }
  ],
  "repository": {
-  "head": "609eae2b4986107029887edb4ea70ea47911d372",
+  "head": "5dd99a553c9fc2ef7c7aff2842cbb13c400f4968",
   "structural_diff": true,
-  "structural_fingerprint": "0ad83cefa5523106d89c8872ef883a402f9817fc0e8ed2620090e7067ae5f656",
+  "structural_fingerprint": "a930610c00e30b80b6f6530ee4e3d0bd6460445cb45b5c52b0b52b95ae243814",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [

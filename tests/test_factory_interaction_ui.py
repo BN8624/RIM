@@ -11,6 +11,7 @@ from repo_idea_miner.factory_interaction_ui import (
     build_interaction_contract,
     detect_interaction_kind,
     generate_interaction_ui,
+    graph_render_hints,
     grid_render_hints,
     run_interaction_smoke,
     run_interaction_ui,
@@ -152,6 +153,52 @@ if __name__ == "__main__":
     main()
 '''
 
+_FLOW_RUNNER = '''import argparse, copy, json
+
+def find_node(nodes, node_id):
+    for n in nodes:
+        if isinstance(n, dict) and n.get("id") == node_id:
+            return n
+    return None
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scenario", required=True)
+    args = ap.parse_args()
+    sc = json.load(open(args.scenario, encoding="utf-8"))
+    state = copy.deepcopy(sc["initial_state"])
+    events, errors = [], []
+    for a in sc.get("actions") or []:
+        kind = a.get("type")
+        payload = a.get("payload") or {}
+        if kind == "activate_stage":
+            node = find_node(state["nodes"], payload.get("stage_id"))
+            if node is None:
+                errors.append("존재하지 않는 stage: %s" % payload.get("stage_id"))
+                events.append({"type": "ERROR_OCCURRED", "target_id": str(payload.get("stage_id"))})
+                continue
+            node["phase"] = "ACTIVE"
+            events.append({"type": "STAGE_ACTIVATED", "target_id": node["id"]})
+        elif kind == "link_stages":
+            src = find_node(state["nodes"], payload.get("from_id"))
+            dst = find_node(state["nodes"], payload.get("to_id"))
+            if src is None or dst is None:
+                errors.append("link 대상 없음")
+                events.append({"type": "ERROR_OCCURRED", "target_id": "link"})
+                continue
+            state["edges"].append({"from": src["id"], "to": dst["id"]})
+            events.append({"type": "STAGES_LINKED", "target_id": src["id"]})
+        else:
+            errors.append("unknown action: %s" % kind)
+            events.append({"type": "ERROR_OCCURRED", "target_id": "system"})
+    print(json.dumps({"ok": not errors, "final_state": state, "events": events,
+                      "summary": "%d events" % len(events), "errors": errors},
+                     ensure_ascii=True))
+
+if __name__ == "__main__":
+    main()
+'''
+
 _DOMAINS = {
     "ledger": {
         "runner": _LEDGER_RUNNER,
@@ -202,6 +249,26 @@ _DOMAINS = {
                          "payload": {"row_id": "r1", "column_id": "cb", "value": True}},
                         {"type": "add_column",
                          "payload": {"column_id": "c2", "name": "C", "type": "Number"}}]},
+    },
+    # graph 도메인 (이슈 #20) — state에 nodes+edges, node 참조 action + edge 생성 action
+    "flow": {
+        "runner": _FLOW_RUNNER,
+        "state_contract": {"state_entities": [
+            {"name": "FlowGraph", "fields": ["nodes", "edges"],
+             "invariants": ["nodes.length >= 0"]}]},
+        "action_contract": {"actions": [
+            {"name": "activate_stage", "input": ["stage_id"],
+             "preconditions": ["exists:nodes[stage_id]"], "output": ["STAGE_ACTIVATED"]},
+            {"name": "link_stages", "input": ["from_id", "to_id"],
+             "preconditions": [], "output": ["STAGES_LINKED"]}]},
+        "fixture": {"id": "scenario_001",
+                    "initial_state": {
+                        "nodes": [{"id": "n1", "label": "하나", "x": 0, "y": 0, "phase": "IDLE"},
+                                  {"id": "n2", "label": "둘", "x": 80, "y": 40, "phase": "IDLE"}],
+                        "edges": [{"from": "n1", "to": "n2"}]},
+                    "actions": [{"type": "activate_stage", "payload": {"stage_id": "n1"}},
+                                {"type": "link_stages",
+                                 "payload": {"from_id": "n2", "to_id": "n1"}}]},
     },
 }
 
@@ -350,7 +417,10 @@ def test_module_has_no_challenge_hardcode():
     src = Path("repo_idea_miner/factory_interaction_ui.py").read_text(encoding="utf-8")
     for token in ("challenge47", "challenge_47", "challenge54", "challenge_54",
                   "folder_id", "item_id", "FileSystem", "root_node",
-                  "supported_node_types", "add_entry", "set_mode"):
+                  "supported_node_types", "add_entry", "set_mode",
+                  # 이슈 #20: graph renderer에 특정 graph 제품(Fresh-G류) 하드코드 금지
+                  "SkillTree", "node_a", "select_node", "visit_node",
+                  "complete_node", "move_node", "activate_stage", "link_stages"):
         assert token not in src, token
 
 
@@ -512,3 +582,164 @@ def test_table_domain_full_apply_smoke_and_validator(tmp_path):
              for rel in ("product/interaction/index.html", "product/interaction_server.py")}
     result = detect_mock_fallback(files)
     assert result["mock_fallback_count"] == 0, result["problems"]
+
+
+# ---------------------------------------------------------------- graph renderer (이슈 #20)
+
+def test_graph_hints_list_and_map_are_equivalent():
+    """이슈 #20 §3: map/list는 동일한 graph 의미 — #19 정본 분류 재사용."""
+    list_state = {"nodes": [{"id": "a"}, {"id": "b"}], "edges": [{"from": "a", "to": "b"}]}
+    h = graph_render_hints(list_state)
+    assert h["state_entity"] is None
+    assert h["node_collection_shape"] == "NODE_LIST"
+    assert h["node_count"] == 2 and h["renderable_edge_count"] == 1
+    assert h["node_identities"] == ["a", "b"]
+    # map + entity 중첩: node 자체 id 우선, map key는 id 없는 entry의 fallback
+    map_state = {"G": {"nodes": {"k1": {"label": "x"}, "k2": {"id": "own2"}}, "edges": []}}
+    h2 = graph_render_hints(map_state)
+    assert h2["state_entity"] == "G"
+    assert h2["node_collection_shape"] == "NODE_MAP"
+    assert sorted(h2["node_identities"]) == ["k1", "own2"]
+
+
+def test_graph_hints_empty_missing_malformed():
+    """empty는 정상 빈 상태, missing은 폴백(None), malformed는 명시적 분류."""
+    assert graph_render_hints({"nodes": [], "edges": []})["node_collection_shape"] == \
+        "NODE_COLLECTION_EMPTY"
+    assert graph_render_hints({}) is None
+    assert graph_render_hints({"other": {"a": 1}}) is None  # nodes/edges 컨테이너 없음
+    assert graph_render_hints(None) is None
+    h = graph_render_hints({"nodes": 42, "edges": []})
+    assert h["node_collection_shape"] == "NODE_COLLECTION_MALFORMED"
+    assert h["malformed_node_entries"] == 1
+
+
+def test_graph_hints_count_malformed_entries_and_nodes_without_id():
+    """malformed entry는 버리지 않고 계수, id 없는 list node에 임의 id를 만들지 않는다."""
+    mixed_map = {"nodes": {"a": {"id": "a"}, "b": "oops", "c": 3}, "edges": []}
+    h = graph_render_hints(mixed_map)
+    assert h["node_collection_shape"] == "NODE_MAP"
+    assert h["malformed_node_entries"] == 2 and h["node_count"] == 1
+    mixed_list = {"nodes": [{"id": "a"}, "oops", {"label": "no-id"}], "edges": []}
+    h2 = graph_render_hints(mixed_list)
+    assert h2["node_collection_shape"] == "NODE_LIST"
+    assert h2["malformed_node_entries"] == 1
+    assert h2["nodes_without_id"] == 1          # 임의 id 미생성 — identity 없음으로 계수
+    assert h2["node_identities"] == ["a"]
+
+
+def test_graph_hints_edge_shapes():
+    """edge 없는 graph 정상, 존재하지 않는 node 참조·malformed edge는 명시적 계수."""
+    base = [{"id": "a"}, {"id": "b"}]
+    assert graph_render_hints({"nodes": base, "edges": []})["renderable_edge_count"] == 0
+    h = graph_render_hints({"nodes": base, "edges": [
+        {"from": "a", "to": "b"}, {"from": "a", "to": "ghost"}, "oops", {"from": "a"}]})
+    assert h["renderable_edge_count"] == 1
+    assert h["unresolved_edge_refs"] == 1
+    assert h["malformed_edge_entries"] == 2
+    # edges가 map(dict of dict)이어도 entry 단위로 동일 처리
+    h2 = graph_render_hints({"nodes": base, "edges": {"e1": {"from": "a", "to": "b"}}})
+    assert h2["renderable_edge_count"] == 1 and h2["edge_collection_kind"] == "object"
+    # edges가 scalar면 collection이 아님 — malformed로 계수
+    h3 = graph_render_hints({"nodes": base, "edges": "oops"})
+    assert h3["malformed_edge_entries"] == 1
+
+
+def test_graph_contract_kind_determinism_and_console_fallback(tmp_path):
+    """graph kind 감지는 결정적이고, 컨테이너가 없으면 정직하게 console 폴백."""
+    run = _make_domain_run(tmp_path, "flow")
+    c1 = build_interaction_contract(run / "workspace")
+    c2 = build_interaction_contract(run / "workspace")
+    assert c1 == c2
+    assert c1["interaction_kind"] == KIND_GRAPH_EDITOR
+    assert c1["interaction_id"] == "core_graph_editor"
+    assert c1["render_hints"]["graph"]["node_collection_shape"] == "NODE_LIST"
+    assert generate_interaction_ui(c1) == generate_interaction_ui(c2)
+    # missing nodes: 필드는 선언됐지만 initial_state에 실체가 없으면 console 폴백
+    _dump(run / "workspace" / "fixtures" / "scenario_001.json",
+          {"id": "scenario_001", "initial_state": {"Flat": {"items": []}},
+           "actions": [{"type": "activate_stage", "payload": {"stage_id": "n1"}}]})
+    fallback = build_interaction_contract(run / "workspace")
+    assert fallback["interaction_kind"] == KIND_ACTION_CONSOLE
+    assert "graph" not in fallback["render_hints"]
+
+
+def test_graph_ui_renders_only_contract_actions(tmp_path):
+    """이슈 #20 §2·§4: graph UI는 contract 데이터로만 렌더 — 계약 밖 action 하드코드 없음."""
+    run = _make_domain_run(tmp_path, "flow")
+    contract = build_interaction_contract(run / "workspace")
+    ui = generate_interaction_ui(contract)
+    assert 'id="graph-view"' in ui and 'id="graph-banner"' in ui
+    # shape-safe JS 미러 — malformed/missing 상태와 임의 id 미생성 규칙이 포함된다
+    for marker in ("NODE_COLLECTION_MALFORMED", "NODE_COLLECTION_MISSING",
+                   "NODE_COLLECTION_EMPTY", "임의 id 미생성"):
+        assert marker in ui, marker
+    # 계약과 무관한 graph 조작 하드코드 금지 (Add/Delete Node 류)
+    for forbidden in ("add_node", "delete_node", "add_edge", "delete_edge",
+                      "Add Node", "Delete Node"):
+        assert forbidden not in ui, forbidden
+    assert "Math.random" not in ui and "Date.now" not in ui
+    files = {"product/interaction/index.html": ui}
+    assert detect_mock_fallback(files)["mock_fallback_count"] == 0
+    # generic console에는 graph 패널이 없다 — generic 결과 불변
+    ledger = _make_domain_run(tmp_path, "ledger")
+    ledger_ui = generate_interaction_ui(build_interaction_contract(ledger / "workspace"))
+    assert "graph-view" not in ledger_ui
+
+
+def test_graph_domain_full_apply_probes_and_validator(tmp_path):
+    """이슈 #20 §5: graph 도메인 전체 적용 — runner-backed 실증 + 무효 probe 2종 거부."""
+    run, out = _apply_domain(tmp_path, "flow")
+    assert out["applied"] is True and out["ok"] is True and out["status"] == "APPLIED"
+    smoke = out["interaction_smoke"]
+    assert smoke["state_change_observed"] is True
+    assert smoke["invalid_action_rejected"] is True
+    assert smoke["graph_probes"] == {"nonexistent_action_rejected": True,
+                                     "nonexistent_node_rejected": True}
+    names = [e["exchange"] for e in smoke["exchanges"]]
+    assert "invalid_nonexistent_action" in names and "invalid_nonexistent_node" in names
+    ev = _load(run / "review/interaction_ui/interaction_evidence.json")
+    assert ev["graph"]["render_hints"]["node_collection_shape"] == "NODE_LIST"
+    assert ev["graph"]["graph_probes"]["nonexistent_node_rejected"] is True
+    assert _check_interaction_ui(run) == []
+    files = {rel: (run / "workspace" / rel).read_text(encoding="utf-8")
+             for rel in ("product/interaction/index.html", "product/interaction_server.py")}
+    assert detect_mock_fallback(files)["mock_fallback_count"] == 0
+
+
+def test_graph_edge_action_changes_state(tmp_path):
+    """실제 contract에 edge action이 있으면 그 action도 state를 바꾼다 (§5)."""
+    run = _make_domain_run(tmp_path, "flow")
+    root = run / "workspace"
+    contract = build_interaction_contract(root)
+    scenario = dict(contract["scenario_template"])
+    scenario["actions"] = [{"type": "link_stages",
+                            "payload": {"from_id": "n2", "to_id": "n1"}}]
+    code, parsed, _ = _run_runner(root, scenario, 60.0)
+    assert code == 0 and parsed["errors"] == []
+    assert {"from": "n2", "to": "n1"} in parsed["final_state"]["edges"]
+
+
+def test_graph_malformed_fixture_is_fail_closed(tmp_path):
+    """missing/malformed graph는 성공으로 승격하지 않는다 — 명시적 문제로 남긴다."""
+    run = _make_domain_run(tmp_path, "flow")
+    fixture = _load(run / "workspace" / "fixtures" / "scenario_001.json")
+    fixture["initial_state"]["nodes"] = "oops"
+    _dump(run / "workspace" / "fixtures" / "scenario_001.json", fixture)
+    out = run_interaction_ui(run_dir=run, apply=True)
+    assert out["ok"] is False and out["status"] == "APPLIED_SMOKE_FAILED"
+    assert any("node collection" in p for p in out["problems"])
+
+
+def test_graph_probe_without_node_reference_is_honest(tmp_path):
+    """node identity 참조 field를 못 찾으면 실증 불가를 문제로 남긴다 — 조용한 통과 없음."""
+    run = _make_domain_run(tmp_path, "flow")
+    fixture = _load(run / "workspace" / "fixtures" / "scenario_001.json")
+    fixture["actions"] = [{"type": "activate_stage", "payload": {"stage_id": "zz"}}]
+    _dump(run / "workspace" / "fixtures" / "scenario_001.json", fixture)
+    root = run / "workspace"
+    contract = build_interaction_contract(root)
+    smoke = run_interaction_smoke(root, contract)
+    assert smoke["pass"] is False
+    assert smoke["graph_probes"]["nonexistent_node_rejected"] is False
+    assert any("실증할 수 없음" in p for p in smoke["problems"])
