@@ -250,6 +250,20 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
     has_ux_polish = ux_polish_report.get("ux_polish_included") is True \
         and (ux_polish_report.get("applied") is True
              or ux_polish_report.get("ux_status") == "UX_READY")
+    # 이슈 #24 §4.3·§5.5: viewer 재작성이 CTA를 무효화할 수 있다 — report의 CTA 주장은
+    # 실제 표면 재도출(validator와 같은 canonical recheck)로만 인정한다. stale이면 UX
+    # 실증 자체가 현재 표면을 설명하지 않으므로 무효화해 UX rung을 다시 연다.
+    ux_cta_claimed = has_ux_polish and (ux_polish_report.get("ux_evidence") or {}) \
+        .get("first_screen_cta_ok") is True
+    ux_cta_verified = False
+    if ux_cta_claimed:
+        from repo_idea_miner.factory_ux_polish import recheck_first_screen_cta
+        try:
+            ux_cta_verified = recheck_first_screen_cta(resolve_artifact_root(run_dir))
+        except Exception:  # noqa: BLE001 — 재도출 실패는 미실증 (fail-closed)
+            ux_cta_verified = False
+        if not ux_cta_verified:
+            has_ux_polish = False
     facts: dict = {
         "viewer_exists": bool(smoke.get("product_viewer_exists", static["viewer_exists"])),
         "viewer_path": smoke.get("product_viewer_path") or static["viewer_path"],
@@ -278,10 +292,9 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         "has_viewer_polish_report": has_viewer_polish,
         "has_ux_polish_report": has_ux_polish,
         # 이슈 #22: UX_POLISH가 실증한 첫 화면 CTA(실제 요소·표시·클릭·계약 action 연결) —
-        # included(검증 전부 통과) 상태의 report만 인정한다
-        "first_screen_cta_evidence": bool(
-            has_ux_polish and (ux_polish_report.get("ux_evidence") or {})
-            .get("first_screen_cta_ok") is True),
+        # included report의 주장 + 실제 표면 재도출 통과(이슈 #24 stale 차단)만 인정한다
+        "first_screen_cta_evidence": ux_cta_verified,
+        "ux_first_screen_cta_stale": bool(ux_cta_claimed and not ux_cta_verified),
         "runner_backed_execution_included": True if (has_execution or has_generic_execution)
         else (editor_smoke.get("runner_backed_execution_included") if has_editor else None),
         "draft_export_supported": editor_smoke.get("draft_export_supported") if has_editor else None,
@@ -376,7 +389,8 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         refs[f"loop.{k}"] = f"artifact_evidence.product_loop.{k}={_b(v)}"
     for k in ("viewer_exists", "viewer_reads_replay", "authoring_ui", "green_base", "gate_fail",
               "evidence_sufficient", "archive_recommended", "mismatch_count", "replay_count",
-              "runner_executable", "verdict", "has_ux_polish_report"):
+              "runner_executable", "verdict", "has_ux_polish_report",
+              "ux_first_screen_cta_stale"):
         refs[f"facts.{k}"] = f"artifact_evidence.facts.{k}={str(facts.get(k)).lower()}"
     if has_editor:
         refs["editor.runner_backed_execution_included"] = (
@@ -514,6 +528,10 @@ def apply_hard_blockers(evidence: dict, quality: dict) -> dict:
           not q["has_example_or_seed_data"], ("quality.has_example_or_seed_data",))
     block("failure_feedback_visible=false → PRODUCT_CANDIDATE 금지",
           not q["failure_feedback_visible"], ("quality.failure_feedback_visible",))
+    # 이슈 #24 §5.5: viewer 재작성으로 CTA 실증이 stale(표면 재도출 실패)이면 기존 report
+    # 주장만으로 PRODUCT_CANDIDATE를 지지할 수 없다 — machine-checkable fact 기반 차단.
+    block("UX CTA 실증이 현재 표면과 불일치(stale) → PRODUCT_CANDIDATE 금지",
+          bool(facts.get("ux_first_screen_cta_stale")), ("facts.ux_first_screen_cta_stale",))
 
     max_stage = "PRODUCT_CANDIDATE"
     for b in blockers:

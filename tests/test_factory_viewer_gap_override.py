@@ -276,6 +276,63 @@ def test_run_judgment_desks_fails_closed_on_invalid_override(tmp_path, monkeypat
     assert any("reason" in p or "viewer_faults" in p for p in out["problems"])
 
 
+# ---------------------------------------------------------------- §5.5 viewer→UX stable ordering: stale CTA 실증 무효화
+
+def test_stale_cta_claim_invalidates_ux_evidence_and_caps_stage(tmp_path):
+    """viewer 재작성으로 CTA가 사라지면 기존 report 주장만으로 CTA를 인정하지 않는다 —
+    UX 실증이 무효화되어 UX rung이 다시 열리고, stale fact가 PC 주장을 기계적으로 차단한다."""
+    from repo_idea_miner.factory_product_loop import (
+        apply_hard_blockers,
+        extract_artifact_evidence,
+        extract_user_facing_quality,
+    )
+    from repo_idea_miner.factory_ux_polish import run_ux_polish
+    from test_factory_ux_polish import _CTA_LESS_VIEWER, _make_cta_run, _write
+
+    run = _make_cta_run(tmp_path)
+    out = run_ux_polish(run_dir=run, apply=True)
+    assert out["ux_evidence"]["first_screen_cta_ok"] is True
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["has_ux_polish_report"] is True
+    assert facts["first_screen_cta_evidence"] is True
+    assert facts["ux_first_screen_cta_stale"] is False
+
+    # canonical VIEWER_POLISH의 rewrite 재현: CTA가 실린 viewer가 CTA 없는 표면으로 교체됨
+    _write(run / "workspace" / "product" / "viewer" / "index.html", _CTA_LESS_VIEWER)
+    ev = extract_artifact_evidence(run)
+    facts = ev["facts"]
+    assert facts["first_screen_cta_evidence"] is False  # 표면 재도출 실패 — 주장 불인정
+    assert facts["ux_first_screen_cta_stale"] is True
+    assert facts["has_ux_polish_report"] is False  # stale 실증은 현재 표면을 설명하지 않음
+
+    # stale fact는 hard blocker로 PC 주장을 차단한다 (§5.5 — 승격은 fresh UX 재실증만)
+    q = extract_user_facing_quality(ev)
+    hard = apply_hard_blockers(ev, q)
+    assert any("stale" in b["rule"] and b["triggered"] for b in hard["blockers"])
+    assert hard["product_candidate_blocked"] is True
+
+
+def test_intact_cta_claim_keeps_ux_evidence(tmp_path):
+    """CTA가 실제 표면에 살아 있으면 기존 실증은 그대로 인정된다 — stale 차단의 과잉 발화 금지."""
+    from repo_idea_miner.factory_product_loop import (
+        apply_hard_blockers,
+        extract_artifact_evidence,
+        extract_user_facing_quality,
+    )
+    from repo_idea_miner.factory_ux_polish import run_ux_polish
+    from test_factory_ux_polish import _make_cta_run
+
+    run = _make_cta_run(tmp_path)
+    run_ux_polish(run_dir=run, apply=True)
+    ev = extract_artifact_evidence(run)
+    assert ev["facts"]["first_screen_cta_evidence"] is True
+    assert ev["facts"]["ux_first_screen_cta_stale"] is False
+    assert ev["facts"]["has_ux_polish_report"] is True
+    q = extract_user_facing_quality(ev)
+    hard = apply_hard_blockers(ev, q)
+    assert not any("stale" in b["rule"] and b["triggered"] for b in hard["blockers"])
+
+
 # ---------------------------------------------------------------- §6.8~6.10 closed loop 자율 순서 (skip 불가 합성 fixture)
 
 def _synthetic_state(mismatches: list, sixty_seconds: bool, ux_report: bool):
