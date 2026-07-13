@@ -8,6 +8,7 @@ from pathlib import Path
 from repo_idea_miner.factory_run_layout import resolve_run_target
 
 from repo_idea_miner.factory_product_evidence import (
+    classify_node_collection,
     find_product_viewer,
     first_replay_file,
     load_json,
@@ -497,12 +498,18 @@ class EditorGraphModel:
 
     def load_from_replay(self, data: dict) -> None:
         st = (data or {}).get("final_state") or {}
-        raw_nodes = st.get("nodes") or {}
-        raw_edges = st.get("edges") or []
+        # node collection은 dict/list 모두 canonical — shape-safe 추출 (이슈 #19 §9).
+        # NODE_MAP은 기존 의미대로 mapping key가 id, NODE_LIST는 원소 id 필드(없으면 index fallback).
+        info = classify_node_collection(st if isinstance(st, dict) else None)
+        raw_edges = st.get("edges") or [] if isinstance(st, dict) else []
+        if info["shape"] == "NODE_MAP":
+            ids = info["identities"]
+        else:
+            ids = [nd.get("id", ident) for ident, nd in zip(info["identities"], info["nodes"])]
         self.nodes = [{"id": nid, "type": nd.get("type"), "label": nd.get("label", nid)}
-                      for nid, nd in raw_nodes.items()]
+                      for nid, nd in zip(ids, info["nodes"])]
         self.edges = [{"source_id": e.get("source_id"), "target_id": e.get("target_id")}
-                      for e in raw_edges]
+                      for e in raw_edges if isinstance(e, dict)]
         self.seq = len(self.nodes)
 
     def _next_id(self) -> str:
@@ -826,8 +833,9 @@ def extract_supported_node_types(final_dir: Path) -> tuple[list[str], str]:
     if rdir.is_dir():
         for p in sorted(rdir.glob("replay_*.json")):
             d = load_json(p) or {}
-            for nd in ((d.get("final_state") or {}).get("nodes") or {}).values():
-                if isinstance(nd, dict) and nd.get("type"):
+            # dict/list node collection 모두 shape-safe로 순회한다 (이슈 #19 §9)
+            for nd in classify_node_collection(d.get("final_state"))["nodes"]:
+                if nd.get("type"):
                     types.add(str(nd["type"]))
     if types:
         return sorted(types), "replay_node_types"
