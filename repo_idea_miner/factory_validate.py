@@ -1495,6 +1495,23 @@ def _check_ux_polish_lane(run_dir: Path) -> list[str]:
         prov = evidence.get("ux_provenance") or {}
         if prov.get("fresh") is not True or not prov.get("started_at"):
             p.append("ux polish: fresh provenance 없는 evidence (과거 결과 재사용 의심)")
+    # 이슈 #22: 첫 화면 CTA 과장 차단 — first_screen_cta_ok=true는 실제 표면 요소에서
+    # 재도출돼야 한다. marker만 있고 실제 CTA(표시·클릭·연결)가 없으면 FAIL.
+    if (report.get("ux_evidence") or {}).get("first_screen_cta_ok") is True:
+        cta = evidence.get("first_screen_cta") or {}
+        per = cta.get("per_surface") or {}
+        if cta.get("ok") is not True or not per or any(
+                not (v.get("present") and v.get("visible") and v.get("clickable")
+                     and v.get("wired")) for v in per.values()):
+            p.append("ux polish: 실증 없는 first_screen_cta_ok=true (과장)")
+        else:
+            from repo_idea_miner.factory_run_layout import resolve_artifact_root
+            from repo_idea_miner.factory_ux_polish import recheck_first_screen_cta
+            root = resolve_artifact_root(run_dir)
+            if root is not None and Path(root).is_dir() \
+                    and not recheck_first_screen_cta(Path(root)):
+                p.append("ux polish: 실제 표면에 CTA 재도출 실패인데 "
+                         "first_screen_cta_ok=true (marker-only 의심)")
     return p
 
 

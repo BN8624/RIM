@@ -260,6 +260,11 @@ def extract_artifact_evidence(run_dir: Path) -> dict:
         "has_execution_report": has_execution or has_generic_execution,
         "has_viewer_polish_report": has_viewer_polish,
         "has_ux_polish_report": has_ux_polish,
+        # 이슈 #22: UX_POLISH가 실증한 첫 화면 CTA(실제 요소·표시·클릭·계약 action 연결) —
+        # included(검증 전부 통과) 상태의 report만 인정한다
+        "first_screen_cta_evidence": bool(
+            has_ux_polish and (ux_polish_report.get("ux_evidence") or {})
+            .get("first_screen_cta_ok") is True),
         "runner_backed_execution_included": True if (has_execution or has_generic_execution)
         else (editor_smoke.get("runner_backed_execution_included") if has_editor else None),
         "draft_export_supported": editor_smoke.get("draft_export_supported") if has_editor else None,
@@ -415,6 +420,9 @@ def extract_user_facing_quality(evidence: dict) -> dict:
         "clear_next_action": bool(
             facts.get("handler_binding_status") == "PASS" or facts.get("authoring_ui")
             or re.search(r"<button|<select", viewer_src)),
+        # 이슈 #22: UX_POLISH의 실제 CTA 실증 — acceptance first_screen_cta_present의
+        # 정본 근거 (없으면 기존 proxy 판정이 그대로 적용된다)
+        "first_screen_cta_evidence": bool(facts.get("first_screen_cta_evidence")),
         "has_example_or_seed_data": (facts.get("replay_count") or 0) > 0,
         "success_feedback_visible": success_visible,
         "failure_feedback_visible": bool(loop.get("can_understand_failure")),

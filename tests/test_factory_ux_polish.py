@@ -178,7 +178,7 @@ def test_executor_source_has_no_task_hardcode():
 
 
 def test_operation_catalog_is_closed():
-    assert len(OPERATION_IDS) == 12
+    assert len(OPERATION_IDS) == 13  # 이슈 #22: ADD_FIRST_SCREEN_CTA 추가
     assert set(DIAGNOSIS_TO_OPERATION.values()) <= set(OPERATION_IDS)
     assert not set(OPERATION_IDS) & set(FORBIDDEN_OPERATION_IDS)
     assert set(DIAGNOSIS_TO_OPERATION) <= set(DIAGNOSIS_STATUSES)
@@ -284,7 +284,7 @@ def test_diagnosis_upstream_defect_not_covered(tmp_path):
 def test_diagnosis_enum_covers_spec():
     assert "HUMAN_REVIEW_REQUIRED" in DIAGNOSIS_STATUSES
     assert "UNSUPPORTED" in DIAGNOSIS_STATUSES
-    assert len(DIAGNOSIS_STATUSES) == 15
+    assert len(DIAGNOSIS_STATUSES) == 16  # 이슈 #22: FIRST_SCREEN_CTA_MISSING 추가
 
 
 # ---------------------------------------------------------------- §19.3 Operations
@@ -765,3 +765,258 @@ def test_probe07_requires_existing_replay_file(tmp_path):
     srcs = {"product/viewer/index.html":
             (ws / "product/viewer/index.html").read_text(encoding="utf-8")}
     assert _contract_mediated_replay_read(ws, srcs) is False
+
+
+# ---------------------------------------------------------------- 이슈 #22 First-screen CTA
+
+from repo_idea_miner.factory_core_schemas import CORE_GATE_ORDER
+from repo_idea_miner.factory_product_acceptance import evaluate_product_acceptance
+from repo_idea_miner.factory_product_loop import extract_user_facing_quality
+from repo_idea_miner.factory_ux_polish import _first_screen_cta
+
+# 계약 primary action(set_value)을 verbatim으로 조작하는 wired 콘솔 — 라벨 있는 활성 button
+_WIRED_CONSOLE = """<!doctype html><html><head><style>
+body { margin: 8px; }
+</style></head><body>
+<div id="state-view"></div><div id="error-view"></div>
+<button id="run">실행</button>
+<script>
+"use strict";
+var QUEUE = [{type: "set_value", payload: {target_id: "e1", value: 1}}];
+document.getElementById("run").addEventListener("click", function () {});
+</script>
+</body></html>"""
+
+# CTA가 없는 결과 뷰어 — button/anchor 없음
+_CTA_LESS_VIEWER = """<!doctype html><html><head></head><body>
+<select id="scenario"></select>
+<pre id="result-state"></pre><div id="error-area"></div>
+<script>"use strict"; fetch("viewer_contract.json");</script>
+</body></html>"""
+
+
+def _make_cta_run(tmp_path: Path, name: str = "run_cta", wired: bool = True,
+                  with_contract: bool = True) -> Path:
+    run = tmp_path / name
+    ws = run / "workspace"
+    _dump(ws / "replay" / "replay_scenario_001.json",
+          {"ok": True, "errors": [], "summary": "1", "final_state": {}, "events": []})
+    digest = hashlib.sha256(
+        (ws / "replay" / "replay_scenario_001.json").read_bytes()).hexdigest()
+    _dump(ws / "product" / "viewer" / "viewer_contract.json", {
+        "viewer_kind": "standard_typed_event",
+        "replays": [{"replay_id": "scenario_001", "ok": True, "errors": [], "frames": []}],
+        "source_artifact_refs": [
+            {"ref": "replay/replay_scenario_001.json", "sha256": digest}],
+    })
+    if with_contract:
+        _dump(ws / "product" / "interaction" / "contract.json", {
+            "available_actions": [{"name": "set_value", "input": ["target_id", "value"]}],
+            "validation_rules": [{"action": "set_value", "rule": "value >= 0"}],
+        })
+    _write(ws / "product" / "interaction" / "index.html",
+           _WIRED_CONSOLE if wired else _CTA_LESS_VIEWER)
+    _write(ws / "product" / "viewer" / "index.html", _CTA_LESS_VIEWER)
+    _dump(run / "review" / "draft_execution" / "draft_execution_report.json", {
+        "applied": True, "runner_backed_execution_included": True,
+        "execution_evidence": {"can_execute_input": True, "state_change_observed": True,
+                               "invalid_action_rejected": True},
+    })
+    return run
+
+
+def _cta_contract(**over) -> dict:
+    c = {"primary_actions": ["set_value"],
+         "cta_wired_surfaces": ["product/interaction/index.html"]}
+    c.update(over)
+    return c
+
+
+def _cta_ok(cta: dict) -> bool:
+    return bool(cta["present"] and cta["visible"] and cta["clickable"] and cta["wired"])
+
+
+def test_cta_diagnosis_fixable_when_wired_target_exists(tmp_path):
+    run = _make_cta_run(tmp_path)
+    built = build_ux_contract(run / "workspace")
+    assert built["contract"]["cta_wired_surfaces"] == ["product/interaction/index.html"]
+    diags = build_ux_diagnosis(built, run / "workspace")
+    cta = [d for d in diags if d["status"] == "FIRST_SCREEN_CTA_MISSING"]
+    assert [d["surface"] for d in cta] == ["product/viewer/index.html"]
+    assert cta[0]["machine_fixable"] is True
+    assert cta[0]["operation"] == "ADD_FIRST_SCREEN_CTA"
+
+
+def test_cta_diagnosis_fail_closed_without_wired_target(tmp_path):
+    run = _make_cta_run(tmp_path, wired=False)
+    built = build_ux_contract(run / "workspace")
+    assert built["contract"]["cta_wired_surfaces"] == []
+    diags = build_ux_diagnosis(built, run / "workspace")
+    cta = [d for d in diags if d["status"] == "FIRST_SCREEN_CTA_MISSING"]
+    assert len(cta) == 2  # 두 표면 모두 CTA 없음 — target도 없어 machine-fixable 아님
+    assert all(d["machine_fixable"] is False and d["operation"] is None for d in cta)
+
+
+def test_cta_no_diagnosis_and_honest_false_without_interaction_artifact(tmp_path):
+    run = _make_cta_run(tmp_path, with_contract=False)
+    built = build_ux_contract(run / "workspace")
+    assert built["contract"]["primary_actions"] == []
+    diags = build_ux_diagnosis(built, run / "workspace")
+    assert not [d for d in diags if d["status"] == "FIRST_SCREEN_CTA_MISSING"]
+    cta = _first_screen_cta("product/viewer/index.html", _CTA_LESS_VIEWER,
+                            built["contract"])
+    assert not _cta_ok(cta)
+    assert "CTA 유도 불가" in cta["evidence"]
+
+
+def test_cta_operation_injects_real_linked_element():
+    diag = {"status": "FIRST_SCREEN_CTA_MISSING", "operation": "ADD_FIRST_SCREEN_CTA",
+            "surface": "product/viewer/index.html"}
+    out = apply_operation(_CTA_LESS_VIEWER, diag, _cta_contract())
+    assert out is not None
+    new_text, rec = out
+    # 연결: wired 표면으로 가는 실제 상대경로 href
+    assert 'href="../interaction/index.html"' in new_text
+    # 문구: 계약 action 이름 verbatim
+    assert "set_value" in new_text
+    assert rec["operation_id"] == "ADD_FIRST_SCREEN_CTA"
+    # 첫 화면: body 여는 태그 바로 뒤
+    assert re.search(r'<body[^>]*>\s*<div data-ux-op="ADD_FIRST_SCREEN_CTA"', new_text)
+    # 적용 후 같은 진단이 사라진다 (재검사 = rollback 기준)
+    cta = _first_screen_cta("product/viewer/index.html", new_text, _cta_contract())
+    assert _cta_ok(cta)
+
+
+def test_cta_operation_fail_closed_without_target():
+    diag = {"status": "FIRST_SCREEN_CTA_MISSING", "operation": "ADD_FIRST_SCREEN_CTA",
+            "surface": "product/viewer/index.html"}
+    assert apply_operation(_CTA_LESS_VIEWER, diag,
+                           _cta_contract(cta_wired_surfaces=[])) is None
+    assert apply_operation(_CTA_LESS_VIEWER, diag,
+                           _cta_contract(primary_actions=[])) is None
+
+
+def test_cta_hidden_or_dummy_or_marker_only_not_counted():
+    contract = _cta_contract()
+    hidden = ('<html><body><a href="../interaction/index.html" '
+              'style="display:none">주요 작업</a></body></html>')
+    cta = _first_screen_cta("product/viewer/index.html", hidden, contract)
+    assert cta["present"] is True and cta["visible"] is False and not _cta_ok(cta)
+    css_hidden = ('<html><head><style>.cta { display: none; }</style></head>'
+                  '<body><a class="cta" href="../interaction/index.html">주요 작업</a>'
+                  "</body></html>")
+    cta = _first_screen_cta("product/viewer/index.html", css_hidden, contract)
+    assert cta["visible"] is False and not _cta_ok(cta)
+    offscreen = ('<html><body><a href="../interaction/index.html" '
+                 'style="position:absolute;left:-9999px">주요 작업</a></body></html>')
+    cta = _first_screen_cta("product/viewer/index.html", offscreen, contract)
+    assert cta["visible"] is False and not _cta_ok(cta)
+    # 더미: 라벨 없는 anchor / href 없는 라벨 / 무관한 링크
+    for dummy in ('<a href="../interaction/index.html"></a>',
+                  "<a>주요 작업</a>",
+                  '<a href="https://example.com">주요 작업</a>'):
+        cta = _first_screen_cta("product/viewer/index.html",
+                                f"<html><body>{dummy}</body></html>", contract)
+        assert cta["present"] is False and not _cta_ok(cta)
+    # marker만 존재 — 실제 요소 없음
+    marker_only = ('<html><body><div data-ux-op="ADD_FIRST_SCREEN_CTA"></div>'
+                   "</body></html>")
+    cta = _first_screen_cta("product/viewer/index.html", marker_only, contract)
+    assert cta["present"] is False and not _cta_ok(cta)
+
+
+def test_cta_end_to_end_apply_and_evidence(tmp_path):
+    run = _make_cta_run(tmp_path)
+    out = run_ux_polish(run_dir=run, apply=True)
+    assert out["ux_status"] == "APPLIED" and out["applied"] is True, out["problems"]
+    assert out["ux_evidence"]["first_screen_cta_ok"] is True
+    assert out["patched_files"] == ["product/viewer/index.html"]
+    ev = _load(run / "review/ux_polish/ux_evidence.json")
+    per = ev["first_screen_cta"]["per_surface"]
+    assert all(_cta_ok(v) for v in per.values())
+    # loop evidence/quality로 전파된다
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["first_screen_cta_evidence"] is True
+
+
+def test_cta_evidence_false_when_not_applied(tmp_path):
+    run = _make_cta_run(tmp_path, wired=False)  # target 없음 — patch 불가
+    out = run_ux_polish(run_dir=run, apply=True)
+    assert out["ux_evidence"]["first_screen_cta_ok"] is False
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["first_screen_cta_evidence"] is False
+
+
+def _acceptance_for(quality_fields: dict, probe_over: dict | None = None) -> dict:
+    probe = {"critical_flow_handlers_ok": False, "mock_fallback_count": 0,
+             "success_scenarios_passed": 2, "failure_scenarios_passed": 1,
+             "revise_and_rerun_changed": True, "viewer_static_ok": True}
+    probe.update(probe_over or {})
+    loop = {k: True for k in (
+        "can_create_or_modify_input", "can_validate_input", "can_execute_primary_action",
+        "can_observe_state_change", "can_understand_success", "can_understand_failure",
+        "can_revise_and_retry", "product_loop_closed")}
+    coverage = {"critical_requirement_coverage": 1.0, "difficulty_anchor_coverage": 1.0,
+                "forbidden_simplification_violation_count": 0}
+    return evaluate_product_acceptance(
+        Path("."), probe, {g: True for g in CORE_GATE_ORDER}, True, "PASS", "PASS",
+        coverage, loop, quality_fields)
+
+
+def test_acceptance_cta_check_uses_real_evidence():
+    # proxy FAIL(첫 화면 이해 불가) + CTA 실증 없음 → FAIL
+    q = {"first_screen_understandable": False, "clear_next_action": True,
+         "success_feedback_visible": True, "failure_feedback_visible": True}
+    a = _acceptance_for(q)
+    assert a["checks"]["first_screen_cta_present"] is False
+    # 같은 상태 + 실제 CTA 실증 → PASS (이슈 #22)
+    a = _acceptance_for({**q, "first_screen_cta_evidence": True})
+    assert a["checks"]["first_screen_cta_present"] is True
+    # 과장 없이 evidence false면 그대로 FAIL
+    a = _acceptance_for({**q, "first_screen_cta_evidence": False})
+    assert a["checks"]["first_screen_cta_present"] is False
+
+
+def test_acceptance_proxy_path_unchanged_without_cta_evidence():
+    # 기존 proxy 계산 불변 — CTA evidence가 없을 때 이전과 동일하게 판정
+    q_pass = {"first_screen_understandable": True, "clear_next_action": True,
+              "success_feedback_visible": True, "failure_feedback_visible": True}
+    a = _acceptance_for(q_pass, {"critical_flow_handlers_ok": True})
+    assert a["checks"]["first_screen_cta_present"] is True
+    a = _acceptance_for(q_pass, {"critical_flow_handlers_ok": False})
+    assert a["checks"]["first_screen_cta_present"] is False
+
+
+def test_quality_field_derives_from_facts():
+    ev = {"facts": {"viewer_exists": True, "viewer_reads_replay": True, "mismatches": [],
+                    "first_screen_cta_evidence": True, "replay_count": 1,
+                    "viewer_source": "<button>x</button>"},
+          "product_loop": {"can_understand_success": True, "can_understand_failure": True,
+                           "product_loop_closed": True},
+          "refs": {}, "known_refs": set()}
+    q = extract_user_facing_quality(ev)
+    assert q["fields"]["first_screen_cta_evidence"] is True
+    ev["facts"]["first_screen_cta_evidence"] = False
+    assert extract_user_facing_quality(ev)["fields"]["first_screen_cta_evidence"] is False
+
+
+def test_validator_blocks_cta_overclaim(tmp_path):
+    # report는 cta ok 주장, evidence per_surface는 숨김 CTA → 과장 차단
+    _valid_report(tmp_path, ux_evidence={"first_screen_cta_ok": True})
+    _valid_evidence(tmp_path, first_screen_cta={
+        "ok": True, "per_surface": {"product/viewer/index.html": {
+            "present": True, "visible": False, "clickable": True, "wired": True}}})
+    assert any("과장" in p for p in _check_ux_polish_lane(tmp_path))
+
+
+def test_validator_blocks_marker_only_cta(tmp_path):
+    # evidence는 전부 true라고 주장하지만 실제 표면에는 marker만 있고 CTA 요소가 없음
+    run = _make_cta_run(tmp_path, wired=False)
+    marker_only = ('<html><body><div data-ux-op="ADD_FIRST_SCREEN_CTA"></div>'
+                   '<select id="s"></select></body></html>')
+    _write(run / "workspace" / "product" / "viewer" / "index.html", marker_only)
+    _valid_report(run, ux_evidence={"first_screen_cta_ok": True})
+    _valid_evidence(run, first_screen_cta={
+        "ok": True, "per_surface": {"product/viewer/index.html": {
+            "present": True, "visible": True, "clickable": True, "wired": True}}})
+    assert any("marker-only 의심" in p for p in _check_ux_polish_lane(run))

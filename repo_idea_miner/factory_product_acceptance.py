@@ -116,10 +116,13 @@ def evaluate_product_acceptance(
         "success_scenarios_min2": probe_report.get("success_scenarios_passed", 0) >= 2,
         "failure_scenarios_min1": probe_report.get("failure_scenarios_passed", 0) >= 1,
         "revise_and_rerun_changed": probe_report.get("revise_and_rerun_changed") is True,
-        # CTA/피드백: probe의 정적 근거(§7-7·10) + quality evidence를 함께 요구
-        "first_screen_cta_present": bool(probe_report.get("critical_flow_handlers_ok"))
-        and bool(q.get("first_screen_understandable", True))
-        and bool(q.get("clear_next_action", True)),
+        # CTA/피드백: probe의 정적 근거(§7-7·10) + quality evidence를 함께 요구.
+        # 이슈 #22: UX_POLISH가 실증한 실제 CTA(요소·표시·클릭·계약 action 연결)가 있으면
+        # 그것이 정본 근거 — 없으면 기존 proxy 판정 그대로 (기존 acceptance 계산 불변).
+        "first_screen_cta_present": bool(q.get("first_screen_cta_evidence"))
+        or (bool(probe_report.get("critical_flow_handlers_ok"))
+            and bool(q.get("first_screen_understandable", True))
+            and bool(q.get("clear_next_action", True))),
         "feedback_actually_visible": bool(probe_report.get("viewer_static_ok"))
         and bool(q.get("success_feedback_visible", True))
         and bool(q.get("failure_feedback_visible", True)),

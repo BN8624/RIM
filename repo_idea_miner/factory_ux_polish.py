@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import time
 from pathlib import Path
@@ -52,6 +53,7 @@ DIAGNOSIS_STATUSES = (
     "DISABLED_REASON_MISSING",
     "REPLAY_POSITION_UNCLEAR",
     "VALIDATION_FEEDBACK_DISCONNECTED",
+    "FIRST_SCREEN_CTA_MISSING",
     "HUMAN_REVIEW_REQUIRED",
     "UPSTREAM_DEFECT",
     "UNSUPPORTED",
@@ -78,6 +80,7 @@ OPERATION_IDS = (
     "MARK_DISABLED_REASON",
     "EXPOSE_REPLAY_POSITION",
     "CONNECT_VALIDATION_FEEDBACK",
+    "ADD_FIRST_SCREEN_CTA",
 )
 
 # 판정이 주관적이고 patch 범위가 무제한이라 금지 (§7.3)
@@ -102,6 +105,7 @@ DIAGNOSIS_TO_OPERATION = {
     "DISABLED_REASON_MISSING": "MARK_DISABLED_REASON",
     "REPLAY_POSITION_UNCLEAR": "EXPOSE_REPLAY_POSITION",
     "VALIDATION_FEEDBACK_DISCONNECTED": "CONNECT_VALIDATION_FEEDBACK",
+    "FIRST_SCREEN_CTA_MISSING": "ADD_FIRST_SCREEN_CTA",
 }
 
 # UX executor가 절대 하지 않는 것 (§5.2) — contract와 report에 기록되는 정본 목록
@@ -227,6 +231,112 @@ def _unfocusable_action_elements(text: str) -> list[str]:
 
 def _stylesheet(text: str) -> str:
     return "\n".join(_STYLE_BLOCK_RE.findall(text))
+
+
+# ---------------------------------------------------------------- First-screen CTA (이슈 #22)
+
+_ANCHOR_RE = re.compile(r"<a\b([^>]*)>(.*?)</a>", re.S | re.I)
+_BUTTON_FULL_RE = re.compile(r"<button\b([^>]*)>(.*?)</button>", re.S | re.I)
+_INLINE_HIDDEN_RE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden", re.I)
+
+
+def _element_hidden(attrs: str, stylesheet: str) -> bool:
+    """정적 근거로 요소가 화면에 안 보이는지 — 숨김/화면 밖 요소를 CTA로 세지 않는다."""
+    if re.search(r'\bhidden\b|aria-hidden="true"', attrs, re.I):
+        return True
+    style_m = re.search(r'style="([^"]*)"', attrs, re.I)
+    if style_m and (_INLINE_HIDDEN_RE.search(style_m.group(1))
+                    or re.search(r"(?:left|top)\s*:\s*-\d{3,}", style_m.group(1))):
+        return True
+    for token in _ID_CLASS_RE.findall(attrs):
+        for word in token.split():
+            if re.search(rf"[.#]{re.escape(word)}\b[^{{]*\{{[^}}]*"
+                         r"(?:display\s*:\s*none|visibility\s*:\s*hidden)",
+                         stylesheet):
+                return True
+    return False
+
+
+def recheck_first_screen_cta(artifact_root: Path) -> bool:
+    """실제 표면에서 첫 화면 CTA(존재·표시·클릭·연결)를 재도출한다 (이슈 #22).
+
+    validator의 marker-only 과장 차단용 공개 API — 저장된 evidence가 아니라 현재
+    artifact 표면과 계약에서 다시 계산한다."""
+    built = build_ux_contract(Path(artifact_root))
+    if not built["surfaces"] or not built["contract"].get("primary_actions"):
+        return False
+    for s in built["surfaces"]:
+        cta = _first_screen_cta(s["rel"], s["text"], built["contract"])
+        if not (cta["present"] and cta["visible"] and cta["clickable"] and cta["wired"]):
+            return False
+    return True
+
+
+def _cta_wired_surface(text: str, primary_actions: list[str]) -> bool:
+    """표면이 계약 primary action을 실제 조작하는 표면인지 — action 이름이 표면 소스에
+    verbatim으로 존재(스크립트 wiring 근거)하고 라벨 있는 활성 button이 있어야 한다."""
+    if not primary_actions:
+        return False
+    if not any(a in text for a in primary_actions if a):
+        return False
+    return any(re.sub(r"<[^>]+>", "", m.group(2)).strip()
+               and not re.search(r"\bdisabled\b", m.group(1))
+               for m in _BUTTON_FULL_RE.finditer(text))
+
+
+def _first_screen_cta(surface_rel: str, text: str, contract: dict) -> dict:
+    """표면 첫 화면의 실제 CTA를 정적 근거로 판정한다 (이슈 #22 §2~§4).
+
+    marker(data-ux-op)는 판정에 쓰지 않는다 — 실제 요소의 존재/표시/클릭 가능/연결만
+    본다. 후보: (a) wired 표면의 라벨 있는 활성 button, (b) 다른 wired 표면으로 연결되는
+    라벨 있는 anchor. interaction artifact/action/target이 없으면 정직하게 실패한다."""
+    primary_actions = [a for a in (contract.get("primary_actions") or []) if a]
+    wired = set(contract.get("cta_wired_surfaces") or [])
+    out = {"present": False, "visible": False, "clickable": False, "wired": False,
+           "evidence": None}
+    if not primary_actions:
+        out["evidence"] = "interaction contract의 primary action 없음 — CTA 유도 불가"
+        return out
+    stylesheet = _stylesheet(text)
+    candidates: list[dict] = []
+    if surface_rel in wired:
+        for m in _BUTTON_FULL_RE.finditer(text):
+            attrs, inner = m.group(1), m.group(2)
+            label = re.sub(r"<[^>]+>", "", inner).strip()
+            if not label:
+                continue
+            candidates.append({
+                "present": True, "wired": True,
+                "visible": not _element_hidden(attrs, stylesheet),
+                "clickable": not re.search(r"\bdisabled\b", attrs),
+                "evidence": f"wired 표면의 button CTA: {label[:60]}"})
+    base = posixpath.dirname(surface_rel)
+    for m in _ANCHOR_RE.finditer(text):
+        attrs, inner = m.group(1), m.group(2)
+        label = re.sub(r"<[^>]+>", "", inner).strip()
+        href_m = re.search(r'href="([^"]+)"', attrs, re.I)
+        if not label or not href_m:
+            continue
+        href = href_m.group(1)
+        if "://" in href or href.startswith(("#", "mailto:", "javascript:")):
+            continue
+        target = posixpath.normpath(posixpath.join(base, href))
+        if target not in wired:
+            continue
+        candidates.append({
+            "present": True, "wired": True,
+            "visible": not _element_hidden(attrs, stylesheet),
+            "clickable": True,
+            "evidence": f"wired 표면({target})으로 연결되는 CTA: {label[:60]}"})
+    for cand in candidates:
+        if cand["visible"] and cand["clickable"]:
+            out.update(cand)
+            return out
+    if candidates:
+        out.update(candidates[0])  # 숨김/비활성 CTA — present지만 FAIL 근거를 남긴다
+        return out
+    out["evidence"] = "첫 화면에 primary action으로 연결되는 실제 CTA 없음"
+    return out
 
 
 _META_VIEWPORT_RE = re.compile(r"<meta[^>]*name=[\"']viewport[\"'][^>]*>", re.I)
@@ -359,6 +469,9 @@ def build_ux_contract(artifact_root: Path) -> dict:
                          "replay를 탐색한다" if primary_actions else
                          "사용자가 제품 표면에서 결과 상태를 탐색한다"),
         "primary_actions": primary_actions,
+        # 이슈 #22: primary action을 실제 조작하는 표면 — 첫 화면 CTA 판정/연결 대상의 정본
+        "cta_wired_surfaces": [s["rel"] for s in surfaces
+                               if _cta_wired_surface(s["text"], primary_actions)],
         "navigation_actions": sorted(nav_actions),
         "state_indicators": state_indicators,
         "feedback_channels": feedback_channels,
@@ -524,6 +637,19 @@ def diagnose_surface(surface: dict, contract: dict, artifact_root: Path) -> list
                 else CATEGORY_UPSTREAM_CONTRACT,
                 "CONNECT_VALIDATION_FEEDBACK" if adjacent_contract else None))
 
+    # FIRST_SCREEN_CTA_MISSING (이슈 #22) — 계약 primary action이 있는데 이 표면 첫 화면에
+    # 실제(표시·클릭 가능·연결) CTA가 없음. 다른 wired 표면이 있어야만 machine-fixable —
+    # 연결할 target이 없으면 UX patch로 CTA를 지어낼 수 없다 (fail-closed).
+    if contract.get("primary_actions"):
+        cta = _first_screen_cta(rel, text, contract)
+        if not (cta["present"] and cta["visible"] and cta["clickable"] and cta["wired"]):
+            targets = [s for s in contract.get("cta_wired_surfaces") or [] if s != rel]
+            out.append(_diag(
+                "FIRST_SCREEN_CTA_MISSING", rel, "first_screen_cta", "control",
+                cta["evidence"] or "첫 화면 CTA 없음",
+                CATEGORY_MACHINE_FIXABLE if targets else CATEGORY_PRODUCT_REQUIREMENT,
+                "ADD_FIRST_SCREEN_CTA" if targets else None))
+
     return out
 
 
@@ -552,7 +678,8 @@ def build_ux_diagnosis(built: dict, artifact_root: Path) -> list[dict]:
 
 def _strip_op_block(text: str, op_id: str) -> str:
     text = re.sub(
-        rf"<(style|script)\s+data-ux-op=\"{op_id}\">.*?</\1>\s*", "", text, flags=re.S)
+        rf"<(style|script|div)\s+data-ux-op=\"{op_id}\"[^>]*>.*?</\1>\s*",
+        "", text, flags=re.S)
     return re.sub(rf"<meta\s[^>]*data-ux-op=\"{op_id}\"[^>]*>\s*", "", text)
 
 
@@ -812,6 +939,36 @@ def apply_operation(text: str, diag: dict, contract: dict) -> tuple[str, dict] |
         rec = _op_record(op, surface, m.group(1), "숨겨진 필수 control 영역 노출")
         return _inject_style(text, op, css), rec
 
+    if op == "ADD_FIRST_SCREEN_CTA":
+        # 이슈 #22: 첫 화면에 실제 CTA를 marker block으로 주입한다. 문구는 계약 primary
+        # action 이름 verbatim, 연결은 그 action을 실제 조작하는 wired 표면 — 임의 action/
+        # 존재하지 않는 기능 약속/제품 하드코딩 없음. target이 없으면 만들지 않는다.
+        actions = [a for a in (contract.get("primary_actions") or []) if a]
+        targets = sorted(s for s in (contract.get("cta_wired_surfaces") or [])
+                         if s != surface)
+        if not actions or not targets:
+            return None
+        target = targets[0]
+        href = posixpath.relpath(target, posixpath.dirname(surface) or ".")
+        label = "주요 작업 실행: " + ", ".join(actions[:3])
+        region = (
+            f'<div data-ux-op="{op}">'
+            f'<a id="ux-primary-cta" href="{href}" '
+            'style="display:inline-block;margin:8px;padding:8px 16px;'
+            'border:2px solid currentColor;border-radius:4px;font-weight:bold;">'
+            f'{label}</a></div>')
+        rec = _op_record(op, surface, "#ux-primary-cta",
+                         f"계약 primary action({', '.join(actions[:3])})을 조작하는 "
+                         f"표면({target})으로 연결되는 첫 화면 CTA")
+        new_text = _strip_op_block(text, op)
+        body_m = re.search(r"<body[^>]*>", new_text, re.I)
+        if body_m:
+            new_text = (new_text[:body_m.end()] + "\n" + region + "\n"
+                        + new_text[body_m.end():])
+        else:
+            new_text = region + "\n" + new_text
+        return new_text, rec
+
     if op == "CONNECT_VALIDATION_FEEDBACK":
         if not re.search(r'fetch\("?[^")]*viewer_contract\.json', text):
             return None
@@ -1059,6 +1216,13 @@ def run_ux_polish(run_dir=None, run_id=None, apply: bool = False,
     inventory_after = {s["rel"]: _surface_inventory(s["text"]) for s in after_surfaces}
     viewport_after = {s["rel"]: _viewport_check(s["text"]) for s in after_surfaces}
     keyboard_after = {s["rel"]: _keyboard_check(s["text"]) for s in after_surfaces}
+    # 이슈 #22: 첫 화면 CTA 실증 — marker가 아니라 patched 표면의 실제 요소로 판정한다.
+    # interaction artifact/action/target 부재는 정직하게 false (fail-closed).
+    cta_after = {s["rel"]: _first_screen_cta(s["rel"], s["text"], contract)
+                 for s in after_surfaces}
+    cta_ok = bool(contract.get("primary_actions")) and bool(cta_after) and all(
+        c["present"] and c["visible"] and c["clickable"] and c["wired"]
+        for c in cta_after.values())
 
     viewport_ok = all(v["narrow"]["pass"] and v["desktop"]["pass"]
                       for v in viewport_after.values())
@@ -1124,6 +1288,12 @@ def run_ux_polish(run_dir=None, run_id=None, apply: bool = False,
         "viewport_results": viewport_after,
         "keyboard_results_before": keyboard_before,
         "keyboard_results": keyboard_after,
+        "first_screen_cta": {
+            "ok": cta_ok,
+            "primary_actions": contract.get("primary_actions") or [],
+            "per_surface": cta_after,
+            "method": "정적 요소 판정 — marker 존재는 판정에 쓰지 않음 (이슈 #22 §4)",
+        },
         "js_syntax": js_checks,
         "runtime_action_refs": runtime_refs,
         "requirement_level_gaps": [d["evidence"] for d in requirement],
@@ -1154,6 +1324,7 @@ def run_ux_polish(run_dir=None, run_id=None, apply: bool = False,
         "operations_applied": len(validated_ops),
         "diagnosis_before_count": len(diagnoses),
         "machine_fixable_remaining": len(remaining_fixable),
+        "first_screen_cta_ok": cta_ok,
     }
     if ux_status == "APPLIED":
         result["status"] = "APPLIED"
