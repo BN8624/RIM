@@ -143,6 +143,50 @@ def first_replay_file(final_dir: Path) -> tuple[str | None, dict | None]:
     return None, None
 
 
+# ---------------------------------------------------------------- Replay node collection 정본 (이슈 #19 §5)
+
+NODE_MAP = "NODE_MAP"
+NODE_LIST = "NODE_LIST"
+NODE_COLLECTION_EMPTY = "NODE_COLLECTION_EMPTY"
+NODE_COLLECTION_MISSING = "NODE_COLLECTION_MISSING"
+NODE_COLLECTION_MALFORMED = "NODE_COLLECTION_MALFORMED"
+# NODE_COLLECTION_AMBIGUOUS: canonical 경로가 final_state["nodes"] 하나뿐이라 이 evaluator에서는
+# 발생하지 않는다 — 다른 키를 crawl하지 않는다(정의만 예약, 이슈 #19 §5.2).
+NODE_COLLECTION_AMBIGUOUS = "NODE_COLLECTION_AMBIGUOUS"
+
+
+def classify_node_collection(final_state) -> dict:
+    """replay final_state의 node collection을 shape-safe로 정본 분류한다 (이슈 #19 §5).
+
+    dict(NODE_MAP)와 list(NODE_LIST)는 모두 정상 canonical collection이다. 빈 collection
+    (EMPTY)·경로 부재(MISSING)·scalar/null 등 비collection(MALFORMED)을 분리하고,
+    canonical node object(dict)가 아닌 entry는 버리지 않고 malformed_entries로 센다 —
+    malformed evidence를 빈 evidence로 조용히 처리하지 않는다. 순서는 입력 순서를
+    보존한다(결정론). 어떤 입력 shape에서도 예외를 던지지 않는다."""
+    if not isinstance(final_state, dict) or "nodes" not in final_state:
+        return {"shape": NODE_COLLECTION_MISSING, "nodes": [], "identities": [],
+                "malformed_entries": 0}
+    raw = final_state["nodes"]
+    if isinstance(raw, dict):
+        if not raw:
+            return {"shape": NODE_COLLECTION_EMPTY, "nodes": [], "identities": [],
+                    "malformed_entries": 0}
+        nodes = [v for v in raw.values() if isinstance(v, dict)]
+        identities = [str(k) for k, v in raw.items() if isinstance(v, dict)]
+        return {"shape": NODE_MAP, "nodes": nodes, "identities": identities,
+                "malformed_entries": len(raw) - len(nodes)}
+    if isinstance(raw, list):
+        if not raw:
+            return {"shape": NODE_COLLECTION_EMPTY, "nodes": [], "identities": [],
+                    "malformed_entries": 0}
+        nodes = [e for e in raw if isinstance(e, dict)]
+        identities = [str(i) for i, e in enumerate(raw) if isinstance(e, dict)]
+        return {"shape": NODE_LIST, "nodes": nodes, "identities": identities,
+                "malformed_entries": len(raw) - len(nodes)}
+    return {"shape": NODE_COLLECTION_MALFORMED, "nodes": [], "identities": [],
+            "malformed_entries": 1}
+
+
 # ---------------------------------------------------------------- Viewer field evidence (§6.2)
 
 def viewer_reads_replay_evidence(viewer_src: str, replay: dict | None) -> list[str]:
@@ -153,32 +197,54 @@ def viewer_reads_replay_evidence(viewer_src: str, replay: dict | None) -> list[s
     if re.search(r"replay/[`'\"]?\s*\+|replay/\$\{|replay/\$\{?file", viewer_src) or \
             re.search(r"replay/`?\$\{file\}`?", viewer_src):
         ev.append("viewer가 replay/<scenario> 파일을 fetch함 (source)")
-    if replay:
+    if isinstance(replay, dict):
         # replay 실제 필드를 viewer가 참조하는지 (data.<field> / 하위 status 등)
         for field in ("summary", "events", "final_state"):
             if field in replay and re.search(rf"\bdata\.{field}\b", viewer_src):
                 sval = replay.get(field)
                 shown = sval if isinstance(sval, str) else f"<{type(sval).__name__}>"
                 ev.append(f"smoke가 replay 필드 '{field}'(={shown})를 읽고 viewer가 data.{field}를 표시함")
-        nodes = ((replay.get("final_state") or {}).get("nodes")) or {}
-        if nodes and re.search(r"\bnode\.status\b", viewer_src):
-            statuses = sorted({n.get("status") for n in nodes.values() if isinstance(n, dict)})
-            ev.append(f"replay 노드 status({','.join(s for s in statuses if s)})를 viewer가 node.status로 표시함")
+        # node collection은 dict(NODE_MAP)/list(NODE_LIST) 모두 canonical — shape-safe 추출 (이슈 #19)
+        info = classify_node_collection(replay.get("final_state"))
+        if info["nodes"] and re.search(r"\bnode\.status\b", viewer_src):
+            statuses = sorted({n.get("status") for n in info["nodes"]
+                               if n.get("status") is not None})
+            # status 값이 하나도 없으면 vacuous — 빈 evidence를 성공 근거로 세지 않는다 (이슈 #19 INV-7)
+            if statuses:
+                ev.append(f"replay 노드 status({','.join(s for s in statuses if s)})를 viewer가 node.status로 표시함")
     return ev
 
 
 def viewer_field_mismatches(replay: dict | None, viewer_src: str) -> list[str]:
-    """viewer가 참조하지만 replay 스키마에 없는 필드(렌더링 결함)를 찾는다 (제품성 감점 근거)."""
+    """viewer가 참조하지만 replay 스키마에 없는 필드(렌더링 결함)를 찾는다 (제품성 감점 근거).
+
+    malformed node collection/entry는 빈 evidence로 조용히 처리하지 않고 명시적 결함으로
+    반환한다 — fail-closed (이슈 #19 §8.2)."""
     out: list[str] = []
-    if not replay:
+    if replay is None:
         return out
-    fs = replay.get("final_state") or {}
-    nodes = fs.get("nodes") or {}
+    if not isinstance(replay, dict):
+        out.append(f"replay 문서가 object가 아님({type(replay).__name__}) → evidence 판정 불가 (fail-closed)")
+        return out
+    fs = replay.get("final_state")
+    if fs is not None and not isinstance(fs, dict):
+        out.append(f"replay final_state가 object가 아님({type(fs).__name__}) → evidence 판정 불가 (fail-closed)")
+        return out
+    fs = fs or {}
+    info = classify_node_collection(fs)
+    if info["shape"] == NODE_COLLECTION_MALFORMED:
+        out.append(
+            f"replay final_state.nodes가 node collection(dict/list)이 아님"
+            f"({type(fs.get('nodes')).__name__}) → node evidence 판정 불가 (fail-closed)")
+    elif info["malformed_entries"]:
+        out.append(
+            f"replay nodes에 canonical node object가 아닌 entry {info['malformed_entries']}개 "
+            f"(valid {len(info['nodes'])}개) → malformed evidence")
     edges = fs.get("edges") or []
     events = replay.get("events") or []
-    sample_node = next(iter(nodes.values()), {}) if isinstance(nodes, dict) else {}
-    sample_edge = edges[0] if edges else {}
-    sample_event = events[0] if events else {}
+    sample_node = info["nodes"][0] if info["nodes"] else {}
+    sample_edge = edges[0] if isinstance(edges, list) and edges and isinstance(edges[0], dict) else {}
+    sample_event = events[0] if isinstance(events, list) and events and isinstance(events[0], dict) else {}
     # edge from/to
     if re.search(r"edge\.from|edge\.to", viewer_src) and sample_edge and \
             ("from" not in sample_edge or "to" not in sample_edge):
@@ -198,6 +264,11 @@ def viewer_field_mismatches(replay: dict | None, viewer_src: str) -> list[str]:
     if re.search(r"node\.x|node\.y", viewer_src) and sample_node and \
             ("x" not in sample_node or "y" not in sample_node):
         out.append("viewer는 node.x/node.y로 좌표 배치하지만 replay 노드에 x/y 없음 → 노드 겹침 배치")
+    # node status — viewer가 node.status를 읽는데 어떤 canonical node에도 status가 없으면
+    # 상태 렌더링이 전부 fallback으로 빠진다 (x/y와 같은 원칙, 이슈 #19)
+    if re.search(r"\bnode\.status\b", viewer_src) and info["nodes"] and \
+            all(n.get("status") is None for n in info["nodes"]):
+        out.append(f"viewer는 node.status를 읽지만 replay 노드 키는 {sorted(sample_node)} → 노드 상태 미렌더링")
     return out
 
 

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from repo_idea_miner.factory_product_evidence import (
     challenge_id_from_run,
+    classify_node_collection,
     compare_protected_hashes,
     compute_protected_hashes,
     find_product_viewer,
@@ -78,15 +79,19 @@ def _consistency_fields(runner_out: dict | None, replay: dict | None, viewer_src
     if runner_out.get("summary") == replay.get("summary") and re.search(r"\bdata\.summary\b", viewer_src):
         fields.append(f"summary=={runner_out.get('summary')!r}")
     # (2) 노드 status: runner==replay 이고 viewer가 node.status를 표시
-    r_nodes = ((runner_out.get("final_state") or {}).get("nodes")) or {}
-    p_nodes = ((replay.get("final_state") or {}).get("nodes")) or {}
-    if r_nodes and p_nodes:
-        r_stat = {k: (v or {}).get("status") for k, v in r_nodes.items()}
-        p_stat = {k: (v or {}).get("status") for k, v in p_nodes.items()}
-        if r_stat == p_stat and re.search(r"\bnode\.status\b", viewer_src):
+    # node collection은 dict/list 모두 canonical — shape-safe 분류로 읽는다 (이슈 #19 §9)
+    r_info = classify_node_collection(runner_out.get("final_state"))
+    p_info = classify_node_collection(replay.get("final_state"))
+    if r_info["nodes"] and p_info["nodes"]:
+        r_stat = {i: n.get("status") for i, n in zip(r_info["identities"], r_info["nodes"])}
+        p_stat = {i: n.get("status") for i, n in zip(p_info["identities"], p_info["nodes"])}
+        # status 값이 전무한 vacuous 일치는 consistency 근거로 세지 않는다 (이슈 #19 INV-7)
+        if r_stat == p_stat and any(v is not None for v in r_stat.values()) and \
+                re.search(r"\bnode\.status\b", viewer_src):
             fields.append("final_state.nodes[].status")
-        if len(r_nodes) == len(p_nodes) and re.search(r"final_state\.nodes|state\.nodes", viewer_src):
-            fields.append(f"final_state.nodes 개수={len(r_nodes)}")
+        if len(r_info["nodes"]) == len(p_info["nodes"]) and \
+                re.search(r"final_state\.nodes|state\.nodes", viewer_src):
+            fields.append(f"final_state.nodes 개수={len(r_info['nodes'])}")
     # (3) events 개수: runner==replay 이고 viewer가 data.events를 순회
     if len(runner_out.get("events") or []) == len(replay.get("events") or []) and \
             re.search(r"\bdata\.events\b", viewer_src):
@@ -117,6 +122,7 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
         "openable_paths": [],
         "replay_count": 0,
         "core_node_types": [],
+        "replay_node_collection": None,
         "mismatches": [],
         "critical_failures": [],
         "unknowns": [],
@@ -215,6 +221,14 @@ def smoke_review(run_dir: Path, review_dir: Path, timeout: float = 60.0) -> dict
             result["runner_viewer_consistent"] = "unknown"
             result["unknowns"].append(f"runner↔viewer 일치 필드가 2개 미만: {fields}")
         result["mismatches"] = viewer_field_mismatches(replay, viewer_src)
+        # 빈 node evidence에도 원인을 남긴다 — NOT_APPLICABLE/EMPTY/MISSING/MALFORMED 구분 (이슈 #19 §8.4)
+        node_info = classify_node_collection(
+            replay.get("final_state") if isinstance(replay, dict) else None)
+        result["replay_node_collection"] = {
+            "shape": node_info["shape"],
+            "valid_nodes": len(node_info["nodes"]),
+            "malformed_entries": node_info["malformed_entries"],
+        }
 
     # (D) openable paths — 실제 존재하는 것만 (§10)
     for rel in (result.get("product_viewer_path"),

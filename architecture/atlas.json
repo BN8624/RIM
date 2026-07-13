@@ -383,7 +383,7 @@
    "path_pattern": "artifact_smoke_review.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 727,
+   "source_line": 741,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -401,7 +401,7 @@
    "path_pattern": "artifact_smoke_review.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 728,
+   "source_line": 742,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -1499,7 +1499,7 @@
    "path_pattern": "demo_manifest.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 751,
+   "source_line": 765,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -2606,7 +2606,7 @@
    "path_pattern": "human_review_checklist.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 772,
+   "source_line": 786,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -2741,7 +2741,7 @@
    "path_pattern": "index.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 129,
+   "source_line": 135,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -3623,7 +3623,7 @@
    "path_pattern": "phase2c0_dashboard_summary.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 797,
+   "source_line": 811,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -4316,7 +4316,7 @@
    "path_pattern": "product_fitness_report.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 747,
+   "source_line": 761,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -4334,7 +4334,7 @@
    "path_pattern": "product_fitness_report.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 748,
+   "source_line": 762,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -5333,7 +5333,7 @@
    "path_pattern": "review_no_code_hash_after.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 722,
+   "source_line": 736,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -5351,7 +5351,7 @@
    "path_pattern": "review_no_code_hash_before.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 721,
+   "source_line": 735,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -5369,7 +5369,7 @@
    "path_pattern": "review_no_code_hash_check.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 723,
+   "source_line": 737,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -5396,7 +5396,7 @@
    "path_pattern": "review_package.json",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 769,
+   "source_line": 783,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -5414,7 +5414,7 @@
    "path_pattern": "review_package.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 770,
+   "source_line": 784,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -6449,7 +6449,7 @@
    "path_pattern": "runner_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 100,
+   "source_line": 105,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -6881,7 +6881,7 @@
    "path_pattern": "sixty_second_review_script.md",
    "provenance": "AST_IO_CALL",
    "role": "PRODUCES",
-   "source_line": 773,
+   "source_line": 787,
    "source_path": "repo_idea_miner/factory_review.py",
    "symbol_id": "repo_idea_miner.factory_review"
   },
@@ -8841,7 +8841,7 @@
    }
   ],
   "private_cross_imports_outside_allowlist": [],
-  "test_count": 1217,
+  "test_count": 1239,
   "unknown_component": [],
   "unresolved_symbols": []
  },
@@ -13176,7 +13176,7 @@
     "repo_idea_miner.factory_spec_repair"
    ],
    "imports": [],
-   "loc": 212,
+   "loc": 283,
    "module": "repo_idea_miner.factory_product_evidence",
    "path": "repo_idea_miner/factory_product_evidence.py",
    "private_symbols": [
@@ -13185,7 +13185,14 @@
     "_PROTECTED_ROOTS"
    ],
    "public_symbols": [
+    "NODE_COLLECTION_AMBIGUOUS",
+    "NODE_COLLECTION_EMPTY",
+    "NODE_COLLECTION_MALFORMED",
+    "NODE_COLLECTION_MISSING",
+    "NODE_LIST",
+    "NODE_MAP",
     "challenge_id_from_run",
+    "classify_node_collection",
     "compare_protected_hashes",
     "compute_protected_hashes",
     "find_product_viewer",
@@ -13200,7 +13207,8 @@
    ],
    "tests": [
     "test_factory_review_2c0",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_replay_node_evidence_shape"
    ]
   },
   {
@@ -13707,6 +13715,7 @@
      "from": "repo_idea_miner.factory_product_evidence",
      "names": [
       "challenge_id_from_run",
+      "classify_node_collection",
       "compare_protected_hashes",
       "compute_protected_hashes",
       "find_product_viewer",
@@ -13727,7 +13736,7 @@
      ]
     }
    ],
-   "loc": 803,
+   "loc": 817,
    "module": "repo_idea_miner.factory_review",
    "path": "repo_idea_miner/factory_review.py",
    "private_symbols": [
@@ -13757,7 +13766,8 @@
     "test_factory_draft_execution_2c3",
     "test_factory_product_editor_2c2",
     "test_factory_product_polish_2c1",
-    "test_factory_review_2c0"
+    "test_factory_review_2c0",
+    "test_replay_node_evidence_shape"
    ]
   },
   {
@@ -15885,9 +15895,9 @@
   }
  ],
  "repository": {
-  "head": "ad293b9a84bdacf5d483916185f087b330a00550",
+  "head": "be1cda89f280690a1431251ce8e468cc8fb9a6cd",
   "structural_diff": true,
-  "structural_fingerprint": "7c5565e8372ad1955e8d5a3c1f9263561c6464535ba45a40b3d257acb2654615",
+  "structural_fingerprint": "1d2259d56d7a1a1430607bd2697d6d1efc259a6b3b14fcf1f7aabc8b324d76c0",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
@@ -17296,7 +17306,8 @@
    "path": "repo_idea_miner/factory_product_evidence.py",
    "related_tests": [
     "test_factory_review_2c0",
-    "test_factory_viewer_polish"
+    "test_factory_viewer_polish",
+    "test_replay_node_evidence_shape"
    ],
    "roles": [
     "invariant_target"
@@ -17446,20 +17457,21 @@
     "CANON-11"
    ],
    "component_id": "productization",
-   "end_line": 803,
+   "end_line": 817,
    "kind": "function",
    "path": "repo_idea_miner/factory_review.py",
    "related_tests": [
     "test_factory_draft_execution_2c3",
     "test_factory_product_editor_2c2",
     "test_factory_product_polish_2c1",
-    "test_factory_review_2c0"
+    "test_factory_review_2c0",
+    "test_replay_node_evidence_shape"
    ],
    "roles": [
     "orchestrator"
    ],
    "signature": "def run_review_package(run_dir: str | Path | None=None, run_id: int | None=None, db_conn=None, timeout: float=60.0) -> dict",
-   "start_line": 670,
+   "start_line": 684,
    "symbol_id": "repo_idea_miner.factory_review.run_review_package"
   },
   {
@@ -17840,6 +17852,7 @@
   "test_product_labels": "tests/test_product_labels.py",
   "test_redaction": "tests/test_redaction.py",
   "test_renderer": "tests/test_renderer.py",
+  "test_replay_node_evidence_shape": "tests/test_replay_node_evidence_shape.py",
   "test_sampler": "tests/test_sampler.py",
   "test_schema_validation": "tests/test_schema_validation.py",
   "test_serve": "tests/test_serve.py",
@@ -18278,6 +18291,10 @@
   ],
   "test_renderer": [
    "renderer"
+  ],
+  "test_replay_node_evidence_shape": [
+   "factory_product_evidence",
+   "factory_review"
   ],
   "test_sampler": [
    "sampler"
