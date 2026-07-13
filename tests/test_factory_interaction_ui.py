@@ -426,8 +426,8 @@ def test_module_has_no_challenge_hardcode():
 
 # ---------------------------------------------------------------- lane 라우팅 (§6.3)
 
-def test_lane_routes_graph_to_legacy_adapter(tmp_path, monkeypatch):
-    """graph 도메인은 legacy graph adapter(2C-2), 그 외는 generic executor로 라우팅."""
+def test_lane_routes_all_domains_to_canonical_executor(tmp_path, monkeypatch):
+    """이슈 #20: graph 포함 전 도메인이 canonical executor로 라우팅 — legacy 2C-2 우회 없음."""
     import repo_idea_miner.factory_interaction_ui as fiu
     import repo_idea_miner.factory_lane_executors as fle
     import repo_idea_miner.factory_product_editor as fpe
@@ -455,7 +455,23 @@ def test_lane_routes_graph_to_legacy_adapter(tmp_path, monkeypatch):
         {"name": "GraphState", "fields": ["nodes", "edges"], "invariants": []}]})
     fle.execute_lane("INTERACTION_UI", {"parent_run_dir": graph_run,
                                         "children_root": tmp_path / "children"})
-    assert calls == ["generic", "graph_adapter"]
+    assert calls == ["generic", "generic"]  # legacy editor 미호출
+
+
+def test_graph_lane_full_apply_via_lane_executor(tmp_path):
+    """lane executor 경유 graph 도메인 실적용 — canonical 산출물과 scope PASS."""
+    import repo_idea_miner.factory_lane_executors as fle
+
+    run = _make_domain_run(tmp_path, "flow")
+    out = fle.execute_lane("INTERACTION_UI", {"parent_run_dir": run,
+                                              "children_root": tmp_path / "children"})
+    assert out["status"] == "APPLIED", out
+    assert out["allowed_scope_check"] == "PASS"
+    assert out["protected_hash_check"] == "PASS"  # parent 불변
+    child = Path(out["child_run_dir"])
+    contract = _load(child / "workspace" / "product" / "interaction" / "contract.json")
+    assert contract["interaction_kind"] == KIND_GRAPH_EDITOR
+    assert "factory_product_editor" not in out["route"]
 
 
 def test_generated_artifacts_carry_no_fixture_id(tmp_path):

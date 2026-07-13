@@ -19,8 +19,8 @@ LANE_EXECUTOR_ROUTES = {
     "VIEWER_POLISH": "generic factory_viewer_polish.run_viewer_polish (graph 도메인만 "
                      "legacy adapter=2C-1 factory_product_polish.run_product_polish, "
                      "child copy에 apply)",
-    "INTERACTION_UI": "generic factory_interaction_ui.run_interaction_ui (graph 도메인만 "
-                      "legacy adapter=2C-2 factory_product_editor.run_product_editor, "
+    "INTERACTION_UI": "generic factory_interaction_ui.run_interaction_ui (graph 도메인 포함 — "
+                      "이슈 #20 canonical graph renderer, legacy 2C-2 adapter 라우팅 제거, "
                       "child copy에 apply)",
     "RUNNER_BACKED_DRAFT_EXECUTION":
         "generic factory_runner_backed_execution.run_runner_backed_execution (graph 도메인만 "
@@ -231,19 +231,10 @@ def _exec_viewer_polish(ctx: dict) -> dict:
 
 
 def _exec_interaction_ui(ctx: dict) -> dict:
-    # 도메인 어댑터 경계 (이슈 #5 §6.3): graph 도메인은 legacy graph adapter(2C-2 editor),
-    # 그 외는 generic interaction executor. 특정 challenge 분기 없음 — artifact 모양으로만 판단.
-    from repo_idea_miner.factory_interaction_ui import (
-        KIND_GRAPH_EDITOR,
-        detect_interaction_kind,
-        run_interaction_ui,
-    )
-    from repo_idea_miner.factory_run_layout import resolve_artifact_root
-
-    root = resolve_artifact_root(Path(ctx["parent_run_dir"]))
-    if root is not None and detect_interaction_kind(Path(root)) == KIND_GRAPH_EDITOR:
-        from repo_idea_miner.factory_product_editor import run_product_editor
-        return _exec_apply_tool("INTERACTION_UI", ctx, run_product_editor)
+    # 이슈 #20: graph 포함 전 도메인이 canonical interaction executor를 사용한다 —
+    # graph는 contract 기반 graph renderer(#19 shape 정본 재사용)로 렌더만 분기하며,
+    # legacy 2C-2 editor adapter 라우팅은 제거됨. 특정 challenge 분기 없음.
+    from repo_idea_miner.factory_interaction_ui import run_interaction_ui
     return _exec_apply_tool("INTERACTION_UI", ctx, run_interaction_ui)
 
 
