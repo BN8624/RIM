@@ -23,8 +23,8 @@ LANE_EXECUTOR_ROUTES = {
                       "이슈 #20 canonical graph renderer, legacy 2C-2 adapter 라우팅 제거, "
                       "child copy에 apply)",
     "RUNNER_BACKED_DRAFT_EXECUTION":
-        "generic factory_runner_backed_execution.run_runner_backed_execution (graph 도메인만 "
-        "legacy adapter=2C-3 factory_draft_execution.run_draft_execution, child copy에 apply)",
+        "generic factory_runner_backed_execution.run_runner_backed_execution (graph 도메인 포함 — "
+        "이슈 #21 canonical 전환, legacy 2C-3 adapter 라우팅 제거, child copy에 apply)",
     "UX_POLISH": "generic factory_ux_polish.run_ux_polish (제한된 operation catalog, "
                  "child copy에 apply — 이슈 #8)",
     "ARCHIVE": "apply 없음 — archive report 생성",
@@ -239,18 +239,9 @@ def _exec_interaction_ui(ctx: dict) -> dict:
 
 
 def _exec_draft_execution(ctx: dict) -> dict:
-    # 도메인 어댑터 경계 (이슈 #6 §4.3): graph 도메인은 legacy 2C-3 adapter(run_draft_execution),
-    # 그 외는 generic runner-backed executor. challenge/run/fixture 분기 없음 — artifact 모양만 본다.
-    from repo_idea_miner.factory_interaction_ui import (
-        KIND_GRAPH_EDITOR,
-        detect_interaction_kind,
-    )
-    from repo_idea_miner.factory_run_layout import resolve_artifact_root
-
-    root = resolve_artifact_root(Path(ctx["parent_run_dir"]))
-    if root is not None and detect_interaction_kind(Path(root)) == KIND_GRAPH_EDITOR:
-        from repo_idea_miner.factory_draft_execution import run_draft_execution
-        return _exec_apply_tool("RUNNER_BACKED_DRAFT_EXECUTION", ctx, run_draft_execution)
+    # 이슈 #21: graph 포함 전 도메인이 canonical runner-backed executor를 사용한다 —
+    # 실행 근거는 draft(interaction contract)·runner contract·fixture이며,
+    # legacy 2C-3 adapter 라우팅(2C-2 report/REVIEW_READY/green_base/human gate 전제)은 제거됨.
     from repo_idea_miner.factory_runner_backed_execution import run_runner_backed_execution
     return _exec_apply_tool("RUNNER_BACKED_DRAFT_EXECUTION", ctx, run_runner_backed_execution)
 

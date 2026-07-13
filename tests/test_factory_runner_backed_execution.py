@@ -91,7 +91,24 @@ _FILES_HANDLER = '''
             events.append({"type": "ERROR_OCCURRED", "target_id": "system"})
 '''
 
-# 세 도메인 — state-rule형 / table형 / filesystem형 (§15.5). 동일 executor로 실행돼야 한다.
+_GRAPH_HANDLER = '''
+        if kind == "visit_node":
+            nid = payload.get("node_id")
+            nodes = {n["id"]: n for n in state["GraphState"]["nodes"]}
+            if nid not in nodes:
+                errors.append("존재하지 않는 노드")
+                events.append({"type": "ERROR_OCCURRED", "target_id": str(nid)})
+                continue
+            nodes[nid]["status"] = "visited"
+            state["GraphState"]["focus_node_id"] = nid
+            events.append({"type": "NODE_VISITED", "target_id": nid})
+        else:
+            errors.append(f"unknown action: {kind}")
+            events.append({"type": "ERROR_OCCURRED", "target_id": "system"})
+'''
+
+# 네 도메인 — state-rule형 / table형 / filesystem형 / graph형 (§15.5, 이슈 #21).
+# 동일 executor로 실행돼야 한다.
 _DOMAINS = {
     "rules": {
         "handler": _RULES_HANDLER,
@@ -132,6 +149,23 @@ _DOMAINS = {
                                                "entries": ["root", "docs", "img"]}},
                     "actions": [{"type": "enter_folder", "payload": {"folder_id": "docs"}},
                                 {"type": "enter_folder", "payload": {"folder_id": "img"}}]},
+    },
+    "graph": {
+        "handler": _GRAPH_HANDLER,
+        "state_contract": {"state_entities": [
+            {"name": "GraphState", "fields": ["nodes", "edges", "focus_node_id"],
+             "invariants": ["focus_node_id는 nodes에 존재하거나 None"]}]},
+        "action_contract": {"actions": [
+            {"name": "visit_node", "input": ["node_id"],
+             "preconditions": ["node_id는 존재하는 노드"], "output": ["NODE_VISITED"]}]},
+        "fixture": {"id": "scenario_001", "case_type": "normal",
+                    "initial_state": {"GraphState": {
+                        "nodes": [{"id": "node_a", "label": "A", "status": "todo"},
+                                  {"id": "node_b", "label": "B", "status": "todo"}],
+                        "edges": [{"from": "node_a", "to": "node_b"}],
+                        "focus_node_id": None}},
+                    "actions": [{"type": "visit_node", "payload": {"node_id": "node_a"}},
+                                {"type": "visit_node", "payload": {"node_id": "node_b"}}]},
     },
 }
 
@@ -220,13 +254,14 @@ def test_missing_validation_contract(tmp_path):
     assert pre["pre_execution_status"] == "MISSING_VALIDATION_CONTRACT"
 
 
-def test_graph_kind_unsupported_here(tmp_path):
-    ws = tmp_path / "graph_run" / "workspace"
-    _dump(ws / "state_contract.json", {"state_entities": [
-        {"name": "GraphState", "fields": ["nodes", "edges"], "invariants": []}]})
-    _dump(ws / "action_contract.json", {"actions": [{"name": "add_node", "input": ["id"]}]})
-    pre = build_execution_contract(ws, timeout=30.0)
-    assert pre["pre_execution_status"] == "UNSUPPORTED_EXECUTION_KIND"
+def test_graph_kind_builds_canonical_contract(tmp_path):
+    """이슈 #21: graph 도메인도 kind 분기 없이 같은 canonical contract를 만든다."""
+    run = _prepare_with_draft(tmp_path, "graph")
+    pre = build_execution_contract(run / "workspace", timeout=30.0)
+    assert pre["pre_execution_status"] == "READY_TO_EXECUTE"
+    c = pre["contract"]
+    assert c["execution_kind"] == "action_scenario"
+    assert c["allowed_actions"] == ["visit_node"]
 
 
 def test_unsafe_runner_command_rejected(tmp_path):
@@ -437,7 +472,8 @@ def test_failed_execution_report_is_honest(tmp_path):
 
 # ---------------------------------------------------------------- §15.4 Product Loop 통합
 
-def test_lane_routes_graph_to_legacy_and_generic_to_new(tmp_path, monkeypatch):
+def test_lane_routes_all_domains_to_canonical_executor(tmp_path, monkeypatch):
+    """이슈 #21: graph 포함 전 도메인이 canonical executor로 라우팅 — legacy 2C-3 호출 0."""
     import repo_idea_miner.factory_draft_execution as fde
     import repo_idea_miner.factory_lane_executors as fle
     import repo_idea_miner.factory_runner_backed_execution as frbe
@@ -460,12 +496,10 @@ def test_lane_routes_graph_to_legacy_and_generic_to_new(tmp_path, monkeypatch):
     generic_run = _make_domain_run(tmp_path, "rules")
     fle.execute_lane("RUNNER_BACKED_DRAFT_EXECUTION",
                      {"parent_run_dir": generic_run, "children_root": tmp_path / "children"})
-    graph_run = tmp_path / "graph_parent"
-    _dump(graph_run / "workspace" / "state_contract.json", {"state_entities": [
-        {"name": "GraphState", "fields": ["nodes", "edges"], "invariants": []}]})
+    graph_run = _make_domain_run(tmp_path, "graph")
     fle.execute_lane("RUNNER_BACKED_DRAFT_EXECUTION",
                      {"parent_run_dir": graph_run, "children_root": tmp_path / "children"})
-    assert calls == ["generic", "graph_adapter"]
+    assert calls == ["generic", "generic"]
 
 
 def _judge_parts(run):

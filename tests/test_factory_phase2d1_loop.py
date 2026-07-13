@@ -57,7 +57,9 @@ def test_registry_covers_all_nine_lanes():
     # 이슈 #20: graph 포함 전 도메인이 canonical executor — legacy 2C-2 라우팅 제거
     assert "factory_interaction_ui" in LANE_EXECUTOR_ROUTES["INTERACTION_UI"]
     assert "factory_product_editor" not in LANE_EXECUTOR_ROUTES["INTERACTION_UI"]
-    assert "factory_draft_execution" in LANE_EXECUTOR_ROUTES["RUNNER_BACKED_DRAFT_EXECUTION"]
+    # 이슈 #21: graph 포함 전 도메인이 canonical executor — legacy 2C-3 라우팅 제거
+    assert "factory_runner_backed_execution" in LANE_EXECUTOR_ROUTES["RUNNER_BACKED_DRAFT_EXECUTION"]
+    assert "factory_draft_execution" not in LANE_EXECUTOR_ROUTES["RUNNER_BACKED_DRAFT_EXECUTION"]
 
 
 def test_check_allowed_scope():

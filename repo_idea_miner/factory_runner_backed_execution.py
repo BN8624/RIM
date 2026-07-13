@@ -10,10 +10,8 @@ from pathlib import Path
 
 from repo_idea_miner.factory_core_gates import run_scenario_once
 from repo_idea_miner.factory_interaction_ui import (
-    KIND_GRAPH_EDITOR,
     first_fixture,
     has_error_signal,
-    detect_interaction_kind,
 )
 from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
@@ -117,12 +115,7 @@ def build_execution_contract(artifact_root: Path, timeout: float) -> dict:
     """
     problems: list[str] = []
 
-    kind = detect_interaction_kind(artifact_root)
-    if kind == KIND_GRAPH_EDITOR:
-        return {"pre_execution_status": "UNSUPPORTED_EXECUTION_KIND",
-                "problems": ["graph 도메인은 legacy 2C-3 adapter가 담당 — lane 라우터에서 분기"],
-                "contract": None}
-
+    # 이슈 #21: graph 포함 전 도메인이 같은 canonical contract를 쓴다 — kind 분기 없음.
     draft = _load_json(artifact_root / DRAFT_REL)
     if draft is None or draft.get("supported") is not True \
             or not draft.get("available_actions") \

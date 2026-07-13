@@ -6458,7 +6458,7 @@
    "path_pattern": "runner_contract.json",
    "provenance": "AST_IO_CALL",
    "role": "CONSUMES",
-   "source_line": 134,
+   "source_line": 127,
    "source_path": "repo_idea_miner/factory_runner_backed_execution.py",
    "symbol_id": "repo_idea_miner.factory_runner_backed_execution"
   },
@@ -12052,8 +12052,7 @@
    ],
    "component": "productization",
    "imported_by": [
-    "repo_idea_miner.cli_handlers",
-    "repo_idea_miner.factory_lane_executors"
+    "repo_idea_miner.cli_handlers"
    ],
    "imports": [
     {
@@ -12403,19 +12402,6 @@
      ]
     },
     {
-     "from": "repo_idea_miner.factory_draft_execution",
-     "names": [
-      "run_draft_execution"
-     ]
-    },
-    {
-     "from": "repo_idea_miner.factory_interaction_ui",
-     "names": [
-      "KIND_GRAPH_EDITOR",
-      "detect_interaction_kind"
-     ]
-    },
-    {
      "from": "repo_idea_miner.factory_interaction_ui",
      "names": [
       "KIND_GRAPH_EDITOR",
@@ -12454,12 +12440,6 @@
      ]
     },
     {
-     "from": "repo_idea_miner.factory_run_layout",
-     "names": [
-      "resolve_artifact_root"
-     ]
-    },
-    {
      "from": "repo_idea_miner.factory_runner_backed_execution",
      "names": [
       "run_runner_backed_execution"
@@ -12484,7 +12464,7 @@
      ]
     }
    ],
-   "loc": 316,
+   "loc": 307,
    "module": "repo_idea_miner.factory_lane_executors",
    "path": "repo_idea_miner/factory_lane_executors.py",
    "private_symbols": [
@@ -13921,8 +13901,6 @@
     {
      "from": "repo_idea_miner.factory_interaction_ui",
      "names": [
-      "KIND_GRAPH_EDITOR",
-      "detect_interaction_kind",
       "first_fixture",
       "has_error_signal"
      ]
@@ -13934,7 +13912,7 @@
      ]
     }
    ],
-   "loc": 522,
+   "loc": 515,
    "module": "repo_idea_miner.factory_runner_backed_execution",
    "path": "repo_idea_miner/factory_runner_backed_execution.py",
    "private_symbols": [
@@ -15896,9 +15874,9 @@
   }
  ],
  "repository": {
-  "head": "e8526c8cc12b2d200bb284694d4f400e86cd3d6b",
+  "head": "6d04915061c368d8833231bd43d97c81c1c1c0b0",
   "structural_diff": true,
-  "structural_fingerprint": "bd221399f41953b4c1a05dc8e0f6ad8198a295a5d9455605b6fc29ad2ff2cd34",
+  "structural_fingerprint": "f56a201ef77290723ce9e40d9f0e875ff8fc487cfc65cc485773b7c1ac428209",
   "structure_snapshot": "4cf35f8a966012c4ad6966b35528b06a8e0ed72588b7e79ba3f27fe3f43f5576"
  },
  "routes": [
@@ -17173,7 +17151,7 @@
     "CANON-11"
    ],
    "component_id": "autopilot",
-   "end_line": 316,
+   "end_line": 307,
    "kind": "function",
    "path": "repo_idea_miner/factory_lane_executors.py",
    "related_tests": [
@@ -17188,7 +17166,7 @@
     "orchestrator"
    ],
    "signature": "def execute_lane(lane: str, ctx: dict) -> dict",
-   "start_line": 296,
+   "start_line": 287,
    "symbol_id": "repo_idea_miner.factory_lane_executors.execute_lane"
   },
   {
@@ -17501,7 +17479,7 @@
     "CANON-11"
    ],
    "component_id": "productization",
-   "end_line": 479,
+   "end_line": 472,
    "kind": "function",
    "path": "repo_idea_miner/factory_runner_backed_execution.py",
    "related_tests": [
@@ -17511,7 +17489,7 @@
     "orchestrator"
    ],
    "signature": "def run_runner_backed_execution(run_dir=None, run_id=None, apply: bool=False, db_conn=None, timeout: float=60.0, use_docker: bool | None=False, secrets: list[str] | None=None) -> dict",
-   "start_line": 362,
+   "start_line": 355,
    "symbol_id": "repo_idea_miner.factory_runner_backed_execution.run_runner_backed_execution"
   },
   {
