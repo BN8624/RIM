@@ -379,8 +379,10 @@ NOTES:
 - generic ux polish (`factory_ux_polish`): product surfaces → canonical UX contract
   (reuses interaction/viewer/runner contracts; ux_target_id/source_artifact_refs with
   sha256/primary_task/primary_actions/state_indicators/feedback_channels/error_channels/
-  viewport_requirements/keyboard_requirements/allowed_operations/forbidden_changes) →
-  deterministic diagnosis (15 states, static DOM/CSS/JS analysis — never subjective
+  viewport_requirements/keyboard_requirements/allowed_operations/forbidden_changes;
+  issue #22 adds cta_wired_surfaces — surfaces that verbatim-reference a contract
+  primary action and carry a labeled active button) →
+  deterministic diagnosis (16 states, static DOM/CSS/JS analysis — never subjective
   LLM screen impressions) → bounded operation catalog → marker-block patch →
   re-diagnosis validation (rollback on failure) → machine-checkable evidence →
   validator. No domain/challenge/run/filename branches
@@ -390,10 +392,10 @@ NOTES:
   features, changes contract meaning, edits domain data, redesigns pages, or fabricates
   success messages; PRODUCT_REQUIREMENT and UPSTREAM_CONTRACT defects are surfaced,
   never covered by UX patches
-- ux operation catalog: only the 12 canonical operations (CLARIFY_LABEL,
+- ux operation catalog: only the 13 canonical operations (CLARIFY_LABEL,
   EXPOSE_PRIMARY_ACTION, ADD_ACTION_FEEDBACK, EXPOSE_STATE, EXPOSE_ERROR, FIX_OVERFLOW,
   STACK_FOR_NARROW_VIEWPORT, ADD_VISIBLE_FOCUS, FIX_FOCUS_ORDER, MARK_DISABLED_REASON,
-  EXPOSE_REPLAY_POSITION, CONNECT_VALIDATION_FEEDBACK); free-form operations
+  EXPOSE_REPLAY_POSITION, CONNECT_VALIDATION_FEEDBACK, ADD_FIRST_SCREEN_CTA); free-form operations
   (MAKE_BEAUTIFUL/REDESIGN_PAGE/IMPROVE_STYLE/...) are forbidden; each operation is an
   idempotent `data-ux-op` marker block with precondition/patch_scope/validation/rollback;
   budget: 5 operations and 3 target surfaces per product, one operation per gap;
@@ -408,6 +410,20 @@ NOTES:
   (existing runner-backed evidence — UX never re-fabricates execution proof); the
   validator blocks catalog-외 operations, budget overruns, product/-외 patches, and
   included overclaims; HTTP 200/CSS-only changes/screenshots are never UX success
+- first-screen CTA semantics (issue #22): FIRST_SCREEN_CTA_MISSING fires when the
+  contract has primary actions but a surface's first screen lacks a real CTA; it is
+  machine-fixable only when another cta-wired surface exists to link to (no wired
+  target, no interaction artifact, or no primary actions → honest failure, never a
+  fabricated CTA). ADD_FIRST_SCREEN_CTA injects one marker block right after <body>
+  containing a real visible anchor — label is contract action names verbatim, href
+  is the relative path to the wired surface. CTA evidence
+  (`ux_evidence.first_screen_cta`) is derived from actual elements only: present +
+  visible (no hidden/display:none/off-screen) + clickable + wired; the data-ux-op
+  marker is never consulted for PASS. The acceptance check first_screen_cta_present
+  accepts this evidence as canonical when present and otherwise keeps the legacy
+  proxy formula unchanged (additive); the validator re-derives the CTA from the
+  artifact surfaces (`recheck_first_screen_cta`) and blocks marker-only or
+  hidden/dummy overclaims
 - UX_POLISH_REQUIRED gap removal: loop closure and 60s-understandability metrics alone
   do not close the UX rung — a ux polish report (applied or UX_READY, included=true)
   is also required; once present with clean metrics the primary gap becomes None

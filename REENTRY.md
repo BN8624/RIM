@@ -11,7 +11,15 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1347개 (flaky 0) at issue #21 마감 (RBDE 테스트에 graph를
+- tests: full suite PASS ×2 연속 1360개 (flaky 0) at issue #22 마감 (first-screen CTA
+  테스트 13종 추가 — 진단 fixable/fail-closed·operation 주입/거부·숨김/더미/marker-only
+  불인정·end-to-end evidence·acceptance additive·validator 과장/marker-only 차단);
+  smoke = Fresh-G fresh loop 192058(parent 134413) UX_POLISH lane **APPLIED** — child
+  103657 viewer에 실제 CTA(계약 action 이름 verbatim, wired 콘솔로 상대경로 연결) +
+  browser 실조작(viewer 첫 화면 CTA 링크 표시 → 클릭 → Interaction Console 진입,
+  action 콘솔 실렌더) + acceptance **14/14**(first_screen_cta_present 해소) +
+  factory-validate PASS(CLI) + architecture-check PASS + parent 146파일 digest·mtime 불변
+- (이전 기록) full suite PASS ×2 연속 1347개 (flaky 0) at issue #21 마감 (RBDE 테스트에 graph를
   4번째 실행 도메인으로 추가 — 4도메인 동일 executor EXECUTED·graph canonical contract·
   전 도메인 canonical routing 검증, legacy 전제 테스트 2건 교체); smoke = Fresh-G fresh
   loop 171003(parent 134413) RBDE lane **APPLIED**(이전 EXECUTION_BLOCKED) — fresh child
@@ -84,6 +92,33 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #22 done (UX_POLISH First-Screen CTA Canonical Execution — 커밋 43e6d30 feat /
+  docs 마감 커밋):
+  root cause = UX_POLISH lane이 진단만 생성(loop NO_CHANGE 설계 한도) + acceptance
+  first_screen_cta_present가 CTA와 무관한 proxy(critical_flow_handlers_ok·
+  first_screen_understandable·clear_next_action)로만 판정 — Fresh-G는 비범위 viewer
+  mismatch(node.status/state)로 proxy가 영구 false → 13/14 자동 승격 정지.
+  수리(production 4파일) = factory_ux_polish에 FIRST_SCREEN_CTA_MISSING 진단(16번째,
+  primary action 존재+실제 CTA 부재, wired 표면 있을 때만 machine-fixable — target/
+  interaction artifact/action 부재는 정직 실패) + ADD_FIRST_SCREEN_CTA operation
+  (13번째 — <body> 직후 marker block에 실제 표시·클릭 가능한 anchor 주입, 문구=계약
+  action 이름 verbatim, 연결=wired 표면 상대경로) + first_screen_cta evidence(실제
+  요소 기반 — marker 미사용, 숨김/off-screen/더미/무연결 전부 false) + 공개
+  recheck_first_screen_cta; factory_product_loop facts/quality에
+  first_screen_cta_evidence(included report만 인정); factory_product_acceptance
+  first_screen_cta_present = CTA 실증 or 기존 proxy(additive — 기존 계산 불변);
+  factory_validate에 CTA 과장·marker-only 차단(표면 재도출). 테스트 13종, pytest ×2
+  **1360** flaky 0.
+  Fresh-G 재실증(fresh loop 192058, parent 134413 불변) = UX_POLISH lane **APPLIED**
+  (이전 NO_CHANGE), child 103657: viewer 첫 화면에 실제 CTA + browser 실조작(CTA 클릭
+  → Interaction Console 진입), acceptance 13/14→**14/14**(first_screen_cta_present
+  해소, iter3 max_stage=PRODUCT_CANDIDATE), factory-validate PASS, crash 0.
+  단 stage는 **EXECUTION_CANDIDATE 유지** — 결정론 hard blocker 2건
+  (first_screen_understandable=false·user_can_understand_value_in_60s=false)이 남았고
+  그 원인은 비범위로 유지된 viewer 실결함(node.status vs replay 'state' mismatch).
+  live 관찰: difficulty anchor coverage desk 판정이 loop마다 요동(1.0↔0.33 —
+  unknown 보수 처리, 재실행으로 fresh 재판정 가능). CANON에 first-screen CTA
+  semantics 추가.
 - Issue #21 done (Graph RUNNER_BACKED_DRAFT_EXECUTION Canonicalization — 커밋 64f06c4
   fix / docs 마감 커밋):
   root cause = graph 우회 2개소 — (1) factory_lane_executors._exec_draft_execution이
@@ -521,13 +556,16 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. Fresh-G acceptance 잔여 1건 first_screen_cta_present 해소 후 PRODUCT_CANDIDATE
-   재판정 (이슈 #21 실측 유일 추천): RBDE canonical 전환으로 G가 EXECUTION_CANDIDATE
-   13/14까지 진행했고 남은 gap은 UX 1건뿐. UX_POLISH lane은 진단만(UX_READY→loop
-   NO_CHANGE 설계 한도)이라 자동 승격 불가 — DO_NOT_REPEAT 규칙대로 execute_lane 직접
-   실행(data-ux-op marker block 주입만)으로 fresh child에 CTA patch를 남기고 재판정.
-   부수 관찰(후속 후보): G 제품 viewer 실결함 4건(제품 workspace 영역), I(#5) 시간 의미
-   결정 반복, hold_reason_class가 무개선 정지에서도 기본값 EXECUTION_BLOCKED로 찍히는
+1. graph VIEWER_POLISH lane canonical 전환(마지막 legacy 2C-1 분기) + Fresh-G viewer
+   실결함 수리 후 PRODUCT_CANDIDATE 재판정 (이슈 #22 실측 유일 추천): acceptance는
+   14/14로 완주했으나 stage 승격을 막는 결정론 hard blocker 2건
+   (first_screen_understandable·60s)의 유일 원인이 viewer mismatch(viewer는
+   node.status를 읽지만 replay 노드 키는 state — #19 때 관측된 G 제품 viewer 실결함
+   계열)다. VIEWER_POLISH는 graph를 여전히 legacy 2C-1 adapter(run_product_polish)로
+   라우팅하는 마지막 lane — #20(INTERACTION_UI)/#21(RBDE)과 동일한 canonical 전환
+   패턴을 적용하고 canonical viewer 경로에서 mismatch를 수리하면 hard blocker가
+   해소된다. 부수 관찰(후속 후보): difficulty anchor coverage desk 판정 요동(unknown
+   보수 처리 — 결정론화 검토), I(#5) 시간 의미 결정 반복, hold_reason_class 기본값
    표기 한계(stop_conditions가 정본).
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
@@ -547,6 +585,10 @@ DO_NOT_REPEAT:
 - do not touch blind batch 4 base/child runs(G 100335·134413/104032, H 105004·150755/
   153036, I 124428·161230/165512)와 loop artifact — 후속 작업은 fresh child/loop로만
   (이슈 #18 Round 1/2 기록은 불변 증거); runs/_batch4_blind/state.json이 attempt 정본
+- do not touch Fresh-G fresh child 103657와 loop 192058 artifact (이슈 #22 CTA
+  APPLIED·acceptance 14/14 실증 근거; 101154/185632는 동일 패치의 선행 실증) —
+  추가 작업은 새 fresh child/loop로만; CTA acceptance는 marker가 아니라 실제 요소
+  실증(first_screen_cta evidence)으로만 통과한다
 - do not touch Fresh-G fresh child 082117와 loop 171003 artifact (이슈 #21 RBDE
   canonical EXECUTED·EXECUTION_CANDIDATE 13/14 실증 근거) — 추가 작업은 새 fresh
   child/loop로만
