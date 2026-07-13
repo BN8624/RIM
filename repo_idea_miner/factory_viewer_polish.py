@@ -9,10 +9,6 @@ import tempfile
 import time
 from pathlib import Path
 
-from repo_idea_miner.factory_interaction_ui import (
-    KIND_GRAPH_EDITOR,
-    detect_interaction_kind,
-)
 from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
 # ---------------------------------------------------------------- 산출물 위치 (evidence ownership §8)
@@ -774,9 +770,11 @@ def _roots(run_dir: Path) -> list[Path]:
 
 def run_viewer_polish(run_dir=None, run_id=None, apply: bool = False,
                       db_conn=None, timeout: float = 60.0) -> dict:
-    """도메인 중립 VIEWER_POLISH executor. graph 도메인은 lane 라우터가 legacy adapter로 보낸다.
+    """도메인 중립 VIEWER_POLISH executor — graph 포함 전 도메인이 사용한다 (이슈 #23).
 
-    반환 계약은 lane executor(_exec_apply_tool)와 동일: applied/patched_files/problems/
+    adapter는 replay event schema shape로만 선택된다(events[].type=standard,
+    events[].event=graph legacy event, mixed/unknown=UNSUPPORTED). 반환 계약은
+    lane executor(_exec_apply_tool)와 동일: applied/patched_files/problems/
     error/ok/status. applied·ok=true는 discovery FOUND + contract valid + navigation
     실증 + JS 파싱 PASS일 때만이다 — HTML 생성/HTTP 200만으로 성공 처리하지 않는다."""
     result: dict = {"ok": False, "status": None, "applied": False, "patched_files": [],
@@ -794,11 +792,8 @@ def run_viewer_polish(run_dir=None, run_id=None, apply: bool = False,
         return result
     artifact_root = Path(artifact_root)
 
-    if detect_interaction_kind(artifact_root) == KIND_GRAPH_EDITOR:
-        result["status"] = "PRECONDITION_GRAPH_DOMAIN"
-        result["error"] = "graph 도메인은 legacy 2C-1 adapter가 담당 — lane 라우터에서 분기"
-        return result
-
+    # 이슈 #23: graph kind 거부(PRECONDITION_GRAPH_DOMAIN) 제거 — kind 분기 없이
+    # 전 도메인이 같은 canonical contract/viewer core를 쓴다.
     built = build_viewer_contract(artifact_root)
     result["discovery_status"] = built["discovery"]["status"]
     result["viewer_status"] = built["viewer_status"]

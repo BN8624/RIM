@@ -45,8 +45,9 @@ def _dump(data) -> str:
 def detect_interaction_kind(artifact_root: Path) -> str | None:
     """도메인 어댑터 경계 (§6.3): artifact 모양으로 interaction kind를 고른다.
 
-    graph 도메인(state에 nodes+edges 컬렉션)은 graph 렌더(이슈 #20/#21 — INTERACTION_UI·RBDE는
-    canonical executor, VIEWER_POLISH lane만 legacy adapter 라우팅에 이 판정을 유지)로,
+    graph 도메인(state에 nodes+edges 컬렉션)은 graph 렌더(이슈 #20/#21/#23 — INTERACTION_UI·
+    RBDE·VIEWER_POLISH 전부 canonical executor로 전환되어 lane 라우팅에는 더 이상
+    이 판정을 쓰지 않는다)로,
     tabular 도메인(state에 columns+rows 컬렉션)은 grid 렌더로, action_contract가 있는
     일반 도메인은 generic action console로. 둘 다 아니면 None."""
     state = _load_json(artifact_root / "state_contract.json") or {}

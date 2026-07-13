@@ -172,6 +172,24 @@ def _static_viewer_facts(run_dir: Path) -> dict:
     surfaces: list[tuple[Path, str]] = [
         (p, p.read_text(encoding="utf-8", errors="replace"))
         for p in sorted((final_dir / "product").rglob("*.html")) if p.is_file()]
+    facts["authoring_ui"] = any(_AUTHORING_RE.search(src) for _p, src in surfaces)
+    facts["validation_ui"] = any(_VALIDATION_UI_RE.search(src) for _p, src in surfaces)
+    # 이슈 #23: canonical viewer report(applied+included)가 있으면 canonical viewer
+    # surface(product/viewer/index.html)가 품질/mismatch 판정의 정본이다 — 다중 표면에서
+    # 정렬 순서로 unrelated interaction 표면이 viewer source가 되지 않는다. replay 읽기
+    # 근거는 report의 source replay refs(sha256)+navigation evidence로 인정한다.
+    vp_report = _load_json(run_dir / "review/viewer_polish/viewer_polish_report.json") or {}
+    canonical_viewer = final_dir / "product" / "viewer" / "index.html"
+    if vp_report.get("applied") is True \
+            and vp_report.get("viewer_polish_included") is True \
+            and canonical_viewer.is_file():
+        src = canonical_viewer.read_text(encoding="utf-8", errors="replace")
+        facts["viewer_source"] = src
+        facts["viewer_path"] = str(canonical_viewer.relative_to(run_dir).as_posix())
+        facts["viewer_reads_replay"] = True
+        facts["mismatches"] = viewer_field_mismatches(replay, src)
+        return facts
+    # canonical report가 없으면 기존 fallback: raw replay를 실제로 읽는 표면 우선
     replay_surface = next(
         ((p, src) for p, src in surfaces
          if len(viewer_reads_replay_evidence(src, replay)) >= 2), None)
@@ -180,8 +198,6 @@ def _static_viewer_facts(run_dir: Path) -> dict:
     facts["viewer_path"] = str(primary[0].relative_to(run_dir).as_posix())
     facts["viewer_reads_replay"] = replay_surface is not None
     facts["mismatches"] = viewer_field_mismatches(replay, primary[1])
-    facts["authoring_ui"] = any(_AUTHORING_RE.search(src) for _p, src in surfaces)
-    facts["validation_ui"] = any(_VALIDATION_UI_RE.search(src) for _p, src in surfaces)
     return facts
 
 

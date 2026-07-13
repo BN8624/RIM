@@ -69,6 +69,20 @@ _DOMAINS = {
                    "events": [{"type": "FOLDER_ENTERED", "target_id": "docs"},
                               {"type": "ITEM_SELECTED", "target_id": "file1"}]},
     },
+    # graph형 (이슈 #23) — Fresh-G shape: nodes는 list, 상태 필드는 state, events[].type
+    "graph": {
+        "state_contract": {"state_entities": [
+            {"name": "GraphState", "fields": ["nodes", "edges", "focus_node_id"],
+             "invariants": []}]},
+        "initial_state": {"nodes": [{"id": "n1", "state": "UNVISITED", "x": 0, "y": 0}],
+                          "edges": [], "focus_node_id": None},
+        "replay": {"ok": True, "errors": [], "summary": "1 visited",
+                   "final_state": {"nodes": [{"id": "n1", "state": "VISITED",
+                                              "x": 0, "y": 0}],
+                                   "edges": [], "focus_node_id": "n1"},
+                   "events": [{"type": "NODE_SELECTED", "node_id": "n1"},
+                              {"type": "NODE_VISITED", "node_id": "n1"}]},
+    },
 }
 
 
@@ -395,12 +409,15 @@ def test_executor_ambiguous_and_unsupported_are_explicit(tmp_path):
     assert out2["status"] == "PRECONDITION_REPLAY_UNSUPPORTED"
 
 
-def test_executor_graph_domain_routes_away(tmp_path):
-    run = _make_viewer_run(tmp_path)
-    _dump(run / "workspace" / "state_contract.json", {"state_entities": [
-        {"name": "GraphState", "fields": ["nodes", "edges"], "invariants": []}]})
+def test_executor_graph_domain_uses_canonical_path(tmp_path):
+    """이슈 #23: graph kind도 kind 분기 없이 같은 canonical executor로 APPLIED된다."""
+    run = _make_viewer_run(tmp_path, "graph")
     out = run_viewer_polish(run_dir=run, apply=True)
-    assert out["status"] == "PRECONDITION_GRAPH_DOMAIN"
+    assert out["status"] == "APPLIED" and out["applied"] is True, out["problems"]
+    assert out["viewer_kind"] == ADAPTER_STANDARD
+    assert (run / "workspace" / VIEWER_HTML_REL).is_file()
+    assert (run / "workspace" / VIEWER_CONTRACT_REL).is_file()
+    assert _check_viewer_polish_lane(run) == []
 
 
 def test_executor_zero_frame_only_is_validation_failed_not_applied(tmp_path):
@@ -502,7 +519,8 @@ def test_statuses_enums_are_closed():
 
 # ---------------------------------------------------------------- §16.6 Product Loop
 
-def test_lane_routes_graph_to_legacy_and_generic_to_new(tmp_path, monkeypatch):
+def test_lane_routes_all_domains_to_canonical_executor(tmp_path, monkeypatch):
+    """이슈 #23: graph 포함 전 도메인이 canonical viewer executor로 라우팅 — legacy 2C-1 호출 0."""
     import repo_idea_miner.factory_lane_executors as fle
     import repo_idea_miner.factory_product_polish as fpp
     import repo_idea_miner.factory_viewer_polish as fvp
@@ -525,12 +543,10 @@ def test_lane_routes_graph_to_legacy_and_generic_to_new(tmp_path, monkeypatch):
     generic_run = _make_viewer_run(tmp_path)
     fle.execute_lane("VIEWER_POLISH",
                      {"parent_run_dir": generic_run, "children_root": tmp_path / "children"})
-    graph_run = tmp_path / "graph_parent"
-    _dump(graph_run / "workspace" / "state_contract.json", {"state_entities": [
-        {"name": "GraphState", "fields": ["nodes", "edges"], "invariants": []}]})
+    graph_run = _make_viewer_run(tmp_path, "graph")
     fle.execute_lane("VIEWER_POLISH",
                      {"parent_run_dir": graph_run, "children_root": tmp_path / "children"})
-    assert calls == ["generic", "graph_adapter"]
+    assert calls == ["generic", "generic"]
 
 
 def test_lane_execution_in_child_keeps_parent_untouched(tmp_path):
@@ -646,11 +662,88 @@ def test_real_domain_runs_convert_with_same_executor(tmp_path, label):
     assert not (src / "review" / "viewer_polish").exists()
 
 
-def test_real_graph_47_routes_to_legacy(tmp_path):
+def test_real_graph_47_converts_with_canonical_executor(tmp_path):
+    """이슈 #23: #47 legacy graph replay(events[].event)도 canonical executor가
+    graph legacy event adapter로 변환한다 — tmp copy에만 apply, 원본 불변."""
     if not _GRAPH47.is_dir():
         pytest.skip("#47 run 없음")
     run = tmp_path / "graph47"
     shutil.copytree(_GRAPH47, run, ignore=shutil.ignore_patterns("__pycache__", "phase2d1"))
     out = run_viewer_polish(run_dir=run, apply=True)
-    assert out["status"] == "PRECONDITION_GRAPH_DOMAIN"
-    assert out["applied"] is False
+    assert out["applied"] is True, out["problems"]
+    assert out["viewer_kind"] == ADAPTER_GRAPH_LEGACY
+    assert _check_viewer_polish_lane(run) == []
+    assert not (_GRAPH47 / "review" / "viewer_polish").exists()
+
+
+# ---------------------------------------------------------------- 이슈 #23 Canonical Surface Selection
+
+from repo_idea_miner.factory_product_loop import extract_artifact_evidence
+
+
+_RAW_GRAPHY_INTERACTION = """<html><body><h1>Console</h1><button>실행</button>
+<script>
+"use strict";
+var node = {status: "x"};  // raw graph field 참조가 있는 unrelated 표면
+document.body.dataset.k = node.status;
+</script></body></html>"""
+
+
+def _canonical_viewer_run(tmp_path: Path, with_report: bool = True) -> Path:
+    """canonical viewer + interaction 표면이 함께 있는 run — 정렬상 interaction이 먼저다."""
+    run = _make_viewer_run(tmp_path, "graph", name="run_surface")
+    out = run_viewer_polish(run_dir=run, apply=True)
+    assert out["applied"] is True, out["problems"]
+    ws = run / "workspace"
+    (ws / "product" / "interaction").mkdir(parents=True, exist_ok=True)
+    (ws / "product" / "interaction" / "index.html").write_text(
+        _RAW_GRAPHY_INTERACTION, encoding="utf-8")
+    if not with_report:
+        shutil.rmtree(run / "review" / "viewer_polish")
+    return run
+
+
+def test_canonical_viewer_is_quality_surface_when_report_included(tmp_path):
+    """canonical report(applied+included)면 mismatch/viewer source는 canonical viewer 기준 —
+    unrelated interaction 표면의 raw graph field가 mismatch로 집계되지 않는다."""
+    run = _canonical_viewer_run(tmp_path)
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["viewer_path"].endswith("product/viewer/index.html")
+    assert facts["mismatches"] == []
+    assert facts["viewer_reads_replay"] is True
+
+
+def test_surface_fallback_unchanged_without_viewer_report(tmp_path):
+    """canonical report가 없으면 기존 fallback 유지 — 정렬 순서상 첫 index.html이 primary."""
+    run = _canonical_viewer_run(tmp_path, with_report=False)
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["viewer_path"].endswith("product/interaction/index.html")
+
+
+def test_raw_replay_reading_surface_still_selected_without_report(tmp_path):
+    """실제 raw replay를 읽는 기존 legitimate viewer 선택 의미는 report 없이도 유지된다."""
+    run = _make_viewer_run(tmp_path, "rules", name="run_raw")
+    ws = run / "workspace"
+    raw_viewer = ('<html><script>fetch("replay/index.json").then(r=>r.json());'
+                  'fetch("replay/" + file).then(r=>r.json()).then(data=>{'
+                  'document.body.textContent = JSON.stringify(data.final_state)'
+                  ' + data.summary;});</script></html>')
+    (ws / "product" / "viewer").mkdir(parents=True, exist_ok=True)
+    (ws / "product" / "viewer" / "index.html").write_text(raw_viewer, encoding="utf-8")
+    (ws / "product" / "aaa_first").mkdir(parents=True, exist_ok=True)
+    (ws / "product" / "aaa_first" / "index.html").write_text(
+        "<html><body>정적 소개 페이지</body></html>", encoding="utf-8")
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["viewer_path"].endswith("product/viewer/index.html")
+    assert facts["viewer_reads_replay"] is True
+
+
+def test_canonical_preference_requires_included_report(tmp_path):
+    """viewer report가 included=false면 canonical 우선을 적용하지 않는다 (과장 차단)."""
+    run = _canonical_viewer_run(tmp_path)
+    report_path = run / "review" / "viewer_polish" / "viewer_polish_report.json"
+    report = _load(report_path)
+    report["viewer_polish_included"] = False
+    _dump(report_path, report)
+    facts = extract_artifact_evidence(run)["facts"]
+    assert facts["viewer_path"].endswith("product/interaction/index.html")

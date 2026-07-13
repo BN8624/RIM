@@ -53,7 +53,9 @@ def test_registry_covers_all_nine_lanes():
     # 연결표가 기존 경로를 가리킨다 (§4)
     assert "factory_spec_repair" in LANE_EXECUTOR_ROUTES["SPEC_REPAIR"]
     assert "factory_continue" in LANE_EXECUTOR_ROUTES["CORE_PATCH"]
-    assert "factory_product_polish" in LANE_EXECUTOR_ROUTES["VIEWER_POLISH"]
+    # 이슈 #23: graph 포함 전 도메인이 canonical executor — legacy 2C-1 라우팅 제거
+    assert "factory_viewer_polish" in LANE_EXECUTOR_ROUTES["VIEWER_POLISH"]
+    assert "factory_product_polish" not in LANE_EXECUTOR_ROUTES["VIEWER_POLISH"]
     # 이슈 #20: graph 포함 전 도메인이 canonical executor — legacy 2C-2 라우팅 제거
     assert "factory_interaction_ui" in LANE_EXECUTOR_ROUTES["INTERACTION_UI"]
     assert "factory_product_editor" not in LANE_EXECUTOR_ROUTES["INTERACTION_UI"]
