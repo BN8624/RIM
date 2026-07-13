@@ -11,7 +11,14 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1336개 (flaky 0) at issue #19 마감 (replay node evidence
+- tests: full suite PASS ×2 연속 1347개 (flaky 0) at issue #20 마감 (graph renderer/
+  shape/probe/routing 테스트 11종 추가 — map/list/empty/missing/malformed/mixed/no-id/
+  edge 4종/console 폴백/probe 2종/lane 라우팅); smoke = dashboard(/, /products 200) +
+  Fresh-G fresh child 021959 canonical graph console runner 실증(valid action state 전이,
+  무효 3종 — missing input·존재하지 않는 action·존재하지 않는 node — 전부 명시 거부,
+  exchanges 5종 machine evidence) + factory-validate PASS + G base 100335/parent 134413/
+  기존 child 104032 protected hash·mtime 전부 baseline 일치
+- (이전 기록) full suite PASS ×2 연속 1336개 (flaky 0) at issue #19 마감 (replay node evidence
   shape 테스트 29종 추가 — dict/list/empty/missing/malformed/mixed/non-graph/vacuous);
   smoke = dashboard(/, /products 200) + Fresh-G parent 134413 scratchpad 복사본 runner
   실증(valid action UNVISITED→COMPLETED, 무효 3종 명시 거부+state 불변) + viewer browser
@@ -69,6 +76,30 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #20 done (Graph INTERACTION_UI Canonicalization — 커밋 e8526c8 feat /
+  8133104 fix / docs 마감 커밋):
+  root cause = graph INTERACTION_UI lane이 legacy 2C-2 editor adapter로 라우팅되는데
+  editor 전제(2C-1 polish 산출물·user_review_decision.md·supported_node_types)가
+  autopilot fresh 제품과 구조적으로 불일치 + generic executor가 graph를 설계상 거부
+  (PRECONDITION_GRAPH_DOMAIN) → EXECUTION_BLOCKED.
+  수리(production 2파일) = (1) factory_interaction_ui: graph_render_hints(nodes+edges
+  컨테이너 탐색, #19 classify_node_collection 재사용 — 판정 복제 0), contract graph kind
+  (core_graph_editor), 콘솔 UI에 graph SVG 패널 주입(shape-safe JS 미러 — map/list 동등,
+  node 자체 id 우선·map key fallback·임의 id 미생성, malformed node/edge·미해석 edge 계수
+  표시), graph 무효 probe 2종(존재하지 않는 action/node — contract/fixture에서 결정론
+  유도), malformed/missing fixture graph fail-closed, PRECONDITION_GRAPH_DOMAIN 제거;
+  (2) factory_lane_executors: INTERACTION_UI lane 전 도메인 canonical 라우팅(legacy
+  2C-2 분기 제거 — legacy 코드 자체는 호환용 유지). generic/table evidence 불변
+  (graph kind에서만 키 추가). 하드코드 0 (Add/Delete Node·challenge·Fresh-G 금지 토큰
+  테스트로 고정).
+  Fresh-G 재실증(fresh loop 111407, parent 134413 불변 base_hash PASS) = INTERACTION_UI
+  lane **APPLIED**(이전 BLOCKED), fresh child 021959: graph console 실증 exchanges 5종
+  (valid 전이 + 무효 3종 명시 거부), factory-validate PASS, stage REVIEWABLE_ARTIFACT→
+  **INTERACTION_CANDIDATE**, acceptance 9/14→**13/14**(잔여 1 = first_screen_cta_present),
+  crash 0. EXECUTION_BLOCKED hold는 잔존하나 원인이 이동: RUNNER_BACKED_DRAFT_EXECUTION
+  lane의 legacy 2C-3 adapter 전제 불일치(2C-2 report·REVIEW_READY·green_base·
+  user_review_decision.md·editor 마커 — 이번 이슈 비범위 명시). edge action은 G contract에
+  미선언이라 전이 실증 대상 없음(정직 보고). CANON에 graph renderer semantics 계약 추가.
 - Issue #19 done (Replay Evidence Shape-Safe Evaluator Repair — 커밋 a37bf48 fix /
   609eae2 test / d148955 fix(editor) / docs 마감 커밋):
   root cause = 복합(NODE_COLLECTION_TYPE_UNGUARDED 주 + ADJACENT_EVALUATOR_CONTRACT_DRIFT
@@ -458,17 +489,16 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. graph 도메인 INTERACTION_UI lane 경로 수리 후 Fresh-G 재판정 (이슈 #19 §27 규칙 1
-   유일 추천): lane 라우터가 state에 nodes+edges만 있으면 legacy 2C-2 editor adapter로
-   보내는데, editor는 2C-1 polish 산출물·user_review_decision.md(human gate)·
-   supported_node_types(contract/replay type 필드)를 전제 — autopilot fresh 제품은
-   전부 결여라 graph-형 신규 제품의 interaction gap이 구조적으로 EXECUTION_BLOCKED
-   (G fresh loop 실측: 정직 CANNOT_EDIT → A1 재선택 차단 → HOLD). generic interaction
-   console은 graph 도메인을 설계상 거부(factory_interaction_ui:1438). 이 라우팅/전제
-   불일치를 수리해야 G가 진행 가능. 부수 관찰(후속 후보): G 제품 viewer 실결함 4건
-   (파일명 조립 404, data.nodes vs final_state.nodes shape, node.status vs 정본 state,
-   event 필드 불일치 — 전부 제품 workspace 영역), continuation child 기록 형식
-   validate FAIL(I R2 iter03), I(#5) 시간 의미 결정 반복.
+1. graph 도메인 RUNNER_BACKED_DRAFT_EXECUTION lane 경로 수리 후 Fresh-G 재판정
+   (이슈 #20 실측 유일 추천): INTERACTION_UI 수리로 G가 INTERACTION_CANDIDATE 13/14까지
+   진행했으나, RBDE lane이 legacy 2C-3 adapter(run_draft_execution)로 라우팅되고 그 전제
+   (2C-2 editor report·verdict REVIEW_READY·green_base·user_review_decision.md·viewer
+   editor 마커)가 autopilot fresh 제품과 구조적으로 불일치 → 동일 패턴의 EXECUTION_BLOCKED
+   잔존 (G fresh loop 111407 iter2 실측 CANNOT_EXECUTE, blocker 5건). 이슈 #20에서
+   INTERACTION_UI에 적용한 canonical 전환 패턴(generic 거부 제거 + lane 분기 제거)을
+   generic factory_runner_backed_execution 경로에 적용. 부수 관찰(후속 후보): acceptance
+   잔여 1건 first_screen_cta_present(UX), G 제품 viewer 실결함 4건(제품 workspace 영역),
+   I(#5) 시간 의미 결정 반복.
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
@@ -487,6 +517,10 @@ DO_NOT_REPEAT:
 - do not touch blind batch 4 base/child runs(G 100335·134413/104032, H 105004·150755/
   153036, I 124428·161230/165512)와 loop artifact — 후속 작업은 fresh child/loop로만
   (이슈 #18 Round 1/2 기록은 불변 증거); runs/_batch4_blind/state.json이 attempt 정본
+- do not touch Fresh-G fresh child 021959와 loop 111407 artifact (이슈 #20
+  INTERACTION_CANDIDATE 13/14 실증 근거) — 추가 작업은 새 fresh child/loop로만;
+  graph interaction UI는 계약 밖 action을 노출하지 않는다(Add/Delete Node 류 하드코드
+  금지, CANON graph renderer semantics)
 - frozen golden↔runner 값 괴리를 patch lane으로 분류하지 않는다 — GOLDEN_SCHEMA_MISMATCH는
   형태 불문 requires_spec_repair=true(CANON-05), SPEC_REPAIR_REQUIRED 마커가 loop
   escalation의 유일한 트리거다

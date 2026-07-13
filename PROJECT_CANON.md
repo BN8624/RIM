@@ -235,12 +235,30 @@ NOTES:
 - generic interaction contract (`factory_interaction_ui`): domain artifact →
   interaction contract adapter → generic INTERACTION_UI executor → runtime UI →
   interaction evidence → validator. Domain meaning never lives in the core executor —
-  the graph domain routes to the legacy 2C-2 adapter by artifact shape (state has
-  nodes+edges), the tabular domain (state fields declare columns+rows AND the fixture
+  the graph domain (state fields declare nodes+edges AND the fixture initial_state
+  actually contains a nodes+edges container, top-level or entity-nested) gets the
+  canonical graph renderer inside the same executor (issue #20 — legacy 2C-2 adapter
+  routing removed from the INTERACTION_UI lane; VIEWER_POLISH and
+  RUNNER_BACKED_DRAFT_EXECUTION lanes still route graph to their legacy adapters),
+  the tabular domain (state fields declare columns+rows AND the fixture
   initial_state actually contains dict-of-dict columns/rows entities) gets the
   table-grid executor, everything else gets the action-console executor; no
   challenge/product branches. The contract reuses existing action/state/runner
   contracts and the fixture as scenario template (do not invent required fields)
+- graph renderer semantics (graph_editor kind, issue #20): the renderer owns screen
+  representation only — action exposure, payload schemas, and state transitions
+  belong to the action contract and runner (no Add/Delete-Node-style hardcoded
+  actions, no challenge/product-shape branches). Node collection classification
+  reuses the issue #19 canonical helper (`classify_node_collection`, mirrored 1:1
+  in the generated JS): map and list carry the same graph meaning, a node's own id
+  wins, a map key is only an id fallback, nodes without id never get a silently
+  invented id, empty graphs are a normal empty state, and missing or malformed
+  collections are never promoted to success. Malformed node/edge entries and
+  unresolved edge references are counted into machine-readable evidence (contract
+  render_hints + interaction evidence) and fail the smoke closed. Graph smokes
+  additionally probe nonexistent-action and nonexistent-node rejection with values
+  derived deterministically from contract/fixture; generic and table domain
+  evidence stays byte-identical
 - typed table value semantics (table_grid kind): input controls derive from the
   column's schema type string only — bool-family → explicit true/false select
   (missing selection is a client-side rejection, never a default), number-family →
