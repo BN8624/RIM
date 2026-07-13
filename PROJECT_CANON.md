@@ -654,6 +654,39 @@ REQUIREMENT_COVERAGE (이슈 #9, factory_coverage):
 - loop 소비: 유효한 fresh coverage matrix가 requirement 판정의 정본
   (desk_status=COVERAGE_MATRIX), 무효 matrix는 problems 기록 후 desk 폴백
 
+COVERAGE_AUTOMATION (이슈 #25, ensure_deterministic_coverage_matrix):
+- root cause(수리 전): fresh run에 matrix가 자동 생성되지 않아 verify_candidate()가
+  live requirement coverage desk로 fallback → transient Google 500 소진과 판정 요동
+  (1.0↔0.33↔0.67)이 동일 artifact의 acceptance를 좌우했다
+- 호출 순서: verify_candidate가 coverage desk 판정 전에 automation을 실행한다 —
+  LLM desk 먼저 실행 후 matrix 생성 구조는 금지 (§5.2)
+- 'matrix 없음'은 LLM fallback 사유가 아니라 생성 사유다. 전체 LLM coverage desk는
+  artifact root 부재(probe 구조적 불가)에서만 최후 fallback
+- 재사용 조건(전부 일치): artifact fingerprint(v2 — src+product+runner_contract;
+  v1은 legacy matrix 재검증 호환 전용) + normalized challenge digest(성공조건/anchor/
+  금지단순화 canonical JSON, 순서 보존) + probe spec digest + probe results semantic
+  digest + matrix schema version + adjudication rule version + validator PASS
+- stale rebuild: fingerprint/digest 불일치 → desk 폴백 대신 fresh probe 재실행으로
+  자동 재생성(REBUILT_STALE). child run은 coverage evidence(matrix/probe 결과/
+  adjudication)를 상속하지 않는다(fresh candidate) — probe spec만 challenge 계약으로
+  상속해 lineage 전체에서 판정 계획을 고정한다
+- adjudication_mode 경계: DETERMINISTIC_RUNTIME/STATIC/CONTRACT(probe 실행 결과만 정본,
+  LLM desk 호출 금지) | SEMANTIC_ADJUDICATION(제한 fallback 후보) | INVALID_REQUIREMENT.
+  semantic row만 별도 desk로 판정하고 strict 검증(실존 evidence ref 필수, 무효 판정은
+  AMBIGUOUS로만 강등) 후 matrix에 병합 — deterministic row의 LLM 재판정 금지
+- probe spec 생성: LLM은 후보 제안만. 결정론적 재검증(check kind/op/glob/actions/
+  covers/분류 전수) 하나라도 실패 시 제안 전체 거부 → 전면 semantic 강등(fail-closed).
+  형태 편차({probe:{...}} 래핑, checks dict, covers 문자열)는 스키마 canonicalize가
+  정규화. 프롬프트는 실제 fixtures scenario/golden output을 정본 shape로 고정
+- 실패 분류(§5.8): COVERAGE_MATRIX_GENERATION_FAILED / COVERAGE_PROBE_FAILED /
+  COVERAGE_MATRIX_INVALID / COVERAGE_STALE_REBUILD_FAILED /
+  COVERAGE_SEMANTIC_ADJUDICATION_REQUIRED / COVERAGE_SEMANTIC_INFRA_FAIL /
+  COVERAGE_REQUIREMENT_INVALID. transient 500은 절대 NOT_COVERED로 변환하지 않는다 —
+  loop는 coverage infra 실패에 repair lane 없이 infra retry/hold 정책 적용
+- 결정론: canonical matrix 파일에 시각 metadata 없음(meta 분리) — 동일 입력이면
+  byte-identical, matrix semantic digest로 재현성 비교. lineage에 coverage provenance
+  (source/action/fingerprint/digests/row counts/desk calls) 기록 (§5.9)
+
 QUERY:
 - architecture-context --canon CANON-10
 

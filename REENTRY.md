@@ -11,7 +11,21 @@ STATE_SNAPSHOT:
 - branch: main
 
 SYSTEM_STATUS:
-- tests: full suite PASS ×2 연속 1379개 (flaky 0) at issue #24 마감 (viewer gap override
+- tests: full suite PASS ×2 연속 1407개 (flaky 0) at issue #25 마감 (coverage automation
+  테스트 28종 추가 — 자동 생성/재사용/stale rebuild/challenge digest/byte-identical/
+  semantic 제한 fallback/infra 500 비변환/desk 요동 무력화/closed loop 전체 흐름);
+  architecture-build 2회 byte-identical + architecture-check PASS; smoke = Fresh-G 계보
+  fresh base 190158(142000 사본)에서 **fresh live closed loop 041106 자율 완주** —
+  iter1 judge infra retry 1회 → VIEWER_POLISH APPLIED(child 191616) → iter2 UX_POLISH
+  APPLIED(child **192108**) → "엄격한 PRODUCT_CANDIDATE 도달", acceptance 14/14,
+  gates 7/7, factory-validate PASS(CLI 재확인), coverage 1.0/1.0/0 = **SEMANTIC_MATRIX
+  자동 생성**(수동 coverage 명령/편집 0회), 반복 검증 3회 완전 동일(matrix digest
+  fb51b5a0…, REUSED, **coverage desk 호출 0회** — live executor 존재에도), lineage
+  coverage provenance(fp fa41→1a00→60b0 분리) + browser 실조작 전 항목 PASS(첫 화면
+  CTA→콘솔 진입, replay 3종, frame 1↔5 REPLAY_COMPLETE, valid action AFTER_ACTIONS
+  전이, node_zzz 명시 거부, console 오류 0, undefined 0, 375px overflow 0) + 보호 대상
+  parent 142000 375파일 digest·mtime 전부 불변
+- (이전 기록) full suite PASS ×2 연속 1379개 (flaky 0) at issue #24 마감 (viewer gap override
   테스트 14종 추가 — objective mismatch/viewer 부재/replay 미연결 override, 정상 viewer
   UX 유지, 주관 판정 비승격, hard rung 회귀, validator fail-closed, stale CTA 무효화
   +blocker, closed loop VIEWER→UX→PC 자율 완주 합성 fixture); architecture-build 2회
@@ -116,6 +130,37 @@ SYSTEM_STATUS:
 - known_flaky: []
 
 RECENT_SEMANTIC_CHANGES:
+- Issue #25 done (Deterministic Coverage Matrix Automation and Stable Acceptance —
+  커밋 83f070a feat / ae9f841 feat / 92b1406 fix / 6500e81 fix / 6d95220 fix / docs 마감
+  커밋): root cause = fresh run에 coverage matrix가 자동 생성되지 않아 verify_candidate가
+  매번 live coverage desk로 fallback — transient Google 500 소진(loop 003925)과 판정
+  요동 1.0↔0.33↔0.67(loop 005306)이 동일 artifact acceptance를 좌우.
+  수리 = ensure_deterministic_coverage_matrix 자동화(재사용→생성→stale rebuild, §5.1) +
+  normalized challenge digest/probe spec digest/probe results semantic digest/matrix
+  semantic digest 재사용 계약(§5.3-5.4) + fingerprint v2(product surface 포함, v1 legacy
+  호환) + probe spec LLM 제안 fail-closed 재검증(무효 제안 전면 semantic 강등, 형태
+  편차 canonicalize, 실제 fixtures/golden shape 프롬프트 고정, §5.5) + semantic row
+  제한 desk(실존 evidence ref 필수, 무효 판정 AMBIGUOUS 강등만, §5.6-5.7) + 실패 분류
+  7종(transient 500 → COVERAGE_SEMANTIC_INFRA_FAIL, NOT_COVERED 변환 금지, loop infra
+  retry/hold, §5.8) + coverage provenance lineage 기록(§5.9) + canonical matrix에서
+  시각 metadata 분리(byte-identical, §4.2) + child run의 coverage evidence 비상속
+  (spec만 challenge 계약으로 상속 — live 실측: §5.2 순서상 validate가 stale 상속
+  matrix에 먼저 FAIL). LLM 전체 coverage desk는 artifact root 부재에서만 fallback.
+  실측 결함 수리 3건: coverage_automation.json 직렬화 crash(desk model 객체),
+  probe spec 형태 편차({probe:{...}}/checks dict/covers 문자열), probe initial_state를
+  state_contract entity로 감싼 오추측(runner precondition 거부 → 구현된 requirement가
+  PROBE_FAILED 오판 — fixtures/golden 실물 shape 프롬프트로 수리).
+  Fresh 실증 = base 190158(142000 사본, 원본 불변): live loop 041106 자율 완주
+  VIEWER→UX→**PRODUCT_CANDIDATE 14/14**(child 192108), matrix 자동 생성(desk 호출은
+  semantic row 한정 1회/후보), 반복 검증 3회 완전 동일 + coverage desk 0회(proof B),
+  provenance 분리(proof C). 선행 시도 정직 기록: 184437 loop 034446(deterministic
+  probe 6/9 live 실행 실증 — PROBE_PROVEN COVERED 3건, probe 오추측 실패 3건 관찰),
+  190158 loop 040208(judge infra 소진 — coverage와 무관). CANON-10에
+  COVERAGE_AUTOMATION 계약 추가.
+  다음 추천 작업(정확히 1개): probe spec 제안의 deterministic 채택률 승격 — live
+  제안이 형태/DSL 재검증에서 자주 전면 semantic 강등돼 coverage 정본이 semantic
+  adjudication에 치우침. 제안 프롬프트/검증 루프(1회 재제안) 또는 normalized
+  challenge→DSL 결정론 매핑 확장으로 DETERMINISTIC_RUNTIME row 비율을 높인다.
 - Issue #24 done (Deterministic Viewer Gap Routing + Autonomous Fresh Loop Completion —
   커밋 f26a069 fix / 6494d7e fix / docs 마감 커밋):
   root cause = enforce_evidence_ladder가 hard rung만 override — objective viewer
@@ -644,20 +689,22 @@ OPEN_BLOCKERS:
     추가 수리·polish 불필요
 
 NEXT_ACTIONS:
-1. loop lane 선택 결함 수리: viewer-원인 60s gap의 UX_POLISH 고정 귀속 해소 (이슈 #23
-   실측 유일 추천): Fresh-G는 PRODUCT_CANDIDATE에 도달했지만 autopilot loop 스스로는
-   완주하지 못했다 — live judge가 user_can_understand_value_in_60s=false gap을 항상
-   UX_POLISH_REQUIRED로 귀속(원인은 viewer mismatch인데도)해 VIEWER_POLISH lane이
-   선택되지 않았고, UX lane 예산(2회) 소진 후 대체 lane 시도 없이 HOLD(6-iter 실측,
-   loop 230346). 결정론 ladder(derive_primary_gap)는 mismatch를 먼저 보지만 live
-   judge 출력이 이를 넘어선다 — gap_override 또는 hard rung으로 mismatch 존재 시
-   VIEWER_POLISH 우선을 강제하는 결정론 보강을 검토. 부수 관찰(후속 후보):
-   difficulty anchor coverage desk 판정 요동(unknown 보수 처리 — 결정론화 검토),
-   I(#5) 시간 의미 결정 반복, hold_reason_class 기본값 표기 한계.
+1. probe spec 제안의 deterministic 채택률 승격 (이슈 #25 실측 유일 추천): coverage
+   acceptance는 이제 matrix 재사용으로 결정론적이지만, live probe spec 제안이 DSL
+   fail-closed 재검증에서 자주 전면 semantic 강등돼(190158 계보 0/9, 184437 계보
+   6/9만 채택) coverage 정본이 semantic adjudication desk 1회 판정에 치우친다.
+   제안 프롬프트/검증 루프(무효 시 1회 재제안) 또는 normalized challenge→probe DSL
+   결정론 매핑 확장으로 DETERMINISTIC_RUNTIME row 비율을 높인다. 단 검증 완화 금지 —
+   probe 실행 결과만 정본, 낙관적 substring PASS 금지(CANON-10 COVERAGE_AUTOMATION).
    (그 외 deferred: golden-only 실패의 CORE_PATCH first-choice rung 검토, 대형 파일 분해,
    literal-only artifact 실증 승격, db verdict stale)
 
 DO_NOT_REPEAT:
+- do not touch 이슈 #25 실증 계보 — fresh base 190158(+loop 040208/041106), child
+  191616/192108, 선행 시도 184437(+183108/183607)/175915 삭제분 제외 기록; 추가 작업은
+  새 fresh child/loop로만. child run은 coverage evidence(matrix/probe 결과/adjudication)를
+  상속하지 않는다(probe spec만 상속) — 이 계약을 되돌리면 §5.2 순서에서 validate가
+  stale 상속 matrix에 먼저 FAIL한다
 - do not keep untracked markdown in repo root or source paths (architecture-check hard failure)
 - do not put a static current-HEAD hash back into this file (HEAD_SOURCE rule)
 - do not re-add human documentation, checklist, or Atlas HTML/serve/summary
