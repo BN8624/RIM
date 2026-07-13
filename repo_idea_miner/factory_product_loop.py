@@ -41,6 +41,7 @@ from repo_idea_miner.factory_autopilot_schemas import (
     UnifiedDecisionPacket,
     normalize_human_decision,
     validate_against_hard_blockers,
+    validate_gap_override,
     validate_human_decision_consistency,
     validate_judgment_evidence,
     validate_stage_gap_lane_consistency,
@@ -1097,6 +1098,15 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
             out["lane"]["human_decision_required"] = report["normalized_human_decision_required"]
         out["human_decision_normalization"] = report
 
+    def _check_override(gap_override) -> bool:
+        # 이슈 #24 §4.4: override 기록의 정합성은 fail-closed다 — 근거 없는 fault 주장이나
+        # 빈 reason으로 live 판정을 조용히 덮어쓰는 출력은 invalid desk output이다.
+        problems = validate_gap_override(gap_override, evidence)
+        if problems:
+            out.update(failure_type=AUTOPILOT_INVALID_OUTPUT, problems=problems)
+            return False
+        return True
+
     if gemma_mode == "unified":
         prompt = build_unified_prompt(evidence, quality, hard, LANE_TEMPLATES)
         prompts_out["unified"] = prompt
@@ -1117,6 +1127,8 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
         if gap_override:
             # gap이 바뀌면 packet의 lane/slots/blueprint는 낡은 gap 기준 — 함께 재생성한다.
             out["gap_override"] = gap_override
+            if not _check_override(gap_override):
+                return out
             out["lane"] = mock_next_lane_planner(evidence, out["gap"])
             template = LANE_TEMPLATES.get(out["lane"]["recommended_next_lane"]) or {}
             out["slots"] = mock_order_slots(evidence, out["gap"], out["lane"], template)
@@ -1149,13 +1161,16 @@ def run_judgment_desks(executor, evidence, quality, hard, gemma_mode: str, use_l
         res["raw"], evidence, quality, out["stage_label"])
     if gap_override:
         out["gap_override"] = gap_override
+        if not _check_override(gap_override):
+            return out
 
     if out["gap"].get("primary_gap") is None:
         out["status"] = "PASS"  # PRODUCT_CANDIDATE 도달 — lane/order 없음
         return out
 
-    if out["gap"]["primary_gap"] in HARD_EVIDENCE_GAPS:
-        # hard rung의 lane은 GAP_TO_LANE 고정 매핑 — live desk에 물을 판단이 없다 (§7).
+    if out["gap"]["primary_gap"] in HARD_EVIDENCE_GAPS or gap_override:
+        # hard rung과 결정론 override(이슈 #24 objective viewer fault)의 lane은
+        # GAP_TO_LANE 고정 매핑 — live desk에 물을 판단이 없다 (§7).
         out["lane"] = mock_next_lane_planner(evidence, out["gap"])
     else:
         prompt = build_lane_prompt(evidence, out["gap"])

@@ -515,6 +515,59 @@ def validate_stage_gap_lane_consistency(stage_label: dict, gap: dict, lane: dict
     return p
 
 
+# ---------------------------------------------------------------- gap override 검증 (이슈 #24 §4.4·§6.7)
+
+def validate_gap_override(override: dict | None, evidence: dict) -> list[str]:
+    """enforce_evidence_ladder가 남긴 gap_override 기록의 정합성 검사 (fail-closed).
+
+    silent mutation 금지 계약: live_gap/deterministic_gap/enforced_gap/reason이 기록돼야
+    하고, OBJECTIVE_VIEWER_FAULT는 artifact facts에 실제 machine-checkable viewer fault가
+    있을 때만 주장할 수 있다 — mismatch 0·viewer 정상인데 fault를 주장하면 invalid다.
+    """
+    if override is None:
+        return []
+    p: list[str] = []
+    facts = (evidence or {}).get("facts") or {}
+    known_refs = (evidence or {}).get("known_refs") or set()
+    for key in ("enforced_gap", "deterministic_gap", "override_kind"):
+        if not override.get(key):
+            p.append(f"gap_override: {key} 누락")
+    if "live_gap" not in override:
+        p.append("gap_override: live_gap 기록 누락")
+    if not (override.get("reason") or "").strip():
+        p.append("gap_override: override reason이 비어 있음")
+    enforced = override.get("enforced_gap")
+    if enforced is not None and enforced not in GAP_TYPES:
+        p.append(f"gap_override: 알 수 없는 enforced_gap {enforced}")
+    if override.get("deterministic_gap") != enforced:
+        p.append("gap_override: enforced_gap이 deterministic_gap과 다름")
+    refs = override.get("evidence_refs") or []
+    bad = [r for r in refs if r not in known_refs]
+    if bad:
+        p.append(f"gap_override: known refs 밖의 evidence_refs {bad[:3]}")
+    kind = override.get("override_kind")
+    if kind == "OBJECTIVE_VIEWER_FAULT":
+        if not refs:
+            p.append("gap_override: viewer fault override에 evidence_refs 없음")
+        vf = override.get("viewer_faults")
+        if not isinstance(vf, dict):
+            p.append("gap_override: viewer fault override에 viewer_faults 기록 없음")
+        # 기록이 아니라 artifact facts가 정본 — 실제 fault 없이 override 주장은 invalid
+        actual_fault = (not facts.get("viewer_exists")) \
+            or (not facts.get("viewer_reads_replay")) \
+            or len(facts.get("mismatches") or []) > 0
+        if not actual_fault:
+            p.append("gap_override: artifact facts에 machine-checkable viewer fault가 없는데 "
+                     "OBJECTIVE_VIEWER_FAULT를 주장")
+        if enforced != "VIEWER_POLISH_REQUIRED":
+            p.append(f"gap_override: OBJECTIVE_VIEWER_FAULT인데 enforced_gap={enforced}")
+    elif kind == "HARD_EVIDENCE_RUNG":
+        pass  # hard rung의 사실 근거는 derive_primary_gap이 직접 계산 — 추가 조건 없음
+    elif kind is not None:
+        p.append(f"gap_override: 알 수 없는 override_kind {kind}")
+    return p
+
+
 # ---------------------------------------------------------------- human decision 결정론 정규화 (이슈 #12)
 
 def normalize_human_decision(gap: dict | None, lane: dict) -> dict:

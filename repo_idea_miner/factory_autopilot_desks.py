@@ -476,25 +476,68 @@ HARD_EVIDENCE_GAPS = (
 )
 
 
+def viewer_fault_facts(evidence: dict) -> dict:
+    """gap override 기록용 machine-checkable viewer fact 요약 (이슈 #24 §4.4)."""
+    facts = (evidence or {}).get("facts") or {}
+    return {
+        "viewer_exists": bool(facts.get("viewer_exists")),
+        "viewer_reads_replay": bool(facts.get("viewer_reads_replay")),
+        "mismatch_count": len(facts.get("mismatches") or []),
+    }
+
+
+def is_machine_checkable_viewer_fault(evidence: dict) -> bool:
+    """artifact에서 직접 검증 가능한 objective viewer fault 여부 (이슈 #24 §4.1).
+
+    viewer 부재 / replay 미연결 / viewer-replay field mismatch만 fault다.
+    미관·제품 느낌·CTA 문구·mismatch 없는 60초 이해성 부족 같은 주관 판정은
+    이 함수의 입력(facts boolean/count)에 존재하지 않으므로 승격될 수 없다.
+    """
+    vf = viewer_fault_facts(evidence)
+    return (not vf["viewer_exists"]) or (not vf["viewer_reads_replay"]) \
+        or vf["mismatch_count"] > 0
+
+
 def enforce_evidence_ladder(gap: dict | None, evidence: dict, quality: dict,
                             stage_label: dict) -> tuple[dict | None, dict | None]:
     """hard fact rung은 live desk의 gap 판정보다 우선한다 (§7: 관측이 서술을 이긴다).
 
     deterministic ladder가 hard rung(gate 실패, runner 실행 불가 등)을 지시하는데
     live gap이 다르면 deterministic 분류로 교체하고 override 기록을 함께 돌려준다.
-    viewer/interaction/UX 같은 판단 rung은 desk 판정을 존중한다.
+
+    이슈 #24 §4.1~4.2: objective viewer fault(viewer 부재/replay 미연결/field mismatch —
+    전부 artifact에서 직접 확인)가 있고 ladder가 VIEWER_POLISH_REQUIRED를 지시하면,
+    live desk의 파생 증상 판정(UX_POLISH_REQUIRED 등)도 root cause로 교체한다.
+    viewer fault가 없는 interaction/UX 같은 판단 rung은 desk 판정을 존중한다.
     """
     ladder = derive_primary_gap(evidence, quality, stage_label)
     live = (gap or {}).get("primary_gap")
-    if ladder not in HARD_EVIDENCE_GAPS or live == ladder:
+    if ladder is None or live == ladder:
         return gap, None
-    enforced = mock_gap_classifier(evidence, quality, stage_label)
-    override = {
-        "live_gap": live,
-        "enforced_gap": ladder,
-        "reason": "deterministic evidence ladder가 hard rung을 지시 — live desk 판정을 override",
-    }
-    return enforced, override
+    if ladder in HARD_EVIDENCE_GAPS:
+        enforced = mock_gap_classifier(evidence, quality, stage_label)
+        override = {
+            "live_gap": live,
+            "deterministic_gap": ladder,
+            "enforced_gap": ladder,
+            "override_kind": "HARD_EVIDENCE_RUNG",
+            "reason": "deterministic evidence ladder가 hard rung을 지시 — live desk 판정을 override",
+            "evidence_refs": list(enforced.get("primary_gap_evidence_refs") or []),
+        }
+        return enforced, override
+    if ladder == "VIEWER_POLISH_REQUIRED" and is_machine_checkable_viewer_fault(evidence):
+        enforced = mock_gap_classifier(evidence, quality, stage_label)
+        override = {
+            "live_gap": live,
+            "deterministic_gap": ladder,
+            "enforced_gap": ladder,
+            "override_kind": "OBJECTIVE_VIEWER_FAULT",
+            "reason": "machine-checkable viewer fault outranks derived UX symptom",
+            "viewer_faults": viewer_fault_facts(evidence),
+            "evidence_refs": list(enforced.get("primary_gap_evidence_refs") or []),
+        }
+        return enforced, override
+    return gap, None
 
 
 def mock_next_lane_planner(evidence: dict, gap: dict) -> dict:
