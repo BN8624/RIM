@@ -429,6 +429,36 @@ def test_generate_probe_spec_rejects_out_of_dsl(tmp_path):
                for r in out["spec"]["requirements"])
 
 
+def test_spec_proposal_shape_drift_canonicalized(tmp_path):
+    """live 실측 형태 편차: {"probe": {...}} 래핑 + checks dict + covers 문자열 —
+    결정론적 정규화 후 strict 검증을 통과해야 한다 (판단 내용 불변)."""
+    run = _make_run(tmp_path, with_spec=False)
+    wrapped = {
+        "probes": [
+            {"probe": {"probe_id": "P1", "title": "값 저장",
+                       "initial_state": {"Entity": {"v": 1}},
+                       "actions": [{"type": "set_value", "payload": {"value": 7}}],
+                       "checks": {"final_state_path":
+                                  {"path": "Entity.v", "op": "eq", "value": 7}},
+                       "covers": "값이 저장되는가"}},
+        ],
+        "requirements": [
+            {"requirement": "값이 저장되는가", "adjudication_mode": "DETERMINISTIC_RUNTIME"},
+            {"requirement": "정수만 허용하는 검증",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION_REQUIRED"},
+            {"requirement": "검증 없는 자유 입력",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION_REQUIRED"},
+        ]}
+    executor = FakeExecutor({"coverage_probe_spec": wrapped})
+    out = generate_probe_spec(run, executor=executor)
+    assert out["ok"] is True
+    assert [p["probe_id"] for p in out["spec"]["probes"]] == ["P1"]
+    assert out["spec"]["probes"][0]["checks"][0]["kind"] == "final_state_path"
+    modes = {r["requirement_id"]: r["adjudication_mode"]
+             for r in out["spec"]["requirements"]}
+    assert modes["SC1"] == "DETERMINISTIC_RUNTIME"
+
+
 # ---------------------------------------------------------------- probe 실패 → 제품 결함으로 정직 기록
 
 def test_failing_probe_yields_not_covered_true_core_gap(tmp_path):

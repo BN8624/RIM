@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 # ---------------------------------------------------------------- Stage / Gap / Lane (§4, §13, §14)
 
@@ -285,6 +285,29 @@ class CoverageProbeProposal(BaseModel):
     actions: list[dict] | None = None
     checks: list[dict] = Field(min_length=1)
     covers: list[str] = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _canonicalize(cls, data):
+        """LLM 출력의 형태 편차를 결정론적으로 정규화한다 — 판단 내용은 바꾸지 않는다.
+
+        {"probe": {...}} 래핑 해제, checks dict({kind: params} 또는 단일 check)→list,
+        covers 단일 문자열→list. 이후 strict 스키마/DSL 검증은 그대로 적용된다."""
+        if isinstance(data, dict):
+            if set(data.keys()) == {"probe"} and isinstance(data["probe"], dict):
+                data = dict(data["probe"])
+            checks = data.get("checks")
+            if isinstance(checks, dict):
+                if "kind" in checks:
+                    data["checks"] = [checks]
+                else:
+                    data["checks"] = [
+                        {"kind": k, **(v if isinstance(v, dict) else {})}
+                        for k, v in checks.items()]
+            covers = data.get("covers")
+            if isinstance(covers, str):
+                data["covers"] = [covers]
+        return data
 
 
 class CoverageRequirementClassification(BaseModel):
