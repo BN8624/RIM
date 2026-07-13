@@ -43,8 +43,13 @@ LANE_ALLOWED_SCOPES = {
     "UX_POLISH": ("product/",),
 }
 
-# child run 복사에서 제외 — loop 자신의 bookkeeping과 로그는 계보에 속하지 않는다
-_CHILD_COPY_IGNORES = ("phase2d1", "debug", "__pycache__")
+# child run 복사에서 제외 — loop 자신의 bookkeeping과 로그는 계보에 속하지 않는다.
+# 이슈 #25 §7.3: coverage evidence(matrix/probe 결과/adjudication)는 artifact 버전
+# 종속이라 child가 상속하지 않는다 — child는 fresh candidate로서 자기 evidence만 갖는다.
+# probe spec은 challenge 계약이라 상속해 lineage 전체에서 판정 계획을 고정한다.
+_CHILD_COPY_IGNORES = ("phase2d1", "debug", "__pycache__",
+                       "coverage_matrix.json", "coverage_matrix_meta.json",
+                       "coverage_probe_results.json", "coverage_adjudication.json")
 
 
 def _load_json(path: Path) -> dict | None:

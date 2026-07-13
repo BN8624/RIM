@@ -626,8 +626,6 @@ def test_closed_loop_reaches_candidate_with_auto_matrix(tmp_path, monkeypatch):
 
     coverage 경로(automation→matrix→acceptance)는 전부 실물이고, coverage와 무관한
     무거운 검증(gate/anti-hardcode/probe/judge desk)만 고정한다 — 기본 budget 유지."""
-    import shutil
-
     import repo_idea_miner.factory_loop_executor as fle
     from repo_idea_miner import factory_validate
 
@@ -657,13 +655,15 @@ def test_closed_loop_reaches_candidate_with_auto_matrix(tmp_path, monkeypatch):
         "prompts": {}})
 
     def fix_runner_lane(lane, ctx):
-        child = Path(ctx["children_root"]) / "child01"
-        shutil.copytree(ctx["parent_run_dir"], child)
-        # fresh candidate: coverage evidence(matrix/probe 결과/adjudication)는 상속하지
-        # 않는다 (§7.3 parent matrix 재사용 금지). spec은 challenge 계약이라 재사용 가능.
-        for name in (MATRIX_NAME, PROBE_RESULTS_NAME, ADJUDICATION_NAME,
-                     "coverage_matrix_meta.json"):
-            (child / COVERAGE_SUBDIR / name).unlink(missing_ok=True)
+        from repo_idea_miner.factory_lane_executors import copy_run_as_child
+        # 실제 child 복사 계약 사용 — coverage evidence는 상속되지 않고(§7.3),
+        # probe spec은 challenge 계약으로 상속된다.
+        child = copy_run_as_child(Path(ctx["parent_run_dir"]),
+                                  Path(ctx["children_root"]) / "child01")
+        assert not (child / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+        assert not (child / COVERAGE_SUBDIR / PROBE_RESULTS_NAME).is_file()
+        assert not (child / COVERAGE_SUBDIR / ADJUDICATION_NAME).is_file()
+        assert (child / COVERAGE_SUBDIR / PROBE_SPEC_NAME).is_file()
         (child / "workspace" / "src" / "runner.py").write_text(_RUNNER, encoding="utf-8")
         return {"lane": lane, "status": "APPLIED", "child_run_dir": str(child),
                 "changed_files": ["src/runner.py"], "allowed_scope_check": "PASS",
