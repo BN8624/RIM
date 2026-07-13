@@ -660,6 +660,7 @@ def generate_probe_spec(run_dir: str | Path, *, executor=None) -> dict:
                            _build_probe_spec_prompt(run_dir, entries),
                            CoverageProbeSpecProposal)
         out["desk_called"] = True
+        out["model"] = res.get("model")
         if res["status"] == "PASS":
             raw = res["raw"] or {}
             proposal_problems = _validate_spec_proposal(raw, set(by_text))
@@ -772,6 +773,7 @@ def _adjudicate_semantic_rows(run_dir: Path, semantic_entries: list[dict],
                        _build_semantic_prompt(semantic_entries, catalog),
                        SemanticCoverageAdjudication)
     out["desk_called"] = True
+    out["model"] = res.get("model")
     if res["status"] != "PASS":
         if res.get("failure_type") == AUTOPILOT_INFRA_FAIL:
             out["ok"] = False
@@ -899,7 +901,7 @@ def ensure_deterministic_coverage_matrix(
         "semantic_row_count": 0, "validation_problems": [], "problems": [],
         "fallback_allowed": False, "failure_type": None, "infra_failure": False,
         "desk_calls": {"probe_spec": 0, "semantic": 0},
-        "invalid_requirement_count": 0,
+        "desk_models": [], "invalid_requirement_count": 0,
     }
     normalized = _load_json(run_dir / "normalized_challenge.json")
     entries = enumerate_requirements(normalized or {})
@@ -945,6 +947,8 @@ def ensure_deterministic_coverage_matrix(
     if spec is None or spec_stale or force_rebuild:
         gen = generate_probe_spec(run_dir, executor=executor)
         result["desk_calls"]["probe_spec"] += 1 if gen["desk_called"] else 0
+        if gen.get("model"):
+            result["desk_models"].append(gen["model"])
         result["problems"] += gen["problems"]
         if not gen["ok"]:
             result["failure_type"] = COVERAGE_STALE_REBUILD_FAILED if stale_rebuild \
@@ -969,6 +973,8 @@ def ensure_deterministic_coverage_matrix(
                             if r.get("adjudication_mode") == "SEMANTIC_ADJUDICATION"]
         sem = _adjudicate_semantic_rows(run_dir, semantic_entries, executor)
         result["desk_calls"]["semantic"] += 1 if sem["desk_called"] else 0
+        if sem.get("model"):
+            result["desk_models"].append(sem["model"])
         result["problems"] += sem["problems"]
         if not sem["ok"]:
             result["failure_type"] = COVERAGE_SEMANTIC_INFRA_FAIL

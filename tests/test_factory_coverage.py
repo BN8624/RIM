@@ -337,16 +337,20 @@ def test_loop_judge_prefers_valid_matrix(cov_run, monkeypatch):
     assert res["judge_coverage"]["값이 저장되는가"]["status"] == "implemented"
 
 
-def test_loop_judge_falls_back_when_matrix_invalid(cov_run):
+def test_loop_judge_rebuilds_stale_matrix_instead_of_desk_fallback(cov_run):
+    """이슈 #25 §4.3: artifact 변경으로 stale이 된 matrix는 LLM desk로 폴백하지 않고
+    fresh probe 재실행으로 자동 재생성한다 — 재생성된 matrix가 다시 정본이 된다."""
     from repo_idea_miner import factory_loop_executor as loop
     _dump(cov_run / COVERAGE_SUBDIR / ADJUDICATION_NAME, {"rows": _rows()})
     assert build_coverage_matrix(cov_run)["ok"]
     runner = cov_run / "workspace" / "src" / "runner.py"
     runner.write_text(runner.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
+    assert load_matrix_judge_coverage(cov_run)["valid"] is False  # stale 소비 금지는 유지
     res = loop._judge_requirement_coverage(cov_run, {}, {}, set(), None, use_llm=False)
-    assert res["desk_status"] != "COVERAGE_MATRIX"  # mock desk로 폴백
-    assert all(v["status"] == "unknown" for v in res["judge_coverage"].values())
-    assert any("불일치" in p or "다름" in p for p in res["problems"])
+    assert res["desk_status"] == "COVERAGE_MATRIX"  # 재생성 후 matrix 소비 (desk 미호출)
+    assert res["judge_coverage"]["값이 저장되는가"]["status"] == "implemented"
+    assert any("재사용 불가" in p for p in res["problems"])
+    assert load_matrix_judge_coverage(cov_run)["valid"] is True
 
 
 # ---------------------------------------------------------------- console persistence (§9.3 최소 구현)

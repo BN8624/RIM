@@ -474,3 +474,207 @@ def test_matrix_semantic_digest_ignores_nothing_in_canonical_file(tmp_path):
     assert "produced_at" not in matrix  # 시각 metadata는 canonical 밖 (§4.2)
     assert matrix_semantic_digest(matrix) == matrix_semantic_digest(_load(
         run / COVERAGE_SUBDIR / MATRIX_NAME))
+
+
+# ---------------------------------------------------------------- §6.13 desk 판정 요동 무력화
+
+class FluctuatingExecutor:
+    """호출마다 다른 coverage를 돌려주는 요동 desk — matrix가 유효하면 아예 호출되면 안 된다."""
+
+    def __init__(self):
+        self.calls: list[str] = []
+        self._coverages = [1.0, 0.33, 0.67]
+
+    def call(self, schema_name, prompt, model_cls):
+        self.calls.append(schema_name)
+        cov = self._coverages[len(self.calls) % 3]
+        return SimpleNamespace(model_dump=lambda: {"items": [], "coverage": cov}), "FAKE"
+
+
+def test_desk_fluctuation_neutralized_by_valid_matrix(tmp_path):
+    from repo_idea_miner import factory_loop_executor as loop
+    run = _make_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run)
+    executor = FluctuatingExecutor()
+    results = [loop._judge_requirement_coverage(run, {}, {}, set(), executor, use_llm=True)
+               for _ in range(3)]
+    assert executor.calls == []  # desk 자체가 호출되지 않는다
+    assert all(r["desk_status"] == "COVERAGE_MATRIX" for r in results)
+    assert results[0]["judge_coverage"] == results[1]["judge_coverage"] \
+        == results[2]["judge_coverage"]
+
+
+def test_matrix_absence_is_generation_reason_not_llm_fallback(tmp_path):
+    """이슈 #25 §4.5: matrix가 단순히 없다는 이유로 전체 LLM coverage desk를 호출하지 않는다."""
+    from repo_idea_miner import factory_loop_executor as loop
+    run = _make_run(tmp_path)
+    assert not (run / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+    res = loop._judge_requirement_coverage(run, {}, {}, set(), BoomExecutor(), use_llm=True)
+    assert res["desk_status"] == "COVERAGE_MATRIX"  # 자동 생성 후 matrix 소비
+    assert res["coverage_source"] == "DETERMINISTIC_MATRIX"
+
+
+def test_repeated_validation_identical_coverage(tmp_path):
+    """§7.2 unit 등가물: 동일 candidate 3회 연속 판정이 완전히 동일해야 한다."""
+    from repo_idea_miner import factory_loop_executor as loop
+    from repo_idea_miner.factory_product_acceptance import build_requirement_coverage
+    run = _make_run(tmp_path)
+    outs = []
+    for _ in range(3):
+        j = loop._judge_requirement_coverage(run, {}, {}, set(), None, use_llm=False)
+        rc = build_requirement_coverage(run, j["judge_coverage"])
+        outs.append((rc["critical_requirement_coverage"], rc["difficulty_anchor_coverage"],
+                     rc["forbidden_simplification_violation_count"],
+                     matrix_semantic_digest(_load(run / COVERAGE_SUBDIR / MATRIX_NAME))))
+    assert outs[0] == outs[1] == outs[2]
+    assert outs[0][0] == 1.0 and outs[0][1] == 1.0 and outs[0][2] == 0
+
+
+# ---------------------------------------------------------------- §6.12 loop infra retry 정책
+
+def test_loop_retries_coverage_infra_and_holds_without_repair_lane(tmp_path, monkeypatch):
+    import repo_idea_miner.factory_loop_executor as fle
+
+    run = tmp_path / "base_run"
+    (run / "workspace").mkdir(parents=True)
+
+    fake_verify = {
+        "gate_summary": {}, "anti_summary": {}, "validate_ok": True, "probe": {},
+        "profile": {},
+        "coverage": {"infra_failure": True,
+                     "desk_status": "COVERAGE_SEMANTIC_INFRA_FAIL"},
+        "judge": {"desks": {"status": "PASS",
+                            "gap": {"primary_gap": "CORE_PATCH_REQUIRED"},
+                            "lane": {"recommended_next_lane": "CORE_PATCH"}}},
+        "acceptance": {"product_candidate_allowed": False, "failed_checks": [],
+                       "max_stage": "REVIEWABLE_ARTIFACT"},
+        "vector": {}, "stage": "REVIEWABLE_ARTIFACT",
+        "effective_stage": "REVIEWABLE_ARTIFACT", "overrating_blocked": False,
+    }
+    verify_calls = []
+    monkeypatch.setattr(fle, "verify_candidate",
+                        lambda *a, **k: (verify_calls.append(1),
+                                         json.loads(json.dumps(fake_verify)))[1])
+
+    def boom_lane(lane, ctx):
+        raise AssertionError("coverage 인프라 실패에 repair lane을 실행하면 안 된다")
+
+    monkeypatch.setattr(fle, "execute_lane", boom_lane)
+    monkeypatch.setattr(fle, "compute_loop_protected_hashes", lambda p: {})
+    monkeypatch.setattr(fle, "compare_protected_hashes",
+                        lambda a, b: {"status": "PASS", "files_checked": 0,
+                                      "changed": [], "added": [], "removed": []})
+
+    res = fle.run_closed_product_loop(run_dir=run, mode="mock", execute=True)
+
+    assert len(verify_calls) == 3  # 최초 1회 + infra retry 2회
+    assert any("coverage 인프라 실패" in s for s in res["stop_conditions"])
+    assert res["hold_packet"] is not None
+    assert res["hold_packet"]["hold_reason_class"] == "EXECUTION_BLOCKED"
+
+
+# ---------------------------------------------------------------- §6.14 closed loop 전체 흐름
+
+_GOOD_PROBE = {"status": "PASS", "success_scenarios_passed": 2, "failure_scenarios_passed": 1,
+               "revise_and_rerun_changed": True, "mock_fallback_count": 0,
+               "viewer_static_ok": True, "field_consistency_ok": True,
+               "critical_flow_handlers_ok": True}
+_LOOP_CLOSED = {"can_create_or_modify_input": True, "can_validate_input": True,
+                "can_execute_primary_action": True, "can_observe_state_change": True,
+                "can_understand_success": True, "can_understand_failure": True,
+                "can_revise_and_retry": True, "product_loop_closed": True}
+_GATES = {g: True for g in ("core_contract", "runner", "scenario_replay", "golden_output",
+                            "state_invariant", "determinism", "anti_hardcode")}
+
+_BROKEN_RUNNER = _RUNNER.replace('state["Entity"]["v"] = value',
+                                 'state["Entity"]["v"] = value + 1')
+
+
+def test_closed_loop_reaches_candidate_with_auto_matrix(tmp_path, monkeypatch):
+    """§6.14: run_closed_product_loop(execute=True)가 수동 matrix 준비 없이 child의
+    coverage matrix를 자동 생성하고 acceptance 14/14 PRODUCT_CANDIDATE에 도달한다.
+
+    coverage 경로(automation→matrix→acceptance)는 전부 실물이고, coverage와 무관한
+    무거운 검증(gate/anti-hardcode/probe/judge desk)만 고정한다 — 기본 budget 유지."""
+    import shutil
+
+    import repo_idea_miner.factory_loop_executor as fle
+    from repo_idea_miner import factory_validate
+
+    parent = _make_run(tmp_path, name="parent_run")
+    # parent는 실제 수정이 필요한 gap을 가진다: runner가 값을 잘못 저장 → P1 probe FAIL
+    (parent / "workspace" / "src" / "runner.py").write_text(_BROKEN_RUNNER, encoding="utf-8")
+
+    monkeypatch.setattr(fle, "run_core_gates", lambda *a, **k: {
+        "summary": dict(_GATES), "problems": {g: [] for g in _GATES}})
+    monkeypatch.setattr(fle, "run_anti_hardcode_gate",
+                        lambda *a, **k: ({}, {"status": "PASS"}))
+    monkeypatch.setattr(fle, "run_fresh_probe", lambda *a, **k: dict(_GOOD_PROBE))
+    monkeypatch.setattr(fle, "build_capability_profile", lambda run_dir: {})
+    monkeypatch.setattr(factory_validate, "validate_product_run_dir",
+                        lambda run_dir, extra: (True, []))
+    monkeypatch.setattr(fle, "_judge", lambda *a, **k: {
+        "evidence": {"known_refs": set(), "product_loop": dict(_LOOP_CLOSED),
+                     "facts": {}, "refs": {}},
+        "quality": {"fields": {"first_screen_cta_evidence": True,
+                               "success_feedback_visible": True,
+                               "failure_feedback_visible": True}},
+        "hard": {"blockers": []},
+        "desks": {"status": "PASS", "stage_label": {"stage": "PRODUCT_CANDIDATE"},
+                  "gap": {"primary_gap": "CORE_GAP"},
+                  "lane": {"recommended_next_lane": "CORE_PATCH",
+                           "human_decision_required": False}},
+        "prompts": {}})
+
+    def fix_runner_lane(lane, ctx):
+        child = Path(ctx["children_root"]) / "child01"
+        shutil.copytree(ctx["parent_run_dir"], child)
+        # fresh candidate: coverage evidence(matrix/probe 결과/adjudication)는 상속하지
+        # 않는다 (§7.3 parent matrix 재사용 금지). spec은 challenge 계약이라 재사용 가능.
+        for name in (MATRIX_NAME, PROBE_RESULTS_NAME, ADJUDICATION_NAME,
+                     "coverage_matrix_meta.json"):
+            (child / COVERAGE_SUBDIR / name).unlink(missing_ok=True)
+        (child / "workspace" / "src" / "runner.py").write_text(_RUNNER, encoding="utf-8")
+        return {"lane": lane, "status": "APPLIED", "child_run_dir": str(child),
+                "changed_files": ["src/runner.py"], "allowed_scope_check": "PASS",
+                "protected_hash_check": "PASS", "targeted_tests": [],
+                "targeted_test_status": "PASS", "failure_signature": None,
+                "problems": [], "error": None, "underlying_status": "DONE", "route": ""}
+
+    monkeypatch.setattr(fle, "execute_lane", fix_runner_lane)
+
+    res = fle.run_closed_product_loop(run_dir=parent, mode="mock", execute=True,
+                                      output_dir=tmp_path / "children")
+
+    assert res["status"] == "PRODUCT_CANDIDATE", res["stop_conditions"]
+    assert any("엄격한 PRODUCT_CANDIDATE 도달" in s for s in res["stop_conditions"])
+    assert res["base_hash_status"] == "PASS"
+
+    child = Path(res["active_candidate_run_dir"])
+    assert child.name == "child01"
+    # child matrix가 자동 생성됐고 유효하다 — 수동 coverage 명령/편집 0회
+    assert (child / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+    assert validate_coverage_artifacts(child) == []
+    child_matrix = _load(child / COVERAGE_SUBDIR / MATRIX_NAME)
+    parent_matrix = _load(parent / COVERAGE_SUBDIR / MATRIX_NAME)
+    # §7.3: parent matrix 재사용 금지 — fingerprint/판정이 분리된다
+    assert child_matrix["artifact_fingerprint"] != parent_matrix["artifact_fingerprint"]
+    sc1_parent = next(r for r in parent_matrix["rows"] if r["requirement_id"] == "SC1")
+    sc1_child = next(r for r in child_matrix["rows"] if r["requirement_id"] == "SC1")
+    assert sc1_parent["coverage_status"] == "NOT_COVERED"  # 시작 gap 실재
+    assert sc1_child["coverage_status"] == "COVERED"
+
+    # acceptance 14/14 + coverage provenance 추적 (§5.9)
+    it1 = res["iterations"][0]
+    assert it1["metric_delta"]["product_acceptance_passed"] == 14
+    prov = it1["child_coverage_provenance"]
+    assert prov["coverage_source"] == "DETERMINISTIC_MATRIX"
+    assert prov["matrix_action"] in ("GENERATED", "REBUILT_STALE")
+    assert prov["critical_requirement_coverage"] == 1.0
+    assert prov["difficulty_anchor_coverage"] == 1.0
+    assert prov["coverage_desk_calls"] == {"probe_spec": 0, "semantic": 0}
+    lineage = _load(Path(res["loop_dir"]) / "lineage.json")
+    assert lineage["entries"][0]["parent_coverage_provenance"]["matrix_action"] in (
+        "GENERATED", "REBUILT_STALE")
+    assert lineage["entries"][0]["child_coverage_provenance"]["coverage_source"] == \
+        "DETERMINISTIC_MATRIX"

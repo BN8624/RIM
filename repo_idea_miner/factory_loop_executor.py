@@ -145,17 +145,41 @@ JSON만 출력. Schema: {{"items": [{{"requirement": "...", "status": "...", "ev
 
 
 def _judge_requirement_coverage(run_dir: Path, profile: dict, probe: dict,
-                                known_refs: set, executor, use_llm: bool) -> dict:
-    """requirement coverage를 desk로 판정하고 근거 없는 낙관 판정을 unknown으로 강등한다.
+                                known_refs: set, executor, use_llm: bool,
+                                automation: dict | None = None) -> dict:
+    """requirement coverage 정본을 deterministic matrix 자동화로 확보해 소비한다 (이슈 #25).
 
-    유효한 fresh coverage matrix(이슈 #9 — 결정론적 probe 실증 기반)가 있으면 그것이
-    정본이다. 검증 실패한 matrix는 채택하지 않고 desk 경로로 떨어진다."""
-    from repo_idea_miner.factory_coverage import load_matrix_judge_coverage
+    'matrix 없음'은 LLM fallback 사유가 아니라 생성 사유다 (§4.5) — 자동화가 matrix를
+    만들지 못하면 coverage는 정직하게 unknown으로 남고, LLM 전체 desk는 deterministic
+    probe가 구조적으로 불가능한 run(artifact root 부재)에서만 최후 fallback으로 남는다."""
+    from repo_idea_miner.factory_coverage import (
+        ensure_deterministic_coverage_matrix,
+        load_matrix_judge_coverage,
+    )
+    if automation is None:
+        automation = ensure_deterministic_coverage_matrix(
+            run_dir, executor=executor if use_llm else None)
     matrix = load_matrix_judge_coverage(run_dir)
     if matrix is not None and matrix.get("valid"):
-        return {"judge_coverage": matrix["judge_coverage"], "problems": [],
-                "desk_status": "COVERAGE_MATRIX"}
-    matrix_problems = list((matrix or {}).get("problems") or [])
+        source = "SEMANTIC_MATRIX" if automation.get("semantic_row_count") \
+            else "DETERMINISTIC_MATRIX"
+        return {"judge_coverage": matrix["judge_coverage"],
+                "problems": list(automation.get("problems") or []),
+                "desk_status": "COVERAGE_MATRIX", "coverage_source": source,
+                "infra_failure": False}
+    if automation.get("status") == "SKIPPED":
+        return {"judge_coverage": {}, "problems": [], "desk_status": "SKIPPED",
+                "coverage_source": None, "infra_failure": False}
+    if not automation.get("fallback_allowed"):
+        # transient 인프라 실패를 NOT_COVERED로 바꾸지 않는다 (§5.8) — coverage는 unknown으로
+        # 남고 실패 분류(COVERAGE_*)가 그대로 노출된다. LLM 전체 desk 호출 금지.
+        return {"judge_coverage": {},
+                "problems": list(automation.get("problems") or [])
+                + list(automation.get("validation_problems") or []),
+                "desk_status": automation.get("failure_type") or "COVERAGE_AUTOMATION_FAILED",
+                "coverage_source": None,
+                "infra_failure": bool(automation.get("infra_failure"))}
+    matrix_problems = list(automation.get("problems") or [])
     normalized = _load_json(run_dir / "normalized_challenge.json") or {}
     requirements = [str(r) for r in
                     (normalized.get("success_conditions") or [])
@@ -181,7 +205,8 @@ def _judge_requirement_coverage(run_dir: Path, profile: dict, probe: dict,
                 status = "unknown"
             judged[str(item.get("requirement"))] = {
                 "status": status, "evidence_refs": refs, "reason": item.get("reason", "")}
-    return {"judge_coverage": judged, "problems": problems, "desk_status": res["status"]}
+    return {"judge_coverage": judged, "problems": problems, "desk_status": res["status"],
+            "coverage_source": "LLM_FALLBACK", "infra_failure": False}
 
 
 # ---------------------------------------------------------------- 검증 체인 (§14)
@@ -243,11 +268,21 @@ def verify_candidate(run_dir: Path, out_dir: Path,
         "problems": desks.get("problems") or [],
     })
 
+    # 이슈 #25 §5.2: coverage desk 판정 전에 deterministic matrix 자동화를 먼저 실행한다 —
+    # LLM desk가 먼저 실행된 뒤 matrix를 만드는 구조는 금지.
+    from repo_idea_miner.factory_coverage import ensure_deterministic_coverage_matrix
+    automation = ensure_deterministic_coverage_matrix(
+        run_dir, executor=executor if use_llm else None, timeout=timeout)
+    _write_json(out_dir / "coverage_automation.json", automation)
+
     coverage_judgment = _judge_requirement_coverage(
-        run_dir, profile, probe, judge["evidence"]["known_refs"], executor, use_llm)
+        run_dir, profile, probe, judge["evidence"]["known_refs"], executor, use_llm,
+        automation=automation)
     coverage = build_requirement_coverage(run_dir, coverage_judgment["judge_coverage"])
     coverage["desk_status"] = coverage_judgment["desk_status"]
     coverage["problems"] = coverage_judgment["problems"]
+    coverage["coverage_source"] = coverage_judgment.get("coverage_source")
+    coverage["infra_failure"] = bool(coverage_judgment.get("infra_failure"))
     _write_json(out_dir / "requirement_coverage.json", coverage)
 
     loop_evidence = judge["evidence"]["product_loop"]
@@ -266,10 +301,28 @@ def verify_candidate(run_dir: Path, out_dir: Path,
     vector = build_progress_vector(effective_stage, gate_summary, acceptance, hard_count,
                                    coverage, loop_evidence, probe)
     _write_json(out_dir / "progress_vector.json", vector)
+    # 이슈 #25 §5.9: 최종 판정이 어떤 coverage 증거로 승인됐는지 추적 가능해야 한다
+    coverage_provenance = {
+        "coverage_source": coverage.get("coverage_source"),
+        "matrix_action": automation.get("action"),
+        "artifact_fingerprint": automation.get("artifact_fingerprint"),
+        "challenge_digest": automation.get("challenge_digest"),
+        "matrix_semantic_digest": automation.get("matrix_semantic_digest"),
+        "deterministic_row_count": automation.get("deterministic_row_count"),
+        "semantic_row_count": automation.get("semantic_row_count"),
+        "coverage_desk_calls": automation.get("desk_calls"),
+        "coverage_desk_models": automation.get("desk_models"),
+        "coverage_infra_failure": bool(automation.get("infra_failure")),
+        "critical_requirement_coverage": coverage.get("critical_requirement_coverage"),
+        "difficulty_anchor_coverage": coverage.get("difficulty_anchor_coverage"),
+        "forbidden_violation_count":
+            coverage.get("forbidden_simplification_violation_count"),
+    }
     return {
         "gate_summary": gate_summary, "anti_summary": anti_summary,
         "validate_ok": validate_ok, "probe": probe, "profile": profile,
         "judge": judge, "coverage": coverage, "acceptance": acceptance,
+        "coverage_provenance": coverage_provenance,
         "vector": vector, "stage": stage, "effective_stage": effective_stage,
         "overrating_blocked": stage == "PRODUCT_CANDIDATE"
         and not acceptance["product_candidate_allowed"],
@@ -404,6 +457,23 @@ def run_closed_product_loop(
                                              timeout=timeout, use_docker=use_docker,
                                              secrets=secrets, gemma_mode=gemma_mode)
         v = parent_verify
+        # 이슈 #25 §6.12: coverage transient 인프라 실패는 제품 미구현이 아니다 —
+        # repair lane 대신 infra retry/hold 정책을 적용한다.
+        if (v.get("coverage") or {}).get("infra_failure"):
+            if infra_retries < b["max_infra_retries"]:
+                infra_retries += 1
+                it.update(coverage_infra_retry=infra_retries,
+                          coverage_desk_status=(v["coverage"] or {}).get("desk_status"))
+                result["iterations"].append(it)
+                parent_verify = None  # 재시도
+                iteration -= 1
+                continue
+            stop.append("coverage 인프라 실패 (재시도 소진)")
+            hold_reason = f"coverage 자동화 인프라 실패: {(v['coverage'] or {}).get('desk_status')}"
+            hold_reason_class = "EXECUTION_BLOCKED"
+            it.update(coverage_desk_status=(v["coverage"] or {}).get("desk_status"))
+            result["iterations"].append(it)
+            break
         desks = v["judge"]["desks"]
         if desks["status"] != "PASS":
             ftype = desks.get("failure_type")
@@ -531,6 +601,8 @@ def run_closed_product_loop(
             "selected_lane": lane,
             "primary_gap_before": gap,
             "stage_before": stage,
+            # 이슈 #25 §5.9: coverage provenance — 어떤 증거로 승인됐는지 추적
+            "parent_coverage_provenance": v.get("coverage_provenance"),
         })
 
         if "SPEC_REPAIR_REQUIRED" in (lane_result.get("problems") or []):
@@ -583,10 +655,13 @@ def run_closed_product_loop(
         _write_json(it_dir / "progress_comparison.json", progress)
         it.update(stage_after=child_verify["effective_stage"],
                   progress=progress["verdict"],
+                  child_coverage_provenance=child_verify.get("coverage_provenance"),
                   metric_delta={k: child_verify["vector"].get(k) for k in
                                 ("stage_rank", "core_gates_passed", "product_acceptance_passed",
                                  "success_scenarios_passed", "failure_scenarios_passed",
                                  "mock_fallback_count", "regression_count")})
+        if lineage:
+            lineage[-1]["child_coverage_provenance"] = child_verify.get("coverage_provenance")
 
         if progress["meaningful_progress"]:
             parent_run_dir = child

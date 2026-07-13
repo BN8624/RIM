@@ -38,9 +38,12 @@ def _run_mock(tmp_path):
 
 
 def _snapshot(run_dir: Path) -> dict:
+    # 이슈 #25: review/coverage는 검증이 자동 생성하는 추가 evidence다 — artifact 불변
+    # 검사 대상은 phase2d1 loop 산출물과 coverage 산출물을 제외한 나머지 전부.
     return {p.relative_to(run_dir).as_posix(): p.stat().st_size
             for p in sorted(run_dir.rglob("*"))
-            if p.is_file() and "phase2d1" not in p.as_posix()}
+            if p.is_file() and "phase2d1" not in p.as_posix()
+            and "review/coverage" not in p.as_posix()}
 
 
 # ---------------------------------------------------------------- registry (§4, §15-2)
