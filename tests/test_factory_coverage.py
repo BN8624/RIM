@@ -208,14 +208,13 @@ def test_missing_difficulty_anchor_rejected(cov_run):
 
 
 def test_deterministic_serialization(cov_run):
+    # 이슈 #25 §4.2: canonical matrix에는 시각 metadata가 없다 — byte-identical이 정본
     _dump(cov_run / COVERAGE_SUBDIR / ADJUDICATION_NAME, {"rows": _rows()})
     build_coverage_matrix(cov_run)
     b1 = (cov_run / COVERAGE_SUBDIR / MATRIX_NAME).read_bytes()
-    m1 = json.loads(b1)
     build_coverage_matrix(cov_run)
-    m2 = json.loads((cov_run / COVERAGE_SUBDIR / MATRIX_NAME).read_bytes())
-    m1.pop("produced_at"); m2.pop("produced_at")
-    assert m1 == m2
+    b2 = (cov_run / COVERAGE_SUBDIR / MATRIX_NAME).read_bytes()
+    assert b1 == b2
 
 
 def test_no_challenge_hardcode_in_production_module():

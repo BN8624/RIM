@@ -274,6 +274,48 @@ class RequirementCoverageJudgment(BaseModel):
     items: list[RequirementCoverageItem] = Field(default_factory=list)
 
 
+class CoverageProbeProposal(BaseModel):
+    """coverage probe spec desk가 제안하는 probe 1개 (이슈 #25 §5.5).
+
+    LLM은 후보를 제안할 뿐이다 — check kind/glob/actions는 factory_coverage의
+    결정론적 validator가 재검증하고, 실제 probe 실행 결과만 정본이 된다."""
+    probe_id: str = Field(min_length=1)
+    title: str = ""
+    initial_state: dict = Field(default_factory=dict)
+    actions: list[dict] | None = None
+    checks: list[dict] = Field(min_length=1)
+    covers: list[str] = Field(min_length=1)
+
+
+class CoverageRequirementClassification(BaseModel):
+    """requirement 1건의 adjudication_mode 분류 (이슈 #25 §4.6)."""
+    requirement: str = Field(min_length=1)
+    adjudication_mode: str
+    reason: str = ""
+
+
+class CoverageProbeSpecProposal(BaseModel):
+    """coverage probe spec desk 출력 — 전 requirement 분류 + deterministic probe 후보."""
+    probes: list[CoverageProbeProposal] = Field(default_factory=list)
+    requirements: list[CoverageRequirementClassification] = Field(min_length=1)
+
+
+class SemanticCoverageItem(BaseModel):
+    """semantic adjudication desk의 requirement 1건 판정 (이슈 #25 §5.7).
+
+    COVERED는 실제 존재하는 evidence_refs 최소 1개 필수 — 검증은 factory_coverage가 한다."""
+    requirement: str = Field(min_length=1)
+    coverage_status: str
+    failure_class: str
+    reason_code: str = Field(min_length=1)
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
+class SemanticCoverageAdjudication(BaseModel):
+    """semantic requirement 전용 제한 fallback desk 출력 — matrix 병합 후에만 소비된다."""
+    items: list[SemanticCoverageItem] = Field(default_factory=list)
+
+
 class GapItem(BaseModel):
     type: str
     severity: str
@@ -422,11 +464,16 @@ def _enum_problems(payload: dict) -> list[str]:
     return problems
 
 
+# 제품 도메인 payload(runner action type 등)를 담는 desk — desk enum 재귀 검사 대상이 아니고,
+# factory_coverage의 결정론적 probe spec validator가 fail-closed로 재검증한다 (이슈 #25 §5.5)
+_PRODUCT_PAYLOAD_SCHEMAS = ("coverage_probe_spec",)
+
+
 def validate_desk_output(schema_name: str, raw, model_cls: type[BaseModel]) -> tuple[BaseModel | None, list[str]]:
     """desk 출력을 strict 스키마로 검증한다. (model|None, problems) 반환 — 자연어만으로는 통과 불가."""
     if not isinstance(raw, dict):
         return None, [f"{schema_name}: JSON 객체가 아님 ({type(raw).__name__})"]
-    problems = _enum_problems(raw)
+    problems = [] if schema_name in _PRODUCT_PAYLOAD_SCHEMAS else _enum_problems(raw)
     if problems:
         return None, [f"{schema_name}: {p}" for p in problems]
     try:

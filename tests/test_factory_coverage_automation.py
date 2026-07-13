@@ -1,0 +1,476 @@
+# 이슈 #25: deterministic coverage matrix automation — 생성/재사용/stale rebuild/semantic fallback 제한.
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from repo_idea_miner.factory_coverage import (
+    ADJUDICATION_NAME,
+    COVERAGE_PROBE_FAILED,
+    COVERAGE_SEMANTIC_INFRA_FAIL,
+    COVERAGE_SUBDIR,
+    FINGERPRINT_VERSION,
+    MATRIX_NAME,
+    PROBE_RESULTS_NAME,
+    PROBE_SPEC_NAME,
+    artifact_fingerprint,
+    ensure_deterministic_coverage_matrix,
+    generate_probe_spec,
+    load_matrix_judge_coverage,
+    matrix_semantic_digest,
+    normalized_challenge_digest,
+    validate_coverage_artifacts,
+)
+from repo_idea_miner.factory_desks import DeskError
+
+
+def _dump(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _load(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+_RUNNER = '''
+import argparse, json
+parser = argparse.ArgumentParser()
+parser.add_argument("--scenario", required=True)
+args = parser.parse_args()
+with open(args.scenario, encoding="utf-8") as f:
+    scenario = json.load(f)
+state = scenario["initial_state"]
+events = []
+errors = []
+for action in scenario.get("actions", []):
+    if action["type"] == "set_value":
+        value = action["payload"].get("value")
+        if not isinstance(value, int):
+            errors.append("invalid value")
+            continue
+        state["Entity"]["v"] = value
+        events.append({"type": "VALUE_SET", "target_id": "e1"})
+    else:
+        errors.append("unknown action")
+print(json.dumps({"ok": not errors, "final_state": state, "events": events,
+                  "summary": f"{len(events)} executed", "errors": errors},
+                 ensure_ascii=True))
+'''
+
+_NORMALIZED = {
+    "success_conditions": ["값이 저장되는가"],
+    "difficulty_anchors": ["정수만 허용하는 검증"],
+    "forbidden_simplifications": ["검증 없는 자유 입력"],
+}
+
+_PROBES = [
+    {"probe_id": "P1", "title": "값 저장",
+     "initial_state": {"Entity": {"v": 1}},
+     "actions": [{"type": "set_value", "payload": {"value": 7}}],
+     "checks": [{"kind": "final_state_path", "path": "Entity.v", "op": "eq", "value": 7},
+                {"kind": "errors", "expect": "empty"}],
+     "covers": ["값이 저장되는가"]},
+    {"probe_id": "P2", "title": "정수 아닌 입력 거부",
+     "initial_state": {"Entity": {"v": 1}},
+     "actions": [{"type": "set_value", "payload": {"value": "x"}}],
+     "checks": [{"kind": "errors", "expect": "nonempty"},
+                {"kind": "final_state_path", "path": "Entity.v", "op": "eq", "value": 1}],
+     "covers": ["정수만 허용하는 검증", "검증 없는 자유 입력"]},
+]
+
+
+def _make_run(tmp_path: Path, name: str = "run_auto", with_spec: bool = True) -> Path:
+    run = tmp_path / name
+    ws = run / "workspace"
+    (ws / "src").mkdir(parents=True)
+    (ws / "src" / "runner.py").write_text(_RUNNER, encoding="utf-8")
+    _dump(ws / "runner_contract.json", {"required_output_fields": ["ok"]})
+    (ws / "product").mkdir()
+    (ws / "product" / "index.html").write_text(
+        "<html><body><div id=\"state\"></div></body></html>", encoding="utf-8")
+    _dump(run / "normalized_challenge.json", _NORMALIZED)
+    if with_spec:
+        _dump(run / COVERAGE_SUBDIR / PROBE_SPEC_NAME, {
+            "schema_version": 2,
+            "challenge_digest": normalized_challenge_digest(_NORMALIZED),
+            "probes": _PROBES,
+            "requirements": [
+                {"requirement_id": "SC1", "requirement_kind": "CRITICAL_REQUIREMENT",
+                 "requirement_text_or_ref": "값이 저장되는가",
+                 "adjudication_mode": "DETERMINISTIC_RUNTIME", "probe_refs": ["P1"]},
+                {"requirement_id": "DA1", "requirement_kind": "DIFFICULTY_ANCHOR",
+                 "requirement_text_or_ref": "정수만 허용하는 검증",
+                 "adjudication_mode": "DETERMINISTIC_RUNTIME", "probe_refs": ["P2"]},
+                {"requirement_id": "FS1", "requirement_kind": "SUPPORTING_REQUIREMENT",
+                 "requirement_text_or_ref": "검증 없는 자유 입력",
+                 "forbidden_simplification": True,
+                 "adjudication_mode": "DETERMINISTIC_RUNTIME", "probe_refs": ["P2"]},
+            ],
+        })
+    return run
+
+
+class FakeExecutor:
+    """desk 호출을 흉내내는 executor — schema_name별 응답/예외를 재생하고 호출을 기록한다."""
+
+    def __init__(self, responses: dict):
+        self.responses = responses
+        self.calls: list[str] = []
+
+    def call(self, schema_name, prompt, model_cls):
+        self.calls.append(schema_name)
+        resp = self.responses.get(schema_name)
+        if isinstance(resp, Exception):
+            raise resp
+        if resp is None:
+            raise AssertionError(f"예상 밖 desk 호출: {schema_name}")
+        return SimpleNamespace(model_dump=lambda: json.loads(json.dumps(resp))), "FAKE"
+
+
+class BoomExecutor:
+    def call(self, schema_name, prompt, model_cls):
+        raise AssertionError(f"LLM desk가 호출되면 안 된다: {schema_name}")
+
+
+# ---------------------------------------------------------------- §6.1 matrix 없음 → 자동 생성
+
+def test_absent_matrix_auto_generated_without_llm(tmp_path):
+    run = _make_run(tmp_path)
+    res = ensure_deterministic_coverage_matrix(run, executor=BoomExecutor())
+    assert res["status"] == "OK", res
+    assert res["action"] == "GENERATED"
+    assert res["desk_calls"] == {"probe_spec": 0, "semantic": 0}
+    assert (run / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+    assert (run / COVERAGE_SUBDIR / PROBE_RESULTS_NAME).is_file()
+    assert validate_coverage_artifacts(run) == []
+    assert res["deterministic_row_count"] == 3
+    assert res["semantic_row_count"] == 0
+    judge = load_matrix_judge_coverage(run)
+    assert judge["valid"] is True
+    assert judge["judge_coverage"]["값이 저장되는가"]["status"] == "implemented"
+    assert judge["judge_coverage"]["검증 없는 자유 입력"]["status"] == "respected"
+
+
+def test_absent_spec_without_executor_falls_to_semantic_hold_rows(tmp_path):
+    """spec도 executor도 없으면 전 requirement가 정직한 AMBIGUOUS semantic row가 된다 —
+    과대평가 없이 matrix 자체는 유효하고, LLM desk fallback은 일어나지 않는다."""
+    run = _make_run(tmp_path, with_spec=False)
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["status"] == "OK"
+    assert res["action"] == "SEMANTIC_FALLBACK_REQUIRED"
+    assert res["semantic_row_count"] == 3
+    judge = load_matrix_judge_coverage(run)
+    assert judge["valid"] is True
+    assert all(v["status"] == "unknown" for v in judge["judge_coverage"].values())
+
+
+# ---------------------------------------------------------------- §6.2 유효 matrix → 재사용
+
+def test_valid_matrix_reused_with_identical_digest(tmp_path):
+    run = _make_run(tmp_path)
+    first = ensure_deterministic_coverage_matrix(run, executor=BoomExecutor())
+    assert first["action"] == "GENERATED"
+    second = ensure_deterministic_coverage_matrix(run, executor=BoomExecutor())
+    assert second["status"] == "OK"
+    assert second["action"] == "REUSED"
+    assert second["matrix_semantic_digest"] == first["matrix_semantic_digest"]
+    assert second["desk_calls"] == {"probe_spec": 0, "semantic": 0}
+
+
+# ---------------------------------------------------------------- §6.3 artifact 변경 → stale rebuild
+
+@pytest.mark.parametrize("rel", ["src/runner.py", "product/index.html"])
+def test_artifact_change_triggers_stale_rebuild(tmp_path, rel):
+    run = _make_run(tmp_path)
+    first = ensure_deterministic_coverage_matrix(run)
+    target = run / "workspace" / rel
+    target.write_text(target.read_text(encoding="utf-8") + "\n<!-- drift -->\n"
+                      if rel.endswith(".html") else
+                      target.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["status"] == "OK"
+    assert res["action"] == "REBUILT_STALE"
+    assert res["artifact_fingerprint"] != first["artifact_fingerprint"]
+    assert validate_coverage_artifacts(run) == []
+
+
+def test_fingerprint_v2_covers_product_surface(tmp_path):
+    run = _make_run(tmp_path)
+    root = run / "workspace"
+    v2_before = artifact_fingerprint(root)
+    v1_before = artifact_fingerprint(root, version=1)
+    html = root / "product" / "index.html"
+    html.write_text(html.read_text(encoding="utf-8") + "<!-- x -->", encoding="utf-8")
+    assert artifact_fingerprint(root) != v2_before          # v2는 product 변경 감지
+    assert artifact_fingerprint(root, version=1) == v1_before  # v1은 legacy 재검증 호환
+    assert FINGERPRINT_VERSION == 2
+
+
+# ---------------------------------------------------------------- §6.4 challenge 변경 → stale 거부
+
+def test_challenge_change_rejects_stale_matrix(tmp_path):
+    run = _make_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run)
+    changed = json.loads(json.dumps(_NORMALIZED))
+    changed["success_conditions"] = ["값이 두 배로 저장되는가"]
+    _dump(run / "normalized_challenge.json", changed)
+    problems = validate_coverage_artifacts(run)
+    assert any("challenge" in p or "누락" in p for p in problems)  # stale matrix 소비 금지
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["action"] in ("REBUILT_STALE",)
+    matrix = _load(run / COVERAGE_SUBDIR / MATRIX_NAME)
+    texts = {r["requirement_text_or_ref"] for r in matrix["rows"]}
+    assert "값이 두 배로 저장되는가" in texts
+    assert "값이 저장되는가" not in texts
+
+
+# ---------------------------------------------------------------- §6.5 동일 입력 → byte-identical
+
+def test_identical_input_byte_identical_matrix(tmp_path):
+    run_a = _make_run(tmp_path / "a")
+    run_b = _make_run(tmp_path / "b")
+    ra = ensure_deterministic_coverage_matrix(run_a)
+    rb = ensure_deterministic_coverage_matrix(run_b)
+    assert ra["matrix_semantic_digest"] == rb["matrix_semantic_digest"]
+    assert (run_a / COVERAGE_SUBDIR / MATRIX_NAME).read_bytes() == \
+        (run_b / COVERAGE_SUBDIR / MATRIX_NAME).read_bytes()
+    pa = _load(run_a / COVERAGE_SUBDIR / PROBE_RESULTS_NAME)
+    pb = _load(run_b / COVERAGE_SUBDIR / PROBE_RESULTS_NAME)
+    assert pa["probes"] == pb["probes"]
+
+
+# ---------------------------------------------------------------- §6.6·§6.9 오염 → 자동 재생성
+
+def test_tampered_adjudication_rebuilt_not_consumed(tmp_path):
+    run = _make_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run)
+    adj = _load(run / COVERAGE_SUBDIR / ADJUDICATION_NAME)
+    adj["rows"][0]["runtime_evidence_refs"] = []  # COVERED인데 evidence 없음
+    _dump(run / COVERAGE_SUBDIR / ADJUDICATION_NAME, adj)
+    matrix_path = run / COVERAGE_SUBDIR / MATRIX_NAME
+    matrix = _load(matrix_path)
+    matrix["rows"][0]["runtime_evidence_refs"] = []
+    _dump(matrix_path, matrix)
+    assert validate_coverage_artifacts(run) != []  # 소비 금지
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["status"] == "OK"
+    assert res["action"] == "REBUILT_STALE"
+    assert validate_coverage_artifacts(run) == []
+
+
+def test_tampered_aggregates_rebuilt(tmp_path):
+    run = _make_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run)
+    matrix_path = run / COVERAGE_SUBDIR / MATRIX_NAME
+    matrix = _load(matrix_path)
+    matrix["rows"][0]["coverage_status"] = "PARTIALLY_COVERED"  # 집계 그대로 = 조작
+    _dump(matrix_path, matrix)
+    assert validate_coverage_artifacts(run) != []
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["action"] == "REBUILT_STALE"
+    assert validate_coverage_artifacts(run) == []
+
+
+# ---------------------------------------------------------------- §6.10 deterministic이면 LLM 금지
+
+def test_all_deterministic_never_calls_llm(tmp_path):
+    run = _make_run(tmp_path)
+    for _ in range(3):
+        res = ensure_deterministic_coverage_matrix(run, executor=BoomExecutor())
+        assert res["status"] == "OK"
+        assert res["desk_calls"] == {"probe_spec": 0, "semantic": 0}
+    judge = load_matrix_judge_coverage(run)
+    assert judge["valid"] is True
+
+
+# ---------------------------------------------------------------- §6.11 semantic row만 제한 fallback
+
+def _spec_with_semantic_da1(run: Path) -> None:
+    spec = _load(run / COVERAGE_SUBDIR / PROBE_SPEC_NAME)
+    spec["probes"] = [p for p in spec["probes"] if p["probe_id"] == "P1"] + [
+        {"probe_id": "P2", "title": "금지 단순화 부재",
+         "initial_state": {"Entity": {"v": 1}},
+         "actions": [{"type": "set_value", "payload": {"value": "x"}}],
+         "checks": [{"kind": "errors", "expect": "nonempty"}],
+         "covers": ["검증 없는 자유 입력"]}]
+    for row in spec["requirements"]:
+        if row["requirement_id"] == "DA1":
+            row["adjudication_mode"] = "SEMANTIC_ADJUDICATION"
+            row["probe_refs"] = []
+    _dump(run / COVERAGE_SUBDIR / PROBE_SPEC_NAME, spec)
+
+
+def test_semantic_rows_limited_fallback_merged_into_matrix(tmp_path):
+    run = _make_run(tmp_path)
+    _spec_with_semantic_da1(run)
+    executor = FakeExecutor({"coverage_semantic_adjudication": {"items": [
+        {"requirement": "정수만 허용하는 검증", "coverage_status": "COVERED",
+         "failure_class": "NONE", "reason_code": "VALIDATION_VISIBLE",
+         "evidence_refs": ["workspace/src/runner.py"]},
+    ]}})
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "OK"
+    # semantic desk 1회만 — 전체 requirement 재판정 없음, probe spec desk 호출 없음
+    assert executor.calls == ["coverage_semantic_adjudication"]
+    assert res["deterministic_row_count"] == 2
+    assert res["semantic_row_count"] == 1
+    assert validate_coverage_artifacts(run) == []
+    judge = load_matrix_judge_coverage(run)
+    assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "implemented"
+    assert judge["judge_coverage"]["값이 저장되는가"]["status"] == "implemented"
+    # 이후 검증은 재사용 — desk 재호출 없음 (판정 요동 무력화의 근거)
+    res2 = ensure_deterministic_coverage_matrix(run, executor=BoomExecutor())
+    assert res2["action"] == "REUSED"
+
+
+def test_semantic_covered_without_real_evidence_demoted(tmp_path):
+    run = _make_run(tmp_path)
+    _spec_with_semantic_da1(run)
+    executor = FakeExecutor({"coverage_semantic_adjudication": {"items": [
+        {"requirement": "정수만 허용하는 검증", "coverage_status": "COVERED",
+         "failure_class": "NONE", "reason_code": "OPTIMISM",
+         "evidence_refs": ["workspace/does_not_exist.py"]},
+    ]}})
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "OK"
+    judge = load_matrix_judge_coverage(run)
+    assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "unknown"  # 강등
+    assert any("강등" in p for p in res["problems"])
+
+
+# ---------------------------------------------------------------- §6.12 transient 500 ≠ 미구현
+
+def test_semantic_infra_fail_not_converted_to_not_covered(tmp_path):
+    run = _make_run(tmp_path)
+    _spec_with_semantic_da1(run)
+    executor = FakeExecutor({
+        "coverage_semantic_adjudication": DeskError("HTTP 500", kind="transient")})
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "FAILED"
+    assert res["failure_type"] == COVERAGE_SEMANTIC_INFRA_FAIL
+    assert res["infra_failure"] is True
+    assert not (run / COVERAGE_SUBDIR / MATRIX_NAME).is_file()  # 약화된 matrix 영속화 금지
+
+
+def test_spec_proposal_transient_is_infra_not_generation(tmp_path):
+    run = _make_run(tmp_path, with_spec=False)
+    executor = FakeExecutor({
+        "coverage_probe_spec": DeskError("HTTP 500", kind="transient")})
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "FAILED"
+    assert res["infra_failure"] is True
+    assert not (run / COVERAGE_SUBDIR / PROBE_SPEC_NAME).is_file()  # 약화 spec 영속화 금지
+    assert not (run / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+
+
+# ---------------------------------------------------------------- §5.5 probe spec 제안 검증
+
+def test_llm_spec_proposal_validated_and_executed(tmp_path):
+    run = _make_run(tmp_path, with_spec=False)
+    executor = FakeExecutor({"coverage_probe_spec": {
+        "probes": _PROBES,
+        "requirements": [
+            {"requirement": "값이 저장되는가", "adjudication_mode": "DETERMINISTIC_RUNTIME"},
+            {"requirement": "정수만 허용하는 검증", "adjudication_mode": "DETERMINISTIC_RUNTIME"},
+            {"requirement": "검증 없는 자유 입력", "adjudication_mode": "DETERMINISTIC_RUNTIME"},
+        ]}})
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "OK"
+    assert res["desk_calls"] == {"probe_spec": 1, "semantic": 0}
+    assert res["deterministic_row_count"] == 3
+    assert validate_coverage_artifacts(run) == []
+
+
+def test_invalid_spec_proposal_demoted_to_semantic_fail_closed(tmp_path):
+    run = _make_run(tmp_path, with_spec=False)
+    bad = {
+        "probes": [{"probe_id": "P1", "checks": [{"kind": "made_up_kind"}],
+                    "covers": ["값이 저장되는가"]}],
+        "requirements": [
+            {"requirement": "값이 저장되는가", "adjudication_mode": "DETERMINISTIC_RUNTIME"},
+            {"requirement": "정수만 허용하는 검증",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION_REQUIRED"},
+            {"requirement": "검증 없는 자유 입력",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION_REQUIRED"},
+        ]}
+    executor = FakeExecutor({
+        "coverage_probe_spec": bad,
+        "coverage_semantic_adjudication": {"items": []},
+    })
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "OK"
+    # 무효 제안은 통째로 거부 — 낙관적 부분 채택 없이 전면 semantic 강등
+    assert res["deterministic_row_count"] == 0
+    assert res["semantic_row_count"] == 3
+    assert any("거부" in p for p in res["problems"])
+    judge = load_matrix_judge_coverage(run)
+    assert all(v["status"] == "unknown" for v in judge["judge_coverage"].values())
+
+
+def test_generate_probe_spec_rejects_out_of_dsl(tmp_path):
+    run = _make_run(tmp_path, with_spec=False)
+    executor = FakeExecutor({"coverage_probe_spec": {
+        "probes": [{"probe_id": "PX", "checks": [
+            {"kind": "static_substring_count", "needle": "x", "glob": "../../etc/*"}],
+            "covers": ["값이 저장되는가"]}],
+        "requirements": [
+            {"requirement": "값이 저장되는가", "adjudication_mode": "DETERMINISTIC_STATIC"},
+            {"requirement": "정수만 허용하는 검증",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION_REQUIRED"},
+            {"requirement": "검증 없는 자유 입력",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION_REQUIRED"},
+        ]}})
+    out = generate_probe_spec(run, executor=executor)
+    assert out["ok"] is True
+    assert out["spec"]["probes"] == []  # glob 탈출 시도 → 제안 전체 거부
+    assert all(r["adjudication_mode"] == "SEMANTIC_ADJUDICATION"
+               for r in out["spec"]["requirements"])
+
+
+# ---------------------------------------------------------------- probe 실패 → 제품 결함으로 정직 기록
+
+def test_failing_probe_yields_not_covered_true_core_gap(tmp_path):
+    run = _make_run(tmp_path)
+    spec = _load(run / COVERAGE_SUBDIR / PROBE_SPEC_NAME)
+    spec["probes"][0]["checks"][0]["value"] = 999  # P1 실패 유도
+    _dump(run / COVERAGE_SUBDIR / PROBE_SPEC_NAME, spec)
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["status"] == "OK"
+    matrix = _load(run / COVERAGE_SUBDIR / MATRIX_NAME)
+    sc1 = next(r for r in matrix["rows"] if r["requirement_id"] == "SC1")
+    assert sc1["coverage_status"] == "NOT_COVERED"
+    assert sc1["failure_class"] == "TRUE_CORE_GAP"
+    judge = load_matrix_judge_coverage(run)
+    assert judge["judge_coverage"]["값이 저장되는가"]["status"] == "missing"
+
+
+def test_runner_crash_is_probe_failure_not_fake_coverage(tmp_path):
+    run = _make_run(tmp_path)
+    (run / "workspace" / "src" / "runner.py").write_text("raise SystemExit(2)",
+                                                         encoding="utf-8")
+    res = ensure_deterministic_coverage_matrix(run)
+    assert res["status"] == "FAILED"
+    assert res["failure_type"] == COVERAGE_PROBE_FAILED
+    assert not (run / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+
+
+# ---------------------------------------------------------------- digest 계약
+
+def test_challenge_digest_order_preserving_and_stable():
+    d1 = normalized_challenge_digest(_NORMALIZED)
+    d2 = normalized_challenge_digest(json.loads(json.dumps(_NORMALIZED)))
+    assert d1 == d2
+    swapped = json.loads(json.dumps(_NORMALIZED))
+    swapped["success_conditions"] = list(reversed(_NORMALIZED["success_conditions"] + ["x"]))
+    assert normalized_challenge_digest(swapped) != d1
+
+
+def test_matrix_semantic_digest_ignores_nothing_in_canonical_file(tmp_path):
+    run = _make_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run)
+    matrix = _load(run / COVERAGE_SUBDIR / MATRIX_NAME)
+    assert "produced_at" not in matrix  # 시각 metadata는 canonical 밖 (§4.2)
+    assert matrix_semantic_digest(matrix) == matrix_semantic_digest(_load(
+        run / COVERAGE_SUBDIR / MATRIX_NAME))
