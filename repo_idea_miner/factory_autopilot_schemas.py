@@ -324,7 +324,7 @@ class CoverageProbeSpecProposal(BaseModel):
 
 
 class SemanticCoverageItem(BaseModel):
-    """semantic adjudication desk의 requirement 1건 판정 (이슈 #25 §5.7).
+    """semantic adjudication desk의 requirement 1건 판정 (이슈 #25 §5.7 — legacy 호환 전용).
 
     COVERED는 실제 존재하는 evidence_refs 최소 1개 필수 — 검증은 factory_coverage가 한다."""
     requirement: str = Field(min_length=1)
@@ -335,8 +335,96 @@ class SemanticCoverageItem(BaseModel):
 
 
 class SemanticCoverageAdjudication(BaseModel):
-    """semantic requirement 전용 제한 fallback desk 출력 — matrix 병합 후에만 소비된다."""
+    """semantic fallback desk 출력 (이슈 #25 — legacy). 이슈 #26부터 semantic desk는
+    claim proposer이며 최종 status는 deterministic claim validator가 계산한다."""
     items: list[SemanticCoverageItem] = Field(default_factory=list)
+
+
+_CLAIM_SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+_CLAIM_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_CLAIM_MAX_LINE_SPAN = 400
+_CLAIM_MAX_TOKENS = 8
+
+
+def _claim_token_list(value, label: str) -> list[str]:
+    if not isinstance(value, list) or not value \
+            or not all(isinstance(t, str) and t.strip() and len(t) <= 200 for t in value):
+        raise ValueError(f"{label}는 1~{_CLAIM_MAX_TOKENS}개의 비어있지 않은 문자열 목록이어야 함")
+    if len(value) > _CLAIM_MAX_TOKENS:
+        raise ValueError(f"{label} 최대 {_CLAIM_MAX_TOKENS}개 초과")
+    return [str(t) for t in value]
+
+
+class SemanticCoverageClaim(BaseModel):
+    """structured semantic coverage claim 1건 (이슈 #26 §5.2) — strict 검증.
+
+    LLM은 claim을 제안할 뿐이다. 최종 판정은 factory_coverage.validate_semantic_claim이
+    실제 artifact 내용을 재검사해 계산한다 — plain file path만으로는 COVERED가 불가능하다."""
+    claim_id: str = ""
+    requirement: str = Field(min_length=1)
+    claim_type: str
+    file: str = Field(min_length=1)
+    symbol: str | None = None
+    json_pointer: str | None = None
+    line_start: int | None = None
+    line_end: int | None = None
+    expected: dict = Field(default_factory=dict)
+    file_digest: str | None = None
+    reason: str = ""
+
+    @model_validator(mode="after")
+    def _strict(self):
+        from repo_idea_miner.factory_coverage import SEMANTIC_CLAIM_TYPES
+        if self.claim_type not in SEMANTIC_CLAIM_TYPES:
+            raise ValueError(f"허용 밖 claim_type {self.claim_type!r}")
+        f = self.file.replace("\\", "/")
+        if ".." in f.split("/") or f.startswith(("/", "\\")) or ":" in f.split("/")[0]:
+            raise ValueError(f"상대 경로만 허용: {self.file!r}")
+        if (self.line_start is None) != (self.line_end is None):
+            raise ValueError("line_start/line_end는 함께 지정")
+        if self.line_start is not None:
+            if not (1 <= self.line_start <= self.line_end):
+                raise ValueError("line range 무효")
+            if self.line_end - self.line_start > _CLAIM_MAX_LINE_SPAN:
+                raise ValueError(f"line range 상한 {_CLAIM_MAX_LINE_SPAN} 초과")
+        if self.file_digest is not None and not _CLAIM_DIGEST_RE.match(self.file_digest):
+            raise ValueError("file_digest 형식은 sha256:<hex64>")
+        ct = self.claim_type
+        if ct.startswith("PYTHON_SYMBOL"):
+            if not self.symbol or not _CLAIM_SYMBOL_RE.match(self.symbol):
+                raise ValueError(f"{ct}에 유효한 symbol 필요")
+        if ct.startswith("JSON_POINTER"):
+            if not isinstance(self.json_pointer, str) or not self.json_pointer.startswith("/") \
+                    or len(self.json_pointer) > 200:
+                raise ValueError(f"{ct}에 '/'로 시작하는 json_pointer 필요")
+        if ct in ("FILE_CONTAINS", "PYTHON_SYMBOL_CONTAINS"):
+            _claim_token_list(self.expected.get("required_tokens"), "required_tokens")
+            if self.expected.get("forbidden_tokens") not in (None, []):
+                _claim_token_list(self.expected["forbidden_tokens"], "forbidden_tokens")
+        elif ct == "JSON_POINTER_EQUALS":
+            if "value" not in self.expected:
+                raise ValueError("JSON_POINTER_EQUALS의 expected에 value 필요")
+        elif ct == "HTML_ELEMENT_EXISTS":
+            eid = self.expected.get("element_id")
+            if not isinstance(eid, str) or not eid.strip():
+                raise ValueError("HTML_ELEMENT_EXISTS의 expected에 element_id 필요")
+        return self
+
+
+class SemanticCoverageClaimItem(BaseModel):
+    """requirement 1건의 claim proposal (이슈 #26 §5.3).
+
+    raw_coverage_status는 LLM의 자체 판단 기록일 뿐이며 최종 matrix status를 결정하지
+    못한다. claims의 개별 strict 검증(SemanticCoverageClaim)은 factory_coverage가
+    per-claim으로 수행한다 — 무효 claim 1건이 나머지 유효 claim을 무효화하지 않는다."""
+    requirement: str = Field(min_length=1)
+    raw_coverage_status: str = ""
+    claims: list[dict] = Field(default_factory=list)
+
+
+class SemanticCoverageClaimProposal(BaseModel):
+    """semantic claim proposer desk 출력 (이슈 #26) — 판정자가 아니라 제안자다."""
+    items: list[SemanticCoverageClaimItem] = Field(default_factory=list)
 
 
 class GapItem(BaseModel):
@@ -489,7 +577,7 @@ def _enum_problems(payload: dict) -> list[str]:
 
 # 제품 도메인 payload(runner action type 등)를 담는 desk — desk enum 재귀 검사 대상이 아니고,
 # factory_coverage의 결정론적 probe spec validator가 fail-closed로 재검증한다 (이슈 #25 §5.5)
-_PRODUCT_PAYLOAD_SCHEMAS = ("coverage_probe_spec",)
+_PRODUCT_PAYLOAD_SCHEMAS = ("coverage_probe_spec", "coverage_semantic_claims")
 
 
 def validate_desk_output(schema_name: str, raw, model_cls: type[BaseModel]) -> tuple[BaseModel | None, list[str]]:

@@ -1,8 +1,10 @@
 # 이슈 #9: requirement coverage 판정을 결정론적 probe와 구조화 matrix로 만드는 모듈 (LLM 감상 없음).
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -77,6 +79,27 @@ PROBE_CHECK_KINDS = (
     "errors",
     "static_substring_count",
 )
+
+# 이슈 #26: semantic coverage grounding — LLM은 claim proposer일 뿐이고 최종 COVERED는
+# deterministic claim validator가 실제 artifact 내용을 재검사한 경우에만 허용된다 (§4.1).
+CLAIM_VALIDATOR_VERSION = 1
+EVIDENCE_BUNDLE_SELECTION_VERSION = 1
+EVIDENCE_BUNDLE_NAME = "coverage_evidence_bundle.json"
+CLAIM_PROPOSAL_NAME = "coverage_claim_proposal.json"
+CLAIM_RESULTS_NAME = "coverage_claim_results.json"
+# 제한 enum — 이 목록 밖 claim type은 UNSUPPORTED로 거부한다 (§4.5)
+SEMANTIC_CLAIM_TYPES = (
+    "FILE_CONTAINS",
+    "PYTHON_SYMBOL_EXISTS",
+    "PYTHON_SYMBOL_CONTAINS",
+    "JSON_POINTER_EQUALS",
+    "JSON_POINTER_TRUE",
+    "HTML_ELEMENT_EXISTS",
+    "HTML_CTA_WIRED",
+)
+CLAIM_STATUSES = ("PASS", "FAIL", "UNSUPPORTED", "STALE", "INVALID")
+# 최종 row source enum (§5.10)
+ROW_SOURCES = ("DETERMINISTIC_PROBE", "VALIDATED_SEMANTIC_CLAIMS", "AMBIGUOUS_SEMANTIC")
 
 
 def _load_json(path: Path) -> dict | None:
@@ -470,6 +493,393 @@ def validate_coverage_artifacts(run_dir: str | Path) -> list[str]:
     if matrix.get("aggregates") != expected:
         problems.append("coverage matrix aggregates가 row와 불일치 (결정론 집계 위반)")
     return [f"coverage_matrix: {p}" for p in problems]
+
+
+# ---------------------------------------------------------------- semantic grounding (이슈 #26)
+
+_TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
+_HTML_ID_RE = re.compile(r"\bid\s*=\s*[\"']([^\"']+)[\"']")
+_BUNDLE_MAX_FILE_BYTES = 400_000
+_BUNDLE_MAX_LINE_CHARS = 240
+
+
+def _text_tokens(text: str) -> set[str]:
+    return {t.lower() for t in _TOKEN_RE.findall(text or "")}
+
+
+def _file_digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_text(path: Path) -> str | None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if b"\x00" in data[:4096]:
+        return None
+    return data.decode("utf-8", errors="ignore")
+
+
+def _python_symbols(text: str) -> list[dict]:
+    """AST 기반 symbol 카탈로그 (Class.method dotted, 최대 60) — 문자열 추측 없음."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    out: list[dict] = []
+
+    def visit(node, prefix=""):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                name = f"{prefix}{child.name}"
+                out.append({"symbol": name, "line_start": child.lineno,
+                            "line_end": int(getattr(child, "end_lineno", None)
+                                            or child.lineno)})
+                visit(child, prefix=f"{name}.")
+
+    visit(tree)
+    return sorted(out, key=lambda s: (s["line_start"], s["symbol"]))[:60]
+
+
+def _json_pointers(data, prefix="", depth=0, out=None) -> list[dict]:
+    """scalar 값 JSON pointer 카탈로그 (깊이 3, 최대 60) — 실제 값에만 claim을 걸 수 있다."""
+    if out is None:
+        out = []
+    if len(out) >= 60 or depth > 3:
+        return out
+    if isinstance(data, dict):
+        for k in sorted(data, key=str):
+            token = str(k).replace("~", "~0").replace("/", "~1")
+            _json_pointers(data[k], f"{prefix}/{token}", depth + 1, out)
+    elif isinstance(data, list):
+        for i, v in enumerate(data[:20]):
+            _json_pointers(v, f"{prefix}/{i}", depth + 1, out)
+    elif prefix and (isinstance(data, (str, int, float, bool)) or data is None):
+        out.append({"pointer": prefix,
+                    "value": data[:200] if isinstance(data, str) else data})
+    return out
+
+
+def _file_structure(path: Path, ref: str, text: str) -> dict:
+    entry: dict = {"digest": _file_digest(path), "line_count": text.count("\n") + 1}
+    if ref.endswith(".py"):
+        entry["kind"] = "python"
+        entry["python_symbols"] = _python_symbols(text)
+    elif ref.endswith(".json"):
+        entry["kind"] = "json"
+        data = _load_json(path)
+        entry["json_pointers"] = _json_pointers(data) if data is not None else []
+    elif ref.endswith((".html", ".htm")):
+        entry["kind"] = "html"
+        entry["html_element_ids"] = sorted(set(_HTML_ID_RE.findall(text)))[:40]
+    else:
+        entry["kind"] = "text"
+    return entry
+
+
+def _bundle_candidate_pool(run_dir: Path) -> list[tuple[str, Path]]:
+    """bundle 후보 파일 (run 상대 ref, 실제 경로) — 결정론적 순서.
+
+    coverage 자기 산출물(review/coverage)은 제외한다 — 판정이 자기 출력을 근거로
+    삼는 순환을 차단한다."""
+    root = resolve_artifact_root(run_dir)
+    rel_root = Path(root).name
+    pool: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+
+    def add(ref: str, path: Path) -> None:
+        if ref not in seen and path.is_file() \
+                and path.stat().st_size <= _BUNDLE_MAX_FILE_BYTES:
+            seen.add(ref)
+            pool.append((ref, path))
+
+    for p in sorted(Path(root).glob("*_contract.json")):
+        add(f"{rel_root}/{p.name}", p)
+    for pattern in ("src/**/*.py", "product/**/*", "fixtures/**/*.json",
+                    "golden/**/*.json"):
+        for p in sorted(Path(root).glob(pattern)):
+            add(f"{rel_root}/{p.relative_to(root).as_posix()}", p)
+    for p in sorted(run_dir.glob("review/*/*.json")):
+        ref = p.relative_to(run_dir).as_posix()
+        if not ref.startswith(COVERAGE_SUBDIR):
+            add(ref, p)
+    return pool[:200]
+
+
+def _bounded_excerpts(text: str, tokens: set[str], max_excerpts: int,
+                      max_lines: int) -> list[dict]:
+    lines = [ln[:_BUNDLE_MAX_LINE_CHARS] for ln in text.splitlines()]
+    match_lines = [i + 1 for i, line in enumerate(lines) if tokens & _text_tokens(line)]
+    windows: list[tuple[int, int]] = []
+    for ln in match_lines:
+        start = max(1, ln - max_lines // 4)
+        end = min(len(lines), start + max_lines - 1)
+        if windows and start <= windows[-1][1]:
+            continue
+        windows.append((start, end))
+        if len(windows) >= max_excerpts:
+            break
+    if not windows and lines:
+        windows = [(1, min(len(lines), max_lines))]
+    return [{"line_start": s, "line_end": e, "text": "\n".join(lines[s - 1:e])}
+            for s, e in windows]
+
+
+def build_semantic_evidence_bundle(
+    run_dir: str | Path,
+    requirements: list[dict],
+    *,
+    max_files_per_requirement: int = 5,
+    max_excerpts_per_file: int = 2,
+    max_lines_per_excerpt: int = 80,
+) -> dict:
+    """semantic desk에 제공할 bounded evidence bundle (이슈 #26 §5.1).
+
+    파일 선택·excerpt 추출은 전부 결정론적이다: requirement 토큰 겹침 점수(동률은 경로
+    오름차순), 부족분은 contract→src→product 순의 pool 순서로 채운다. run ID/challenge
+    title 하드코딩 없음. bundle에는 시각/절대경로 metadata가 없어 동일 입력이면
+    canonical digest가 동일하다 (§4.7)."""
+    run_dir = Path(run_dir)
+    pool = _bundle_candidate_pool(run_dir)
+    texts: dict[str, str] = {}
+    token_cache: dict[str, set[str]] = {}
+    for ref, path in pool:
+        text = _read_text(path)
+        if text is not None:
+            texts[ref] = text
+            token_cache[ref] = _text_tokens(text)
+    req_entries: list[dict] = []
+    used_refs: set[str] = set()
+    for entry in requirements:
+        rid = str(entry.get("requirement_id"))
+        text = str(entry.get("requirement_text_or_ref")
+                   or entry.get("requirement") or "")
+        req_tokens = _text_tokens(text)
+        scored = sorted(((len(req_tokens & token_cache[ref]), ref)
+                         for ref, _ in pool if ref in texts),
+                        key=lambda t: (-t[0], t[1]))
+        chosen = [ref for score, ref in scored if score > 0][:max_files_per_requirement]
+        if len(chosen) < max_files_per_requirement:
+            for ref, _ in pool:
+                if ref in texts and ref not in chosen:
+                    chosen.append(ref)
+                if len(chosen) >= max_files_per_requirement:
+                    break
+        files = [{"file": ref,
+                  "excerpts": _bounded_excerpts(texts[ref], req_tokens,
+                                                max_excerpts_per_file,
+                                                max_lines_per_excerpt)}
+                 for ref in chosen]
+        used_refs.update(ref for ref in chosen)
+        req_entries.append({"requirement_id": rid, "requirement": text, "files": files})
+    path_by_ref = dict(pool)
+    return {
+        "schema_version": 1,
+        "selection_version": EVIDENCE_BUNDLE_SELECTION_VERSION,
+        "budget": {"max_files_per_requirement": max_files_per_requirement,
+                   "max_excerpts_per_file": max_excerpts_per_file,
+                   "max_lines_per_excerpt": max_lines_per_excerpt},
+        "files": {ref: _file_structure(path_by_ref[ref], ref, texts[ref])
+                  for ref in sorted(used_refs)},
+        "requirements": req_entries,
+        "produced_by": "factory_coverage_semantic_grounding",
+    }
+
+
+def evidence_bundle_digest(bundle: dict) -> str:
+    """bundle의 canonical digest — bundle에는 비본질 metadata가 없으므로 전체가 정본."""
+    return _canonical_digest(bundle or {})
+
+
+def _resolve_json_pointer(data, pointer: str) -> tuple[object, bool]:
+    cur = data
+    for raw in pointer.split("/")[1:]:
+        token = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(cur, dict):
+            if token not in cur:
+                return None, False
+            cur = cur[token]
+        elif isinstance(cur, list):
+            if not token.isdigit() or int(token) >= len(cur):
+                return None, False
+            cur = cur[int(token)]
+        else:
+            return None, False
+    return cur, True
+
+
+def _find_python_symbol(text: str, symbol: str) -> tuple[int, int] | None:
+    for s in _python_symbols(text):
+        if s["symbol"] == symbol:
+            return s["line_start"], s["line_end"]
+    return None
+
+
+def _tokens_check(segment: str, expected: dict) -> tuple[bool, dict]:
+    required = [str(t) for t in expected.get("required_tokens") or []]
+    forbidden = [str(t) for t in expected.get("forbidden_tokens") or []]
+    missing = [t for t in required if t not in segment]
+    present_forbidden = [t for t in forbidden if t in segment]
+    ok = bool(required) and not missing and not present_forbidden
+    return ok, {"missing_tokens": missing, "forbidden_tokens_present": present_forbidden}
+
+
+def validate_semantic_claim(run_dir: str | Path, claim: dict,
+                            evidence_bundle: dict) -> dict:
+    """claim 1건을 실제 artifact 내용에서 재검사한다 (이슈 #26 §5.4).
+
+    파일이 존재한다는 사실만으로는 절대 PASS하지 않는다 — bundle 소속·digest 일치·
+    위치(symbol/pointer/element) 실존·expected assertion 재검사를 전부 통과해야 PASS다.
+    판정 불가는 UNSUPPORTED/INVALID/STALE로 정직하게 남는다."""
+    run_dir = Path(run_dir)
+    ct = str(claim.get("claim_type"))
+    ref = str(claim.get("file") or "")
+    out: dict = {"claim_id": claim.get("claim_id"), "claim_type": ct, "file": ref,
+                 "status": "INVALID", "reason_code": None,
+                 "observed": None, "expected": claim.get("expected") or {},
+                 "file_digest_ok": False, "location_ok": False,
+                 "validator_version": CLAIM_VALIDATOR_VERSION}
+    if ct not in SEMANTIC_CLAIM_TYPES:
+        out.update(status="UNSUPPORTED", reason_code="UNSUPPORTED_CLAIM_TYPE")
+        return out
+    norm = ref.replace("\\", "/")
+    if not ref or ".." in norm.split("/") or norm.startswith("/") \
+            or ":" in norm.split("/")[0]:
+        out["reason_code"] = "UNSAFE_PATH"
+        return out
+    bundle_entry = ((evidence_bundle or {}).get("files") or {}).get(ref)
+    if bundle_entry is None:
+        # bundle 밖 파일은 bounded evidence가 아니다 — 근거 없는 인용 차단 (§5.6)
+        out["reason_code"] = "FILE_NOT_IN_BUNDLE"
+        return out
+    path = run_dir / ref
+    if not path.is_file():
+        out.update(status="STALE", reason_code="FILE_MISSING")
+        return out
+    actual_digest = _file_digest(path)
+    expected_digest = claim.get("file_digest") or bundle_entry.get("digest")
+    if expected_digest != actual_digest:
+        out.update(status="STALE", reason_code="FILE_DIGEST_MISMATCH",
+                   observed={"file_digest": actual_digest})
+        return out
+    out["file_digest_ok"] = True
+    text = _read_text(path)
+    if text is None:
+        out.update(status="FAIL", reason_code="FILE_UNREADABLE")
+        return out
+    expected = claim.get("expected") or {}
+    if ct == "FILE_CONTAINS":
+        out["location_ok"] = True
+        ok, detail = _tokens_check(text, expected)
+        out.update(status="PASS" if ok else "FAIL", observed=detail,
+                   reason_code="CONTENT_MATCH" if ok else "CONTENT_MISMATCH")
+    elif ct in ("PYTHON_SYMBOL_EXISTS", "PYTHON_SYMBOL_CONTAINS"):
+        loc = _find_python_symbol(text, str(claim.get("symbol")))
+        if loc is None:
+            out.update(status="FAIL", reason_code="SYMBOL_NOT_FOUND",
+                       observed={"symbol": claim.get("symbol")})
+            return out
+        out["location_ok"] = True
+        if ct == "PYTHON_SYMBOL_EXISTS":
+            out.update(status="PASS", reason_code="SYMBOL_PRESENT",
+                       observed={"line_start": loc[0], "line_end": loc[1]})
+        else:
+            segment = "\n".join(text.splitlines()[loc[0] - 1:loc[1]])
+            ok, detail = _tokens_check(segment, expected)
+            detail.update(line_start=loc[0], line_end=loc[1])
+            out.update(status="PASS" if ok else "FAIL", observed=detail,
+                       reason_code="CONTENT_MATCH" if ok else "CONTENT_MISMATCH")
+    elif ct in ("JSON_POINTER_EQUALS", "JSON_POINTER_TRUE"):
+        data = _load_json(path)
+        if data is None:
+            out.update(status="FAIL", reason_code="JSON_PARSE_FAILED")
+            return out
+        value, found = _resolve_json_pointer(data, str(claim.get("json_pointer")))
+        if not found:
+            out.update(status="FAIL", reason_code="POINTER_NOT_FOUND")
+            return out
+        out["location_ok"] = True
+        ok = (value == expected.get("value")) if ct == "JSON_POINTER_EQUALS" \
+            else value is True
+        out.update(status="PASS" if ok else "FAIL", observed={"value": value},
+                   reason_code="VALUE_MATCH" if ok else "VALUE_MISMATCH")
+    elif ct == "HTML_ELEMENT_EXISTS":
+        from repo_idea_miner.factory_ux_polish import _element_hidden, _stylesheet
+        eid = str(expected.get("element_id"))
+        m = re.search(r"<([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*\bid\s*=\s*[\"']"
+                      + re.escape(eid) + r"[\"'][^>]*)>", text)
+        if m is None:
+            out.update(status="FAIL", reason_code="ELEMENT_NOT_FOUND",
+                       observed={"element_id": eid})
+            return out
+        out["location_ok"] = True
+        hidden = _element_hidden(m.group(2), _stylesheet(text))
+        out.update(status="FAIL" if hidden else "PASS",
+                   observed={"element_id": eid, "hidden": hidden},
+                   reason_code="ELEMENT_HIDDEN" if hidden else "ELEMENT_PRESENT")
+    elif ct == "HTML_CTA_WIRED":
+        # 이슈 #22 UX validator helper 재사용 — marker-only/숨김/무연결 CTA를 동일 기준으로 거부
+        from repo_idea_miner.factory_ux_polish import recheck_first_screen_cta
+        root = resolve_artifact_root(run_dir)
+        ok = bool(root and Path(root).is_dir() and recheck_first_screen_cta(Path(root)))
+        out["location_ok"] = ok
+        out.update(status="PASS" if ok else "FAIL", observed={"first_screen_cta": ok},
+                   reason_code="CTA_WIRED" if ok else "CTA_NOT_WIRED")
+    return out
+
+
+def canonicalize_semantic_claims(claims: list[dict]) -> list[dict]:
+    """claim 후보를 canonical form으로 정규화한다 (§4.7 — 순서/중복/표현 차이 무력화).
+
+    identity = (claim_type, file, symbol, json_pointer, expected). 자연어 reason,
+    LLM이 붙인 claim_id, line hint, LLM이 echo한 file_digest는 비본질이라 제거한다 —
+    digest 검증은 항상 deterministic bundle digest 기준으로 수행되므로 LLM 표기 차이가
+    matrix 결과를 흔들지 못한다."""
+    canon: dict[tuple, dict] = {}
+    for c in claims:
+        key = (str(c.get("claim_type")), str(c.get("file")),
+               c.get("symbol") or "", c.get("json_pointer") or "",
+               json.dumps(c.get("expected") or {}, ensure_ascii=True, sort_keys=True))
+        if key not in canon:
+            canon[key] = {"claim_type": key[0], "file": key[1],
+                          "symbol": c.get("symbol") or None,
+                          "json_pointer": c.get("json_pointer") or None,
+                          "expected": c.get("expected") or {}}
+    return [canon[k] for k in sorted(canon)]
+
+
+def coverage_context_digest(run_dir: str | Path) -> str | None:
+    """coverage 판정에 영향을 주는 모든 입력의 canonical digest (이슈 #26 §4.8).
+
+    artifact fingerprint가 놓치는 입력(contract/golden/fixture/probe spec/probe 결과/
+    rule·validator version)을 포함한다. mtime/절대경로/생성 시각 같은 비본질 metadata는
+    구성상 제외된다 — 동일 의미 입력이면 동일 digest다."""
+    run_dir = Path(run_dir)
+    root = resolve_artifact_root(run_dir)
+    if root is None or not Path(root).is_dir():
+        return None
+    files: dict[str, str] = {}
+    for pattern in ("*_contract.json", "src/**/*.py", "product/**/*",
+                    "golden/**/*", "fixtures/**/*"):
+        for p in sorted(Path(root).glob(pattern)):
+            if p.is_file():
+                files[p.relative_to(root).as_posix()] = _file_digest(p)
+    spec = _load_json(run_dir / COVERAGE_SUBDIR / PROBE_SPEC_NAME)
+    probe_results = _load_json(run_dir / COVERAGE_SUBDIR / PROBE_RESULTS_NAME)
+    normalized = _load_json(run_dir / "normalized_challenge.json") or {}
+    return _canonical_digest({
+        "challenge_digest": normalized_challenge_digest(normalized),
+        "artifact_files": files,
+        "probe_spec_digest": probe_spec_digest(spec) if spec is not None else None,
+        "probe_results_digest": probe_results_semantic_digest(probe_results)
+        if probe_results is not None else None,
+        "matrix_schema_version": MATRIX_SCHEMA_VERSION,
+        "adjudication_rule_version": ADJUDICATION_RULE_VERSION,
+        "claim_validator_version": CLAIM_VALIDATOR_VERSION,
+        "evidence_bundle_selection_version": EVIDENCE_BUNDLE_SELECTION_VERSION,
+        "fingerprint_version": FINGERPRINT_VERSION,
+    })
 
 
 # ---------------------------------------------------------------- coverage automation (이슈 #25)
