@@ -351,3 +351,367 @@ def test_context_digest_ignores_nonessential_metadata(tmp_path):
     target = run / "workspace" / "golden" / "expected_001.json"
     os.utime(target, (0, 0))  # mtime만 변경
     assert coverage_context_digest(run) == before
+
+
+# ================================================================ automation flow (이슈 #26 §5.3~§5.9)
+
+from types import SimpleNamespace  # noqa: E402
+
+from repo_idea_miner.factory_coverage import (  # noqa: E402
+    COVERAGE_SUBDIR,
+    EVIDENCE_BUNDLE_NAME,
+    CLAIM_PROPOSAL_NAME,
+    CLAIM_RESULTS_NAME,
+    MATRIX_NAME,
+    PROBE_SPEC_NAME,
+    ensure_deterministic_coverage_matrix,
+    load_matrix_judge_coverage,
+    normalized_challenge_digest,
+    validate_coverage_artifacts,
+)
+
+_FLOW_RUNNER = '''\
+import argparse, json
+parser = argparse.ArgumentParser()
+parser.add_argument("--scenario", required=True)
+args = parser.parse_args()
+with open(args.scenario, encoding="utf-8") as f:
+    scenario = json.load(f)
+state = scenario["initial_state"]
+events = []
+errors = []
+for action in scenario.get("actions", []):
+    if action["type"] == "set_value":
+        value = action["payload"].get("value")
+        if not isinstance(value, int):
+            errors.append("invalid value")
+            continue
+        state["Entity"]["v"] = value
+        events.append({"type": "VALUE_SET", "target_id": "e1"})
+    else:
+        errors.append("unknown action")
+print(json.dumps({"ok": not errors, "final_state": state, "events": events,
+                  "errors": errors}, ensure_ascii=True))
+'''
+
+_FLOW_NORMALIZED = {
+    "success_conditions": ["값이 저장되는가"],
+    "difficulty_anchors": ["정수만 허용하는 검증"],
+    "forbidden_simplifications": ["검증 없는 자유 입력"],
+}
+
+
+def _make_flow_run(tmp_path: Path, name: str = "flow_run") -> Path:
+    run = tmp_path / name
+    ws = run / "workspace"
+    (ws / "src").mkdir(parents=True)
+    (ws / "src" / "runner.py").write_text(_FLOW_RUNNER, encoding="utf-8")
+    _dump(ws / "runner_contract.json", {"required_output_fields": ["ok"]})
+    _dump(ws / "state_contract.json", {"entities": {"Entity": {"fields": ["v"]}}})
+    (ws / "product").mkdir()
+    (ws / "product" / "index.html").write_text(
+        "<html><body><div id=\"state\"></div></body></html>", encoding="utf-8")
+    _dump(run / "normalized_challenge.json", _FLOW_NORMALIZED)
+    _dump(run / COVERAGE_SUBDIR / PROBE_SPEC_NAME, {
+        "schema_version": 2,
+        "challenge_digest": normalized_challenge_digest(_FLOW_NORMALIZED),
+        "probes": [
+            {"probe_id": "P1", "title": "값 저장",
+             "initial_state": {"Entity": {"v": 1}},
+             "actions": [{"type": "set_value", "payload": {"value": 7}}],
+             "checks": [{"kind": "final_state_path", "path": "Entity.v",
+                         "op": "eq", "value": 7}],
+             "covers": ["값이 저장되는가"]},
+            {"probe_id": "P2", "title": "금지 단순화 부재",
+             "initial_state": {"Entity": {"v": 1}},
+             "actions": [{"type": "set_value", "payload": {"value": "x"}}],
+             "checks": [{"kind": "errors", "expect": "nonempty"}],
+             "covers": ["검증 없는 자유 입력"]},
+        ],
+        "requirements": [
+            {"requirement_id": "SC1", "requirement_kind": "CRITICAL_REQUIREMENT",
+             "requirement_text_or_ref": "값이 저장되는가",
+             "adjudication_mode": "DETERMINISTIC_RUNTIME", "probe_refs": ["P1"]},
+            {"requirement_id": "DA1", "requirement_kind": "DIFFICULTY_ANCHOR",
+             "requirement_text_or_ref": "정수만 허용하는 검증",
+             "adjudication_mode": "SEMANTIC_ADJUDICATION", "probe_refs": []},
+            {"requirement_id": "FS1", "requirement_kind": "SUPPORTING_REQUIREMENT",
+             "requirement_text_or_ref": "검증 없는 자유 입력",
+             "forbidden_simplification": True,
+             "adjudication_mode": "DETERMINISTIC_RUNTIME", "probe_refs": ["P2"]},
+        ],
+    })
+    return run
+
+
+class FakeExecutor:
+    def __init__(self, responses: dict):
+        self.responses = responses
+        self.calls: list[str] = []
+
+    def call(self, schema_name, prompt, model_cls):
+        self.calls.append(schema_name)
+        resp = self.responses.get(schema_name)
+        if isinstance(resp, Exception):
+            raise resp
+        if resp is None:
+            raise AssertionError(f"예상 밖 desk 호출: {schema_name}")
+        return SimpleNamespace(model_dump=lambda: json.loads(json.dumps(resp))), "FAKE"
+
+
+_VALID_CLAIM = {"claim_type": "FILE_CONTAINS", "file": "workspace/src/runner.py",
+                "expected": {"required_tokens": ["invalid value"]}}
+
+
+def _claims_desk(items) -> FakeExecutor:
+    return FakeExecutor({"coverage_semantic_claims": {"items": items}})
+
+
+def _matrix_bytes(run: Path) -> bytes:
+    return (run / COVERAGE_SUBDIR / MATRIX_NAME).read_bytes()
+
+
+# ---------------------------------------------------------------- §6.1 plain path COVERED 거부
+
+def test_plain_path_covered_rejected_end_to_end(tmp_path):
+    run = _make_flow_run(tmp_path)
+    executor = _claims_desk([
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+         "coverage_status": "COVERED", "evidence_refs": ["workspace/src/runner.py"],
+         "claims": []},
+    ])
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["status"] == "OK"
+    matrix = json.loads(_matrix_bytes(run).decode("utf-8"))
+    da1 = next(r for r in matrix["rows"] if r["requirement_id"] == "DA1")
+    assert da1["coverage_status"] == "AMBIGUOUS"
+    assert da1["row_source"] == "AMBIGUOUS_SEMANTIC"
+    assert res["plain_path_covered_count"] == 0
+    judge = load_matrix_judge_coverage(run)
+    assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "unknown"
+
+
+def test_tampered_plain_path_covered_row_rejected_by_validator(tmp_path):
+    """조작 방어: claim 없는 semantic COVERED row를 손으로 넣어도 validator가 거부한다."""
+    run = _make_flow_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run, executor=_claims_desk([]))
+    matrix_path = run / COVERAGE_SUBDIR / MATRIX_NAME
+    matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+    for row in matrix["rows"]:
+        if row["requirement_id"] == "DA1":
+            row.update(coverage_status="COVERED", failure_class="NONE",
+                       reason_code="OPTIMISM",
+                       static_evidence_refs=["workspace/src/runner.py"])
+    matrix["aggregates"]["difficulty_anchor"] = {"total": 1, "covered": 1,
+                                                 "coverage": 1.0}
+    _dump(matrix_path, matrix)
+    problems = validate_coverage_artifacts(run)
+    assert any("plain file path" in p or "validated claim 없음" in p for p in problems)
+
+
+# ---------------------------------------------------------------- §6.2·§6.15 claim 기반 실판정
+
+def test_validated_claims_cover_and_real_defect_uncovers(tmp_path):
+    run = _make_flow_run(tmp_path)
+    res = ensure_deterministic_coverage_matrix(
+        run, executor=_claims_desk([
+            {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+             "claims": [_VALID_CLAIM]}]))
+    assert res["status"] == "OK"
+    assert res["validated_semantic_covered_count"] == 1
+    assert validate_coverage_artifacts(run) == []
+    assert (run / COVERAGE_SUBDIR / EVIDENCE_BUNDLE_NAME).is_file()
+    assert (run / COVERAGE_SUBDIR / CLAIM_RESULTS_NAME).is_file()
+    judge = load_matrix_judge_coverage(run)
+    assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "implemented"
+
+    # §6.15: 실제 구현 제거 → 같은 claim이 FAIL → NOT_COVERED (재현성이 과대평가로
+    # 이어지지 않는다)
+    run2 = _make_flow_run(tmp_path, name="flow_defect")
+    src = run2 / "workspace" / "src" / "runner.py"
+    src.write_text(_FLOW_RUNNER.replace(
+        'if not isinstance(value, int):\n            errors.append("invalid value")\n            continue\n        ',
+        ""), encoding="utf-8")
+    res2 = ensure_deterministic_coverage_matrix(
+        run2, executor=_claims_desk([
+            {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+             "claims": [_VALID_CLAIM]}]))
+    assert res2["status"] == "OK"
+    matrix = json.loads(_matrix_bytes(run2).decode("utf-8"))
+    da1 = next(r for r in matrix["rows"] if r["requirement_id"] == "DA1")
+    assert da1["coverage_status"] == "NOT_COVERED"
+    assert da1["failure_class"] == "TRUE_CORE_GAP"
+    assert da1["claim_fail_count"] == 1
+    judge = load_matrix_judge_coverage(run2)
+    assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "missing"
+
+
+# ---------------------------------------------------------------- §6.4 stale claim → rebuild
+
+def test_stale_claim_target_forces_rebuild(tmp_path):
+    run = _make_flow_run(tmp_path)
+    executor = _claims_desk([
+        {"requirement": "정수만 허용하는 검증", "claims": [_VALID_CLAIM]}])
+    first = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert first["action"] == "GENERATED"
+    src = run / "workspace" / "src" / "runner.py"
+    src.write_text(src.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
+    problems = validate_coverage_artifacts(run)
+    assert problems != []  # stale 상태의 기존 semantic row 소비 금지
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["action"] == "REBUILT_STALE"
+    assert validate_coverage_artifacts(run) == []
+
+
+# ---------------------------------------------------------------- §6.7 unsupported claim
+
+def test_unsupported_claim_type_never_covers(tmp_path):
+    run = _make_flow_run(tmp_path)
+    res = ensure_deterministic_coverage_matrix(
+        run, executor=_claims_desk([
+            {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+             "claims": [{"claim_type": "FEELS_INTUITIVE",
+                         "file": "workspace/src/runner.py", "expected": {}}]}]))
+    assert res["status"] == "OK"
+    assert res["proposal_rejected_count"] == 1
+    matrix = json.loads(_matrix_bytes(run).decode("utf-8"))
+    da1 = next(r for r in matrix["rows"] if r["requirement_id"] == "DA1")
+    assert da1["coverage_status"] == "AMBIGUOUS"
+    judge = load_matrix_judge_coverage(run)
+    assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "unknown"
+
+
+# ---------------------------------------------------------------- §6.9·§6.10 context 감지
+
+def test_contract_change_forces_rebuild_beyond_fingerprint(tmp_path):
+    """§6.9: fingerprint(src/product)에 없는 state_contract 변경도 context digest가 잡는다."""
+    run = _make_flow_run(tmp_path)
+    executor = _claims_desk([
+        {"requirement": "정수만 허용하는 검증", "claims": [_VALID_CLAIM]}])
+    first = ensure_deterministic_coverage_matrix(run, executor=executor)
+    _dump(run / "workspace" / "state_contract.json",
+          {"entities": {"Entity": {"fields": ["v", "w"]}}})
+    res = ensure_deterministic_coverage_matrix(run, executor=executor)
+    assert res["action"] == "REBUILT_STALE"
+    assert res["coverage_context_digest"] != first["coverage_context_digest"]
+    assert any("context digest" in p for p in res["problems"])
+
+
+def test_nonessential_metadata_keeps_reuse(tmp_path):
+    """§6.10: mtime만 변경 → 기존 matrix 그대로 REUSED, digest 불변."""
+    import os
+    run = _make_flow_run(tmp_path)
+    executor = _claims_desk([
+        {"requirement": "정수만 허용하는 검증", "claims": [_VALID_CLAIM]}])
+    first = ensure_deterministic_coverage_matrix(run, executor=executor)
+    os.utime(run / "workspace" / "state_contract.json", (0, 0))
+    res = ensure_deterministic_coverage_matrix(run, executor=FakeExecutor({}))
+    assert res["action"] == "REUSED"
+    assert res["matrix_semantic_digest"] == first["matrix_semantic_digest"]
+
+
+# ---------------------------------------------------------------- §6.11~§6.14 cross-fresh 수렴
+
+def test_proposal_expression_variance_converges(tmp_path):
+    """§6.11: claim 순서/중복/reason/raw status 차이 → canonical set·matrix 동일."""
+    # flow runner는 top-level 함수가 없으므로 FILE_CONTAINS 2종으로 구성
+    other = {"claim_type": "FILE_CONTAINS", "file": "workspace/src/runner.py",
+             "expected": {"required_tokens": ["isinstance"]}}
+    run_a = _make_flow_run(tmp_path / "a")
+    run_b = _make_flow_run(tmp_path / "b")
+    ra = ensure_deterministic_coverage_matrix(run_a, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+         "claims": [{**_VALID_CLAIM, "reason": "표현 1"}, {**other, "reason": "표현 2"}]}]))
+    rb = ensure_deterministic_coverage_matrix(run_b, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "PARTIALLY_COVERED",
+         "claims": [{**other, "reason": "다른 말"}, {**_VALID_CLAIM, "reason": "또 다른"},
+                    {**_VALID_CLAIM, "reason": "중복"}]}]))
+    assert ra["matrix_semantic_digest"] == rb["matrix_semantic_digest"]
+    assert _matrix_bytes(run_a) == _matrix_bytes(run_b)
+    assert ra["evidence_bundle_digest"] == rb["evidence_bundle_digest"]
+    # raw proposal은 달랐다 — 기록은 남고 정본은 흔들리지 않는다 (§6.14)
+    assert ra["raw_proposal_digest"] != rb["raw_proposal_digest"]
+    assert (run_a / COVERAGE_SUBDIR / CLAIM_PROPOSAL_NAME).is_file()
+
+
+def test_invalid_claims_dropped_converge_to_same_truth(tmp_path):
+    """§6.12: A(유효+무효 claim) vs B(유효만) → 무효는 제거되고 최종 matrix 동일."""
+    run_a = _make_flow_run(tmp_path / "a")
+    run_b = _make_flow_run(tmp_path / "b")
+    ra = ensure_deterministic_coverage_matrix(run_a, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증",
+         "claims": [_VALID_CLAIM,
+                    {"claim_type": "FILE_CONTAINS", "file": "../escape.py",
+                     "expected": {"required_tokens": ["x"]}}]}]))
+    rb = ensure_deterministic_coverage_matrix(run_b, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증", "claims": [_VALID_CLAIM]}]))
+    assert ra["proposal_rejected_count"] == 1
+    assert rb["proposal_rejected_count"] == 0
+    assert ra["matrix_semantic_digest"] == rb["matrix_semantic_digest"]
+    assert _matrix_bytes(run_a) == _matrix_bytes(run_b)
+    ja = load_matrix_judge_coverage(run_a)["judge_coverage"]
+    jb = load_matrix_judge_coverage(run_b)["judge_coverage"]
+    assert ja == jb
+
+
+def test_independent_fresh_clones_identical_first_matrix(tmp_path):
+    """§6.13: coverage evidence가 전혀 없는 독립 clone A/B의 최초 생성 결과 전부 동일."""
+    run_a = _make_flow_run(tmp_path / "clone_a")
+    run_b = _make_flow_run(tmp_path / "clone_b")
+    for run in (run_a, run_b):
+        assert not (run / COVERAGE_SUBDIR / MATRIX_NAME).is_file()
+        assert not (run / COVERAGE_SUBDIR / CLAIM_RESULTS_NAME).is_file()
+    make_exec = lambda: _claims_desk([
+        {"requirement": "정수만 허용하는 검증", "claims": [_VALID_CLAIM]}])
+    ra = ensure_deterministic_coverage_matrix(run_a, executor=make_exec())
+    rb = ensure_deterministic_coverage_matrix(run_b, executor=make_exec())
+    assert ra["artifact_fingerprint"] == rb["artifact_fingerprint"]
+    assert ra["challenge_digest"] == rb["challenge_digest"]
+    assert ra["coverage_context_digest"] == rb["coverage_context_digest"]
+    assert ra["evidence_bundle_digest"] == rb["evidence_bundle_digest"]
+    assert ra["matrix_semantic_digest"] == rb["matrix_semantic_digest"]
+    assert _matrix_bytes(run_a) == _matrix_bytes(run_b)
+    assert (run_a / COVERAGE_SUBDIR / CLAIM_RESULTS_NAME).read_bytes() == \
+        (run_b / COVERAGE_SUBDIR / CLAIM_RESULTS_NAME).read_bytes()
+    ma = json.loads(_matrix_bytes(run_a).decode("utf-8"))
+    mb = json.loads(_matrix_bytes(run_b).decode("utf-8"))
+    assert [(r["requirement_id"], r["coverage_status"]) for r in ma["rows"]] == \
+        [(r["requirement_id"], r["coverage_status"]) for r in mb["rows"]]
+    assert ma["aggregates"] == mb["aggregates"]
+    assert load_matrix_judge_coverage(run_a)["judge_coverage"] == \
+        load_matrix_judge_coverage(run_b)["judge_coverage"]
+
+
+def test_desk_status_fluctuation_neutralized(tmp_path):
+    """§6.14: clone별 raw status/reason 요동 — 같은 claim truth면 matrix 동일,
+    raw LLM status는 acceptance에 닿지 못한다."""
+    run_a = _make_flow_run(tmp_path / "a")
+    run_b = _make_flow_run(tmp_path / "b")
+    ra = ensure_deterministic_coverage_matrix(run_a, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "NOT_COVERED",
+         "claims": [{**_VALID_CLAIM, "reason": "회의적"}]}]))
+    rb = ensure_deterministic_coverage_matrix(run_b, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+         "claims": [{**_VALID_CLAIM, "reason": "낙관적"}]}]))
+    assert ra["matrix_semantic_digest"] == rb["matrix_semantic_digest"]
+    ma = json.loads(_matrix_bytes(run_a).decode("utf-8"))
+    da1 = next(r for r in ma["rows"] if r["requirement_id"] == "DA1")
+    # validator가 계산한 status(COVERED)가 정본 — raw NOT_COVERED가 아니다
+    assert da1["coverage_status"] == "COVERED"
+    assert da1["reason_code"] == "VALIDATED_SEMANTIC_CLAIMS"
+
+
+# ---------------------------------------------------------------- §6.18 child 비상속
+
+def test_child_does_not_inherit_semantic_claim_evidence(tmp_path):
+    from repo_idea_miner.factory_lane_executors import copy_run_as_child
+    run = _make_flow_run(tmp_path)
+    ensure_deterministic_coverage_matrix(run, executor=_claims_desk([
+        {"requirement": "정수만 허용하는 검증", "claims": [_VALID_CLAIM]}]))
+    for name in (EVIDENCE_BUNDLE_NAME, CLAIM_PROPOSAL_NAME, CLAIM_RESULTS_NAME):
+        assert (run / COVERAGE_SUBDIR / name).is_file()
+    child = copy_run_as_child(run, tmp_path / "child01")
+    for name in (MATRIX_NAME, EVIDENCE_BUNDLE_NAME, CLAIM_PROPOSAL_NAME,
+                 CLAIM_RESULTS_NAME):
+        assert not (child / COVERAGE_SUBDIR / name).is_file(), name
+    assert (child / COVERAGE_SUBDIR / PROBE_SPEC_NAME).is_file()  # spec만 계약 상속

@@ -312,6 +312,17 @@ def verify_candidate(run_dir: Path, out_dir: Path,
         "semantic_row_count": automation.get("semantic_row_count"),
         "coverage_desk_calls": automation.get("desk_calls"),
         "coverage_infra_failure": bool(automation.get("infra_failure")),
+        # 이슈 #26 §5.10: claim 기반 semantic grounding provenance
+        "coverage_context_digest": automation.get("coverage_context_digest"),
+        "evidence_bundle_digest": automation.get("evidence_bundle_digest"),
+        "claim_validator_version": automation.get("claim_validator_version"),
+        "claim_stats": automation.get("claim_stats"),
+        "row_source_counts": automation.get("row_source_counts"),
+        "validated_semantic_covered_count":
+            automation.get("validated_semantic_covered_count"),
+        "plain_path_covered_count": automation.get("plain_path_covered_count"),
+        "proposal_rejected_count": automation.get("proposal_rejected_count"),
+        "raw_proposal_digest": automation.get("raw_proposal_digest"),
         "critical_requirement_coverage": coverage.get("critical_requirement_coverage"),
         "difficulty_anchor_coverage": coverage.get("difficulty_anchor_coverage"),
         "forbidden_violation_count":

@@ -22,8 +22,10 @@ MATRIX_NAME = "coverage_matrix.json"
 MATRIX_META_NAME = "coverage_matrix_meta.json"
 
 # 이슈 #25: matrix/adjudication 계약 버전 — 규칙이 바뀌면 올리고, 다르면 재사용 금지 (§5.3)
-MATRIX_SCHEMA_VERSION = 2
-ADJUDICATION_RULE_VERSION = 1
+# 이슈 #26: semantic row가 validated claim 기반으로 바뀌어 schema 3/rule 2로 승급 —
+# 기존(legacy) matrix는 저장된 버전 규칙으로만 재검증하고 새 automation에서는 rebuild한다.
+MATRIX_SCHEMA_VERSION = 3
+ADJUDICATION_RULE_VERSION = 2
 FINGERPRINT_VERSION = 2
 
 # 이슈 #25 §4.6: requirement adjudication 경계 — SEMANTIC_ADJUDICATION만 LLM 후보
@@ -329,7 +331,8 @@ _ROW_REQUIRED_FIELDS = (
 
 
 def _validate_rows(rows: list, normalized: dict, probe_results: dict,
-                   current_fingerprint: str | None, run_dir: Path | None = None) -> list[str]:
+                   current_fingerprint: str | None, run_dir: Path | None = None,
+                   rule_version: int = ADJUDICATION_RULE_VERSION) -> list[str]:
     problems: list[str] = []
     seen_ids: set[str] = set()
     seen_text: set[str] = set()
@@ -363,11 +366,29 @@ def _validate_rows(rows: list, normalized: dict, probe_results: dict,
                 and row.get("failure_class") == "NONE":
             problems.append(f"{rid}: {status}인데 failure_class=NONE — 원인 미분류 FAIL 금지")
         # 실증 요구: 충족 주장(COVERED)과 부분 충족은 실제 evidence가 필수.
-        # semantic row(이슈 #25 §5.7)는 존재하는 static/contract evidence ref로 실증하고,
-        # 그 외(deterministic·legacy)는 기존과 동일하게 PASS probe evidence가 필수다.
+        # semantic row는 rule v2(이슈 #26)부터 validated claim이 필수 — plain file path
+        # 인용만으로는 절대 승인되지 않는다 (§5.6). rule v1(legacy matrix 재검증)만
+        # 기존 static/contract evidence ref 규칙을 유지한다. 그 외(deterministic·legacy)는
+        # 기존과 동일하게 PASS probe evidence가 필수다.
         if status in ("COVERED", "PARTIALLY_COVERED"):
             refs = row.get("runtime_evidence_refs") or []
             if mode == "SEMANTIC_ADJUDICATION" and not refs:
+                if rule_version >= 2:
+                    if not row.get("claim_ids"):
+                        problems.append(
+                            f"{rid}: {status} semantic 판정에 validated claim 없음 — "
+                            "plain file path 인용만으로는 금지")
+                    if row.get("row_source") != "VALIDATED_SEMANTIC_CLAIMS":
+                        problems.append(
+                            f"{rid}: semantic {status}인데 "
+                            f"row_source={row.get('row_source')!r}")
+                    if not row.get("claim_pass_count"):
+                        problems.append(f"{rid}: {status}인데 PASS claim 0개")
+                    if status == "COVERED" and any(
+                            row.get(k) for k in ("claim_fail_count", "claim_stale_count",
+                                                 "claim_unsupported_count")):
+                        problems.append(
+                            f"{rid}: COVERED인데 FAIL/STALE/UNSUPPORTED claim 존재")
                 srefs = [str(r) for r in (row.get("static_evidence_refs") or [])
                          + (row.get("contract_evidence_refs") or [])]
                 if not srefs:
@@ -431,14 +452,18 @@ def build_coverage_matrix(run_dir: str | Path) -> dict:
     rows = list(adjudication.get("rows") or [])
     root = resolve_artifact_root(run_dir)
     fp = artifact_fingerprint(Path(root)) if root else None
-    problems = _validate_rows(rows, normalized, probe_results, fp, run_dir)
+    # adjudication이 만들어진 rule 버전으로 row를 검증한다 — legacy(v1) adjudication을
+    # v2 규칙으로 소급 파괴하지 않되, 새 automation은 항상 v2 rows를 생성한다 (이슈 #26).
+    rule_version = int(adjudication.get("rule_version") or 1)
+    problems = _validate_rows(rows, normalized, probe_results, fp, run_dir,
+                              rule_version=rule_version)
     result = {"ok": not problems, "problems": problems, "row_count": len(rows)}
     if problems:
         return result
     # canonical matrix에는 시각/경로 metadata를 넣지 않는다 — 동일 입력이면 byte-identical (§4.2)
     matrix = {
         "schema_version": MATRIX_SCHEMA_VERSION,
-        "adjudication_rule_version": ADJUDICATION_RULE_VERSION,
+        "adjudication_rule_version": rule_version,
         "rows": sorted(rows, key=lambda r: str(r.get("requirement_id"))),
         "aggregates": _aggregate(rows),
         "artifact_fingerprint": fp,
@@ -449,6 +474,11 @@ def build_coverage_matrix(run_dir: str | Path) -> dict:
         if probe_results else None,
         "semantic_adjudication_state": adjudication.get(
             "semantic_adjudication_state", "NONE_REQUIRED"),
+        # 이슈 #26 §5.8: reuse/stale 판정에 coverage 입력 전체와 validator version을 포함
+        "coverage_context_digest": coverage_context_digest(run_dir),
+        "evidence_bundle_digest": adjudication.get("evidence_bundle_digest"),
+        "claim_validator_version": CLAIM_VALIDATOR_VERSION,
+        "evidence_bundle_selection_version": EVIDENCE_BUNDLE_SELECTION_VERSION,
         "probe_results_ref": f"{COVERAGE_SUBDIR}/{PROBE_RESULTS_NAME}",
         "produced_by": "factory_coverage",
     }
@@ -460,6 +490,43 @@ def build_coverage_matrix(run_dir: str | Path) -> dict:
     result["matrix"] = matrix
     result["matrix_semantic_digest"] = matrix_semantic_digest(matrix)
     return result
+
+
+def _revalidate_semantic_claim_rows(run_dir: Path, rows: list) -> list[str]:
+    """matrix의 claim 기반 semantic row를 실제 artifact 내용으로 재검증한다 (이슈 #26 §5.6).
+
+    저장된 claim result를 믿지 않고 validate_semantic_claim을 다시 실행한다 — target
+    파일이 바뀌었으면 STALE로 불일치가 드러나 matrix가 소비되지 못한다 (§6.4)."""
+    claim_rows = [r for r in rows if r.get("adjudication_mode") == "SEMANTIC_ADJUDICATION"
+                  and r.get("claim_ids")]
+    if not claim_rows:
+        return []
+    problems: list[str] = []
+    bundle = _load_json(Path(run_dir) / COVERAGE_SUBDIR / EVIDENCE_BUNDLE_NAME)
+    stored = _load_json(Path(run_dir) / COVERAGE_SUBDIR / CLAIM_RESULTS_NAME)
+    if bundle is None or stored is None:
+        return ["semantic claim row가 있는데 evidence bundle/claim results 파일 없음"]
+    bdig = evidence_bundle_digest(bundle)
+    if stored.get("evidence_bundle_digest") != bdig:
+        problems.append("claim results가 현재 evidence bundle과 불일치")
+    by_req = stored.get("results") or {}
+    for row in claim_rows:
+        rid = str(row.get("requirement_id"))
+        if row.get("evidence_bundle_digest") != bdig:
+            problems.append(f"{rid}: row의 evidence bundle digest가 현재 bundle과 다름")
+        entries = by_req.get(rid) or []
+        ids = sorted(str(e.get("claim_id")) for e in entries)
+        if ids != sorted(str(c) for c in row.get("claim_ids") or []):
+            problems.append(f"{rid}: claim results와 row의 claim ID 불일치")
+            continue
+        for e in entries:
+            fresh = validate_semantic_claim(run_dir, e.get("claim") or {}, bundle)
+            stored_status = (e.get("result") or {}).get("status")
+            if fresh["status"] != stored_status:
+                problems.append(
+                    f"{rid}: claim {e.get('claim_id')} 재검증 불일치 "
+                    f"({stored_status} → {fresh['status']}) — stale evidence 소비 금지")
+    return problems
 
 
 def validate_coverage_artifacts(run_dir: str | Path) -> list[str]:
@@ -477,9 +544,19 @@ def validate_coverage_artifacts(run_dir: str | Path) -> list[str]:
     fpv = int(matrix.get("fingerprint_version") or 1)
     fp = artifact_fingerprint(Path(root), version=fpv) if root else None
     rows = list(matrix.get("rows") or [])
-    problems = _validate_rows(rows, normalized, probe_results, fp, run_dir)
+    problems = _validate_rows(rows, normalized, probe_results, fp, run_dir,
+                              rule_version=int(matrix.get("adjudication_rule_version")
+                                               or 1))
     if matrix.get("artifact_fingerprint") != fp:
         problems.append("coverage matrix fingerprint가 현재 artifact와 다름")
+    # 이슈 #26: context digest가 있으면(신규 matrix) coverage 입력 전체의 stale을 잡는다 —
+    # contract/golden/fixture 변경은 fingerprint만으로는 놓친다 (§4.8). legacy matrix는
+    # 필드가 없으므로 기존 규칙으로만 재검증한다.
+    if matrix.get("coverage_context_digest") is not None \
+            and matrix["coverage_context_digest"] != coverage_context_digest(run_dir):
+        problems.append("coverage context digest가 현재 입력과 다름 "
+                        "(contract/golden/fixture/spec 변경 — 재생성 필요)")
+    problems += _revalidate_semantic_claim_rows(run_dir, rows)
     if matrix.get("challenge_digest") is not None \
             and matrix["challenge_digest"] != normalized_challenge_digest(normalized):
         problems.append("coverage matrix challenge digest가 현재 normalized challenge와 다름")
@@ -1125,46 +1202,67 @@ def generate_probe_spec(run_dir: str | Path, *, executor=None) -> dict:
     return out
 
 
-def _semantic_evidence_catalog(run_dir: Path) -> list[str]:
-    """semantic adjudication이 인용할 수 있는 실존 파일 카탈로그 (run 상대 경로)."""
-    run_dir = Path(run_dir)
-    root = resolve_artifact_root(run_dir)
-    rel_root = Path(root).name
-    catalog: list[str] = []
-    for pattern in ("product/**/*", "src/**/*.py"):
-        for p in sorted(Path(root).glob(pattern)):
-            if p.is_file():
-                catalog.append(f"{rel_root}/{p.relative_to(root).as_posix()}")
-    for name in ("runner_contract.json", "core_contract.json", "state_contract.json",
-                 "action_contract.json"):
-        if (Path(root) / name).is_file():
-            catalog.append(f"{rel_root}/{name}")
-    for p in sorted(run_dir.glob("review/*/*.json")):
-        catalog.append(p.relative_to(run_dir).as_posix())
-    return catalog[:120]
+_SEMANTIC_PROMPT_BUDGET = 24_000
+_BUNDLE_BUDGET_LADDER = ((5, 2, 80), (5, 1, 60), (3, 1, 40), (2, 1, 30))
 
 
-def _build_semantic_prompt(semantic_entries: list[dict], catalog: list[str]) -> str:
+def _fit_semantic_bundle(run_dir: Path, semantic_entries: list[dict]) -> dict:
+    """고정 prompt 예산에 맞는 가장 큰 bounded bundle을 결정론적으로 고른다 (§4.4)."""
+    bundle: dict = {}
+    for files_n, exc_n, lines_n in _BUNDLE_BUDGET_LADDER:
+        bundle = build_semantic_evidence_bundle(
+            run_dir, semantic_entries, max_files_per_requirement=files_n,
+            max_excerpts_per_file=exc_n, max_lines_per_excerpt=lines_n)
+        if len(json.dumps(bundle, ensure_ascii=False)) <= _SEMANTIC_PROMPT_BUDGET:
+            break
+    return bundle
+
+
+def _build_semantic_claim_prompt(semantic_entries: list[dict], bundle: dict) -> str:
     reqs = [{"requirement": e["requirement_text_or_ref"], "kind": e["requirement_kind"],
              "forbidden_simplification": bool(e.get("forbidden_simplification"))}
             for e in semantic_entries]
-    return f"""너는 Product Factory의 Semantic Coverage Adjudicator다.
-결정론적 probe로 판정 불가한 requirement만 아래 evidence 카탈로그의 실존 파일 근거로 판정한다.
+    claim_dsl = {
+        "claim": {"requirement": "requirement 원문", "claim_type": "아래 type 중 하나",
+                  "file": "bundle files의 경로만", "symbol": "PYTHON_*일 때",
+                  "json_pointer": "JSON_POINTER_*일 때 (/a/b 형식)",
+                  "expected": "type별 assertion", "reason": "짧은 근거"},
+        "claim_types": {
+            "FILE_CONTAINS": {"expected": {"required_tokens": ["..."],
+                                           "forbidden_tokens": ["선택"]}},
+            "PYTHON_SYMBOL_EXISTS": {"symbol": "함수/클래스 (Class.method 가능)"},
+            "PYTHON_SYMBOL_CONTAINS": {"symbol": "...",
+                                       "expected": {"required_tokens": ["..."]}},
+            "JSON_POINTER_EQUALS": {"json_pointer": "/a/b", "expected": {"value": "..."}},
+            "JSON_POINTER_TRUE": {"json_pointer": "/a/b"},
+            "HTML_ELEMENT_EXISTS": {"expected": {"element_id": "..."}},
+            "HTML_CTA_WIRED": {"file": "첫 화면 product surface"},
+        },
+    }
+    return f"""너는 Product Factory의 Semantic Coverage Claim Proposer다.
+결정론적 probe로 판정 불가한 requirement에 대해, 아래 bounded evidence bundle의 실제 내용에
+근거한 '기계 검증 가능한 structured claim' 후보를 제안한다.
 
 규칙:
-- coverage_status: COVERED | PARTIALLY_COVERED | NOT_COVERED | AMBIGUOUS | NOT_APPLICABLE.
-- failure_class: TRUE_CORE_GAP | EVIDENCE_GAP | VALIDATOR_DEFECT | SPEC_OVERREACH | NONE.
-- COVERED/PARTIALLY_COVERED는 카탈로그의 evidence_refs 최소 1개 필수. COVERED는 failure_class=NONE.
-- 근거 없는 낙관 판정 금지 — 불확실하면 AMBIGUOUS. 카탈로그 밖 ref를 만들지 마라.
-- reason_code는 짧은 대문자 코드.
+- 너는 판정자가 아니라 제안자다. 최종 coverage status는 deterministic validator가 claim을
+  실제 artifact에서 재검사해 계산한다 — 네가 쓰는 raw_coverage_status는 참고 기록일 뿐이다.
+- claim은 bundle의 files에 있는 경로만 인용한다. bundle 밖 경로/추측 symbol/추측 pointer 금지.
+- claim의 expected는 bundle excerpt에서 실제로 확인한 내용만 쓴다 — 파일 경로 인용만으로는
+  아무것도 증명되지 않는다.
+- requirement가 기계 검증 가능한 claim으로 표현되지 않으면(순수 감상/직관 판단) claims를
+  비워라 — 그 requirement는 AMBIGUOUS 처리된다. 억지 claim을 만들지 마라.
+- requirement당 claim 최대 4개.
 
-JSON만 출력. Schema: {{"items": [{{"requirement": "...", "coverage_status": "...", "failure_class": "...", "reason_code": "...", "evidence_refs": ["..."]}}]}}
+JSON만 출력. Schema: {{"items": [{{"requirement": "...", "raw_coverage_status": "...", "claims": [claim...]}}]}}
+
+=== CLAIM DSL ===
+{json.dumps(claim_dsl, ensure_ascii=False, indent=1)}
 
 === SEMANTIC REQUIREMENTS ===
 {json.dumps(reqs, ensure_ascii=False, indent=1)}
 
-=== EVIDENCE CATALOG ===
-{json.dumps(catalog, ensure_ascii=False, indent=1)}
+=== EVIDENCE BUNDLE ===
+{json.dumps(bundle, ensure_ascii=False, indent=1)}
 """
 
 
@@ -1172,18 +1270,65 @@ def _ambiguous_row(reason_code: str) -> dict:
     return {"coverage_status": "AMBIGUOUS", "failure_class": "EVIDENCE_GAP",
             "reason_code": reason_code, "recommended_action": "SEMANTIC_REVIEW",
             "runtime_evidence_refs": [], "static_evidence_refs": [],
-            "contract_evidence_refs": []}
+            "contract_evidence_refs": [], "row_source": "AMBIGUOUS_SEMANTIC"}
+
+
+def _row_from_claim_results(results: list[dict], bundle_digest: str) -> dict:
+    """requirement 1건의 최종 semantic row를 claim 결과에서 결정론적으로 계산한다 (§4.6).
+
+    LLM raw status는 이 계산에 관여하지 않는다. FAIL은 실제 결함(NOT_COVERED/PARTIAL),
+    STALE/UNSUPPORTED/INVALID는 검증 불능(AMBIGUOUS)으로 분리한다 — 어느 쪽도 COVERED가
+    되지 못한다."""
+    counts = {s: sum(1 for r in results if r.get("status") == s) for s in CLAIM_STATUSES}
+    base = {
+        "runtime_evidence_refs": [], "contract_evidence_refs": [],
+        "static_evidence_refs": sorted({str(r.get("file")) for r in results}),
+        "claim_ids": [str(r.get("claim_id")) for r in results],
+        "claim_pass_count": counts["PASS"], "claim_fail_count": counts["FAIL"],
+        "claim_unsupported_count": counts["UNSUPPORTED"] + counts["INVALID"],
+        "claim_stale_count": counts["STALE"],
+        "claim_validator_version": CLAIM_VALIDATOR_VERSION,
+        "evidence_bundle_digest": bundle_digest,
+    }
+    if not results:
+        row = _ambiguous_row("SEMANTIC_NO_VALID_CLAIMS")
+        row.update({k: v for k, v in base.items() if k != "static_evidence_refs"})
+        return row
+    if counts["STALE"]:
+        return {**base, "coverage_status": "AMBIGUOUS", "failure_class": "EVIDENCE_GAP",
+                "reason_code": "SEMANTIC_CLAIM_STALE",
+                "recommended_action": "SEMANTIC_REVIEW",
+                "row_source": "AMBIGUOUS_SEMANTIC", "static_evidence_refs": []}
+    if counts["UNSUPPORTED"] or counts["INVALID"]:
+        return {**base, "coverage_status": "AMBIGUOUS", "failure_class": "EVIDENCE_GAP",
+                "reason_code": "SEMANTIC_CLAIM_UNSUPPORTED",
+                "recommended_action": "SEMANTIC_REVIEW",
+                "row_source": "AMBIGUOUS_SEMANTIC", "static_evidence_refs": []}
+    if counts["FAIL"]:
+        status = "PARTIALLY_COVERED" if counts["PASS"] else "NOT_COVERED"
+        return {**base, "coverage_status": status, "failure_class": "TRUE_CORE_GAP",
+                "reason_code": "SEMANTIC_CLAIM_PARTIAL" if counts["PASS"]
+                else "SEMANTIC_CLAIM_FAILED",
+                "recommended_action": "REPAIR_REQUIRED",
+                "row_source": "VALIDATED_SEMANTIC_CLAIMS"}
+    return {**base, "coverage_status": "COVERED", "failure_class": "NONE",
+            "reason_code": "VALIDATED_SEMANTIC_CLAIMS", "recommended_action": "없음",
+            "row_source": "VALIDATED_SEMANTIC_CLAIMS"}
 
 
 def _adjudicate_semantic_rows(run_dir: Path, semantic_entries: list[dict],
                               executor) -> dict:
-    """semantic requirement만 제한적으로 LLM adjudication 한다 (§5.7).
+    """semantic requirement를 claim proposer + deterministic validator로 판정한다 (이슈 #26).
 
-    transient 인프라 실패는 NOT_COVERED로 바꾸지 않고 infra로 보고한다 (§6.12).
-    무효 판정(카탈로그 밖 ref, enum 밖 값, 근거 없는 COVERED)은 AMBIGUOUS로 강등한다 —
-    위로 승격되는 강등은 없다."""
+    LLM은 bounded evidence bundle에 근거한 structured claim 후보만 제안한다. 최종 row는
+    validate_semantic_claim 실행 결과에서 결정론적으로 계산되고, LLM raw status는 raw
+    proposal 기록으로만 남는다. transient 인프라 실패는 NOT_COVERED로 바꾸지 않고 infra로
+    보고한다 (§5.7). 무효 claim은 개별 제거(rejected 기록)한다 — 유효 claim의 판정을
+    무효화하지 않아 서로 다른 잘못된 proposal도 동일 artifact truth로 수렴한다 (§4.7)."""
     out: dict = {"ok": True, "rows_by_text": {}, "infra_failure": False,
-                 "desk_called": False, "problems": [], "state": "NOT_ATTEMPTED"}
+                 "desk_called": False, "problems": [], "state": "NOT_ATTEMPTED",
+                 "evidence_bundle_digest": None, "raw_proposal_digest": None,
+                 "proposal_rejected_count": 0}
     if not semantic_entries:
         out["state"] = "NONE_REQUIRED"
         return out
@@ -1192,13 +1337,24 @@ def _adjudicate_semantic_rows(run_dir: Path, semantic_entries: list[dict],
     from repo_idea_miner.factory_autopilot_desks import execute_desk
     from repo_idea_miner.factory_autopilot_schemas import (
         AUTOPILOT_INFRA_FAIL,
-        SemanticCoverageAdjudication,
+        SemanticCoverageClaim,
+        SemanticCoverageClaimProposal,
     )
-    catalog = _semantic_evidence_catalog(run_dir)
-    res = execute_desk(executor, "coverage_semantic_adjudication",
-                       _build_semantic_prompt(semantic_entries, catalog),
-                       SemanticCoverageAdjudication)
+    from pydantic import ValidationError
+    bundle = _fit_semantic_bundle(run_dir, semantic_entries)
+    _write_json(run_dir / COVERAGE_SUBDIR / EVIDENCE_BUNDLE_NAME, bundle)
+    bdig = evidence_bundle_digest(bundle)
+    out["evidence_bundle_digest"] = bdig
+    res = execute_desk(executor, "coverage_semantic_claims",
+                       _build_semantic_claim_prompt(semantic_entries, bundle),
+                       SemanticCoverageClaimProposal)
     out["desk_called"] = True
+    if res.get("raw") is not None:
+        out["raw_proposal_digest"] = _canonical_digest(res["raw"])
+        _write_json(run_dir / COVERAGE_SUBDIR / CLAIM_PROPOSAL_NAME, {
+            "raw": res["raw"], "raw_proposal_digest": out["raw_proposal_digest"],
+            "desk_status": res["status"],
+            "produced_by": "factory_coverage_semantic_grounding"})
     if res["status"] != "PASS":
         if res.get("failure_type") == AUTOPILOT_INFRA_FAIL:
             out["ok"] = False
@@ -1206,42 +1362,65 @@ def _adjudicate_semantic_rows(run_dir: Path, semantic_entries: list[dict],
             out["problems"] += list(res.get("problems") or [])
         else:
             out["state"] = "ADJUDICATION_INVALID"
-            out["problems"] += [f"semantic adjudication 무효 → AMBIGUOUS 강등: {p}"
+            out["problems"] += [f"semantic claim proposal 무효 → AMBIGUOUS 강등: {p}"
                                 for p in (res.get("problems") or [])[:10]]
         return out
-    catalog_set = set(catalog)
     payload = res["model"].model_dump() if res.get("model") is not None \
         else (res["raw"] or {})
-    items = {str(i.get("requirement")): i for i in payload.get("items") or []}
+    rid_by_text = {e["requirement_text_or_ref"]: str(e.get("requirement_id"))
+                   for e in semantic_entries}
+    bundle_files = set(bundle.get("files") or {})
+    claims_by_text: dict[str, list[dict]] = {t: [] for t in rid_by_text}
+    raw_status_by_text: dict[str, str] = {}
+    for item in payload.get("items") or []:
+        text = str(item.get("requirement"))
+        if text not in rid_by_text:
+            out["problems"].append(f"정본 밖 requirement claim 거부: {text[:40]!r}")
+            out["proposal_rejected_count"] += len(item.get("claims") or [])
+            continue
+        raw_status_by_text[text] = str(item.get("raw_coverage_status") or "")
+        for raw_claim in item.get("claims") or []:
+            if not isinstance(raw_claim, dict):
+                out["proposal_rejected_count"] += 1
+                continue
+            try:
+                model = SemanticCoverageClaim.model_validate(
+                    {**raw_claim, "requirement": text})
+            except ValidationError as exc:
+                out["proposal_rejected_count"] += 1
+                out["problems"].append(
+                    f"무효 claim 제거({text[:30]!r}): {exc.errors()[0].get('msg')}")
+                continue
+            claim = model.model_dump()
+            if claim.get("file") not in bundle_files:
+                # bundle 밖 인용은 bounded evidence가 아니다 — 개별 제거 (§4.4)
+                out["proposal_rejected_count"] += 1
+                out["problems"].append(
+                    f"bundle 밖 파일 claim 제거({text[:30]!r}): {claim.get('file')!r}")
+                continue
+            claims_by_text[text].append(claim)
+    results_by_rid: dict[str, list[dict]] = {}
     for entry in semantic_entries:
         text = entry["requirement_text_or_ref"]
-        item = items.get(text)
-        if item is None:
-            out["problems"].append(f"semantic 판정 누락 → AMBIGUOUS: {text[:40]!r}")
-            continue
-        status = item.get("coverage_status")
-        fclass = item.get("failure_class")
-        refs = [str(r) for r in item.get("evidence_refs") or []]
-        valid_refs = [r for r in refs
-                      if r in catalog_set and (run_dir / r).is_file()]
-        row = {"coverage_status": status, "failure_class": fclass,
-               "reason_code": str(item.get("reason_code") or "SEMANTIC_JUDGED"),
-               "recommended_action": "없음" if status == "COVERED" else "SEMANTIC_REVIEW",
-               "runtime_evidence_refs": [], "static_evidence_refs": valid_refs,
-               "contract_evidence_refs": []}
-        demote = None
-        if status not in COVERAGE_STATUSES or fclass not in FAILURE_CLASSES:
-            demote = "enum 밖 판정"
-        elif status in ("COVERED", "PARTIALLY_COVERED") and not valid_refs:
-            demote = "실존 evidence ref 없는 충족 주장"
-        elif status == "COVERED" and fclass != "NONE":
-            demote = "COVERED인데 failure_class!=NONE"
-        elif status in ("PARTIALLY_COVERED", "NOT_COVERED") and fclass == "NONE":
-            demote = "원인 미분류 FAIL"
-        if demote:
-            out["problems"].append(f"semantic 판정 강등({demote}): {text[:40]!r}")
-            row = _ambiguous_row("SEMANTIC_JUDGMENT_REJECTED")
+        rid = rid_by_text[text]
+        canonical = canonicalize_semantic_claims(claims_by_text.get(text) or [])
+        results: list[dict] = []
+        for i, claim in enumerate(canonical, start=1):
+            cid = f"{rid}-C{i}"
+            result = validate_semantic_claim(run_dir, {**claim, "claim_id": cid}, bundle)
+            results.append({"claim_id": cid, "claim": claim, "result": result})
+        results_by_rid[rid] = results
+        row = _row_from_claim_results(
+            [{**e["result"], "claim_id": e["claim_id"], "file": e["claim"]["file"]}
+             for e in results], bdig)
+        # LLM raw status는 판정에 관여하지 않는 참고 기록 — canonical matrix에는 넣지 않는다
         out["rows_by_text"][text] = row
+    _write_json(run_dir / COVERAGE_SUBDIR / CLAIM_RESULTS_NAME, {
+        "validator_version": CLAIM_VALIDATOR_VERSION,
+        "evidence_bundle_digest": bdig,
+        "results": results_by_rid,
+        "produced_by": "factory_coverage_semantic_grounding",
+    })
     out["state"] = "ADJUDICATED"
     return out
 
@@ -1270,11 +1449,13 @@ def _build_adjudication_rows(spec: dict, probe_results: dict,
             elif all(r.get("pass") and r.get("checks") for r in results):
                 row.update(coverage_status="COVERED", failure_class="NONE",
                            reason_code="PROBE_PROVEN", recommended_action="없음",
-                           runtime_evidence_refs=refs)
+                           runtime_evidence_refs=refs,
+                           row_source="DETERMINISTIC_PROBE")
             else:
                 row.update(coverage_status="NOT_COVERED", failure_class="TRUE_CORE_GAP",
                            reason_code="PROBE_FAILED", recommended_action="REPAIR_REQUIRED",
-                           runtime_evidence_refs=[], probe_refs=refs)
+                           runtime_evidence_refs=[], probe_refs=refs,
+                           row_source="DETERMINISTIC_PROBE")
         elif mode == "SEMANTIC_ADJUDICATION":
             row.update(semantic_rows_by_text.get(text)
                        or _ambiguous_row("SEMANTIC_ADJUDICATION_NOT_ATTEMPTED"))
@@ -1282,7 +1463,8 @@ def _build_adjudication_rows(spec: dict, probe_results: dict,
             row.update(coverage_status="AMBIGUOUS", failure_class="SPEC_OVERREACH",
                        reason_code="INVALID_OR_AMBIGUOUS_REQUIREMENT",
                        recommended_action="SPEC_REVIEW",
-                       runtime_evidence_refs=[])
+                       runtime_evidence_refs=[],
+                       row_source="AMBIGUOUS_SEMANTIC")
         else:
             problems.append(f"{row['requirement_id']}: 알 수 없는 adjudication_mode {mode!r}")
             row.update(_ambiguous_row("UNKNOWN_MODE"))
@@ -1302,10 +1484,49 @@ def _matrix_reuse_problems(run_dir: Path, matrix: dict, fp: str, cdig: str,
         problems.append("artifact fingerprint 불일치")
     if matrix.get("challenge_digest") != cdig:
         problems.append("challenge digest 불일치")
+    # 이슈 #26 §5.8: coverage 입력 전체 + claim validator/bundle selection 버전이
+    # 전부 일치해야 재사용 — 필드가 없는 legacy matrix는 새 automation에서 rebuild된다.
+    if matrix.get("coverage_context_digest") != coverage_context_digest(run_dir):
+        problems.append("coverage context digest 불일치 (contract/golden/fixture 변경 포함)")
+    if matrix.get("claim_validator_version") != CLAIM_VALIDATOR_VERSION:
+        problems.append("claim validator version 불일치")
+    if matrix.get("evidence_bundle_selection_version") != EVIDENCE_BUNDLE_SELECTION_VERSION:
+        problems.append("evidence bundle selection version 불일치")
     if executor is not None \
             and matrix.get("semantic_adjudication_state") == "NOT_ATTEMPTED":
         problems.append("semantic rows 미판정 상태 — executor로 승급 재생성")
     return problems
+
+
+def _row_stats(rows: list) -> dict:
+    """matrix rows에서 provenance 통계를 결정론적으로 집계한다 (이슈 #26 §5.10)."""
+    stats: dict = {
+        "deterministic_row_count": sum(
+            1 for r in rows if r.get("adjudication_mode") in _DETERMINISTIC_MODES),
+        "semantic_row_count": sum(
+            1 for r in rows if r.get("adjudication_mode") == "SEMANTIC_ADJUDICATION"),
+        "invalid_requirement_count": sum(
+            1 for r in rows if r.get("adjudication_mode") == "INVALID_REQUIREMENT"),
+        "row_source_counts": {},
+        "claim_stats": {"pass": 0, "fail": 0, "unsupported": 0, "stale": 0},
+        "validated_semantic_covered_count": 0,
+        "plain_path_covered_count": 0,
+    }
+    for r in rows:
+        src = r.get("row_source")
+        if src:
+            stats["row_source_counts"][src] = stats["row_source_counts"].get(src, 0) + 1
+        stats["claim_stats"]["pass"] += int(r.get("claim_pass_count") or 0)
+        stats["claim_stats"]["fail"] += int(r.get("claim_fail_count") or 0)
+        stats["claim_stats"]["unsupported"] += int(r.get("claim_unsupported_count") or 0)
+        stats["claim_stats"]["stale"] += int(r.get("claim_stale_count") or 0)
+        if r.get("adjudication_mode") == "SEMANTIC_ADJUDICATION" \
+                and r.get("coverage_status") == "COVERED":
+            if r.get("row_source") == "VALIDATED_SEMANTIC_CLAIMS" and r.get("claim_ids"):
+                stats["validated_semantic_covered_count"] += 1
+            else:
+                stats["plain_path_covered_count"] += 1
+    return stats
 
 
 def ensure_deterministic_coverage_matrix(
@@ -1329,6 +1550,13 @@ def ensure_deterministic_coverage_matrix(
         "fallback_allowed": False, "failure_type": None, "infra_failure": False,
         "desk_calls": {"probe_spec": 0, "semantic": 0},
         "invalid_requirement_count": 0,
+        # 이슈 #26 provenance (§5.10)
+        "coverage_context_digest": None, "evidence_bundle_digest": None,
+        "claim_validator_version": CLAIM_VALIDATOR_VERSION,
+        "evidence_bundle_selection_version": EVIDENCE_BUNDLE_SELECTION_VERSION,
+        "claim_stats": None, "row_source_counts": None,
+        "validated_semantic_covered_count": 0, "plain_path_covered_count": 0,
+        "proposal_rejected_count": 0, "raw_proposal_digest": None,
     }
     normalized = _load_json(run_dir / "normalized_challenge.json")
     entries = enumerate_requirements(normalized or {})
@@ -1354,12 +1582,10 @@ def ensure_deterministic_coverage_matrix(
         reuse_problems = _matrix_reuse_problems(run_dir, matrix, fp, cdig, executor)
         if not force_rebuild and not reuse_problems:
             result.update(status="OK", action="REUSED",
-                          matrix_semantic_digest=matrix_semantic_digest(matrix))
-            rows = matrix.get("rows") or []
-            result["deterministic_row_count"] = sum(
-                1 for r in rows if r.get("adjudication_mode") in _DETERMINISTIC_MODES)
-            result["semantic_row_count"] = sum(
-                1 for r in rows if r.get("adjudication_mode") == "SEMANTIC_ADJUDICATION")
+                          matrix_semantic_digest=matrix_semantic_digest(matrix),
+                          coverage_context_digest=matrix.get("coverage_context_digest"),
+                          evidence_bundle_digest=matrix.get("evidence_bundle_digest"))
+            result.update(_row_stats(matrix.get("rows") or []))
             return result
         stale_rebuild = True
         result["problems"] += [f"기존 matrix 재사용 불가: {p}" for p in reuse_problems[:8]]
@@ -1399,6 +1625,9 @@ def ensure_deterministic_coverage_matrix(
         sem = _adjudicate_semantic_rows(run_dir, semantic_entries, executor)
         result["desk_calls"]["semantic"] += 1 if sem["desk_called"] else 0
         result["problems"] += sem["problems"]
+        result["evidence_bundle_digest"] = sem.get("evidence_bundle_digest")
+        result["raw_proposal_digest"] = sem.get("raw_proposal_digest")
+        result["proposal_rejected_count"] = int(sem.get("proposal_rejected_count") or 0)
         if not sem["ok"]:
             result["failure_type"] = COVERAGE_SEMANTIC_INFRA_FAIL
             result["infra_failure"] = sem["infra_failure"]
@@ -1411,6 +1640,7 @@ def ensure_deterministic_coverage_matrix(
             "rule_version": ADJUDICATION_RULE_VERSION,
             "challenge_digest": cdig,
             "semantic_adjudication_state": sem["state"],
+            "evidence_bundle_digest": sem.get("evidence_bundle_digest"),
             "rows": rows,
         })
     # spec에 requirement 분류가 없는 legacy run은 기존 adjudication을 그대로 재검증한다
@@ -1428,13 +1658,11 @@ def ensure_deterministic_coverage_matrix(
         return result
     built = build["matrix"]
     rows = built.get("rows") or []
-    result["deterministic_row_count"] = sum(
-        1 for r in rows if r.get("adjudication_mode") in _DETERMINISTIC_MODES)
-    result["semantic_row_count"] = sum(
-        1 for r in rows if r.get("adjudication_mode") == "SEMANTIC_ADJUDICATION")
-    result["invalid_requirement_count"] = sum(
-        1 for r in rows if r.get("adjudication_mode") == "INVALID_REQUIREMENT")
+    result.update(_row_stats(rows))
     result["matrix_semantic_digest"] = build["matrix_semantic_digest"]
+    result["coverage_context_digest"] = built.get("coverage_context_digest")
+    if result["evidence_bundle_digest"] is None:
+        result["evidence_bundle_digest"] = built.get("evidence_bundle_digest")
     semantic_pending = built.get("semantic_adjudication_state") == "NOT_ATTEMPTED" \
         and result["semantic_row_count"] > 0
     result["status"] = "OK"

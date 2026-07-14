@@ -1579,8 +1579,11 @@ MARKER_VALIDATORS: tuple[ValidatorSpec, ...] = (
                   markers=("review/coverage/coverage_matrix.json",),
                   inputs=("review/coverage/coverage_matrix.json",
                           "review/coverage/coverage_probe_results.json",
-                          "review/coverage/coverage_adjudication.json"),
-                  related_tests=("tests/test_factory_coverage.py",)),
+                          "review/coverage/coverage_adjudication.json",
+                          "review/coverage/coverage_evidence_bundle.json",
+                          "review/coverage/coverage_claim_results.json"),
+                  related_tests=("tests/test_factory_coverage.py",
+                                 "tests/test_factory_semantic_coverage_grounding.py")),
     ValidatorSpec("phase2d0", _MARKER_RUN_KINDS, _check_phase2d0,
                   markers=tuple(f"{PHASE2D0_SUBDIR}/{m}" for m in PHASE2D0_MARKERS),
                   inputs=tuple(f"{PHASE2D0_SUBDIR}/{r}"

@@ -47,9 +47,12 @@ LANE_ALLOWED_SCOPES = {
 # 이슈 #25 §7.3: coverage evidence(matrix/probe 결과/adjudication)는 artifact 버전
 # 종속이라 child가 상속하지 않는다 — child는 fresh candidate로서 자기 evidence만 갖는다.
 # probe spec은 challenge 계약이라 상속해 lineage 전체에서 판정 계획을 고정한다.
+# 이슈 #26 §6.18: semantic claim evidence(bundle/proposal/claim results)도 동일하게 비상속.
 _CHILD_COPY_IGNORES = ("phase2d1", "debug", "__pycache__",
                        "coverage_matrix.json", "coverage_matrix_meta.json",
-                       "coverage_probe_results.json", "coverage_adjudication.json")
+                       "coverage_probe_results.json", "coverage_adjudication.json",
+                       "coverage_evidence_bundle.json", "coverage_claim_proposal.json",
+                       "coverage_claim_results.json")
 
 
 def _load_json(path: Path) -> dict | None:

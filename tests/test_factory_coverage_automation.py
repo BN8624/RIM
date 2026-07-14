@@ -303,19 +303,23 @@ def _spec_with_semantic_da1(run: Path) -> None:
 
 
 def test_semantic_rows_limited_fallback_merged_into_matrix(tmp_path):
+    """이슈 #26: semantic desk는 structured claim을 제안하고, validator가 실제 내용을
+    재검사한 경우에만 COVERED가 matrix에 병합된다."""
     run = _make_run(tmp_path)
     _spec_with_semantic_da1(run)
-    executor = FakeExecutor({"coverage_semantic_adjudication": {"items": [
-        {"requirement": "정수만 허용하는 검증", "coverage_status": "COVERED",
-         "failure_class": "NONE", "reason_code": "VALIDATION_VISIBLE",
-         "evidence_refs": ["workspace/src/runner.py"]},
+    executor = FakeExecutor({"coverage_semantic_claims": {"items": [
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+         "claims": [{"claim_type": "FILE_CONTAINS", "file": "workspace/src/runner.py",
+                     "expected": {"required_tokens": ["invalid value"]}}]},
     ]}})
     res = ensure_deterministic_coverage_matrix(run, executor=executor)
     assert res["status"] == "OK"
     # semantic desk 1회만 — 전체 requirement 재판정 없음, probe spec desk 호출 없음
-    assert executor.calls == ["coverage_semantic_adjudication"]
+    assert executor.calls == ["coverage_semantic_claims"]
     assert res["deterministic_row_count"] == 2
     assert res["semantic_row_count"] == 1
+    assert res["validated_semantic_covered_count"] == 1
+    assert res["plain_path_covered_count"] == 0
     assert validate_coverage_artifacts(run) == []
     judge = load_matrix_judge_coverage(run)
     assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "implemented"
@@ -325,19 +329,22 @@ def test_semantic_rows_limited_fallback_merged_into_matrix(tmp_path):
     assert res2["action"] == "REUSED"
 
 
-def test_semantic_covered_without_real_evidence_demoted(tmp_path):
+def test_semantic_covered_without_claims_demoted(tmp_path):
+    """§6.1: 파일 경로만 인용한 raw COVERED(claim 없음)는 AMBIGUOUS로 강등된다 —
+    implemented로 산입 금지."""
     run = _make_run(tmp_path)
     _spec_with_semantic_da1(run)
-    executor = FakeExecutor({"coverage_semantic_adjudication": {"items": [
-        {"requirement": "정수만 허용하는 검증", "coverage_status": "COVERED",
-         "failure_class": "NONE", "reason_code": "OPTIMISM",
-         "evidence_refs": ["workspace/does_not_exist.py"]},
+    executor = FakeExecutor({"coverage_semantic_claims": {"items": [
+        {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "COVERED",
+         "coverage_status": "COVERED",
+         "evidence_refs": ["workspace/src/runner.py"], "claims": []},
     ]}})
     res = ensure_deterministic_coverage_matrix(run, executor=executor)
     assert res["status"] == "OK"
+    assert res["validated_semantic_covered_count"] == 0
+    assert res["plain_path_covered_count"] == 0
     judge = load_matrix_judge_coverage(run)
     assert judge["judge_coverage"]["정수만 허용하는 검증"]["status"] == "unknown"  # 강등
-    assert any("강등" in p for p in res["problems"])
 
 
 # ---------------------------------------------------------------- §6.12 transient 500 ≠ 미구현
@@ -346,7 +353,7 @@ def test_semantic_infra_fail_not_converted_to_not_covered(tmp_path):
     run = _make_run(tmp_path)
     _spec_with_semantic_da1(run)
     executor = FakeExecutor({
-        "coverage_semantic_adjudication": DeskError("HTTP 500", kind="transient")})
+        "coverage_semantic_claims": DeskError("HTTP 500", kind="transient")})
     res = ensure_deterministic_coverage_matrix(run, executor=executor)
     assert res["status"] == "FAILED"
     assert res["failure_type"] == COVERAGE_SEMANTIC_INFRA_FAIL
@@ -397,7 +404,7 @@ def test_invalid_spec_proposal_demoted_to_semantic_fail_closed(tmp_path):
         ]}
     executor = FakeExecutor({
         "coverage_probe_spec": bad,
-        "coverage_semantic_adjudication": {"items": []},
+        "coverage_semantic_claims": {"items": []},
     })
     res = ensure_deterministic_coverage_matrix(run, executor=executor)
     assert res["status"] == "OK"
