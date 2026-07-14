@@ -12,6 +12,8 @@ import tempfile
 import time
 from pathlib import Path
 
+# claim type enum은 schema 모듈이 소유한다 — schemas가 이 모듈을 역참조하면 import cycle
+from repo_idea_miner.factory_autopilot_schemas import SEMANTIC_CLAIM_TYPES
 from repo_idea_miner.factory_run_layout import resolve_artifact_root
 
 COVERAGE_SUBDIR = "review/coverage"
@@ -84,21 +86,13 @@ PROBE_CHECK_KINDS = (
 
 # 이슈 #26: semantic coverage grounding — LLM은 claim proposer일 뿐이고 최종 COVERED는
 # deterministic claim validator가 실제 artifact 내용을 재검사한 경우에만 허용된다 (§4.1).
+# 제한 claim type enum(SEMANTIC_CLAIM_TYPES)은 factory_autopilot_schemas가 소유하고
+# 이 모듈이 re-export한다. 목록 밖 claim type은 UNSUPPORTED로 거부한다 (§4.5).
 CLAIM_VALIDATOR_VERSION = 1
 EVIDENCE_BUNDLE_SELECTION_VERSION = 1
 EVIDENCE_BUNDLE_NAME = "coverage_evidence_bundle.json"
 CLAIM_PROPOSAL_NAME = "coverage_claim_proposal.json"
 CLAIM_RESULTS_NAME = "coverage_claim_results.json"
-# 제한 enum — 이 목록 밖 claim type은 UNSUPPORTED로 거부한다 (§4.5)
-SEMANTIC_CLAIM_TYPES = (
-    "FILE_CONTAINS",
-    "PYTHON_SYMBOL_EXISTS",
-    "PYTHON_SYMBOL_CONTAINS",
-    "JSON_POINTER_EQUALS",
-    "JSON_POINTER_TRUE",
-    "HTML_ELEMENT_EXISTS",
-    "HTML_CTA_WIRED",
-)
 CLAIM_STATUSES = ("PASS", "FAIL", "UNSUPPORTED", "STALE", "INVALID")
 # 최종 row source enum (§5.10)
 ROW_SOURCES = ("DETERMINISTIC_PROBE", "VALIDATED_SEMANTIC_CLAIMS", "AMBIGUOUS_SEMANTIC")
@@ -882,19 +876,18 @@ def validate_semantic_claim(run_dir: str | Path, claim: dict,
         out.update(status="PASS" if ok else "FAIL", observed={"value": value},
                    reason_code="VALUE_MATCH" if ok else "VALUE_MISMATCH")
     elif ct == "HTML_ELEMENT_EXISTS":
-        from repo_idea_miner.factory_ux_polish import _element_hidden, _stylesheet
+        # 이슈 #22 UX validator와 동일한 숨김 판정 재사용 (공개 API)
+        from repo_idea_miner.factory_ux_polish import find_element_visibility
         eid = str(expected.get("element_id"))
-        m = re.search(r"<([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*\bid\s*=\s*[\"']"
-                      + re.escape(eid) + r"[\"'][^>]*)>", text)
-        if m is None:
+        visible = find_element_visibility(text, eid)
+        if visible is None:
             out.update(status="FAIL", reason_code="ELEMENT_NOT_FOUND",
                        observed={"element_id": eid})
             return out
         out["location_ok"] = True
-        hidden = _element_hidden(m.group(2), _stylesheet(text))
-        out.update(status="FAIL" if hidden else "PASS",
-                   observed={"element_id": eid, "hidden": hidden},
-                   reason_code="ELEMENT_HIDDEN" if hidden else "ELEMENT_PRESENT")
+        out.update(status="PASS" if visible else "FAIL",
+                   observed={"element_id": eid, "hidden": not visible},
+                   reason_code="ELEMENT_PRESENT" if visible else "ELEMENT_HIDDEN")
     elif ct == "HTML_CTA_WIRED":
         # 이슈 #22 UX validator helper 재사용 — marker-only/숨김/무연결 CTA를 동일 기준으로 거부
         from repo_idea_miner.factory_ux_polish import recheck_first_screen_cta

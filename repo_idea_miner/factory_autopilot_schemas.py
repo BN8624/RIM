@@ -340,6 +340,18 @@ class SemanticCoverageAdjudication(BaseModel):
     items: list[SemanticCoverageItem] = Field(default_factory=list)
 
 
+# 제한 semantic claim type enum (이슈 #26 §4.5) — 정의는 여기(schema 소유),
+# factory_coverage가 re-export한다 (schemas→coverage 역방향 import는 cycle 금지 §17.12).
+SEMANTIC_CLAIM_TYPES = (
+    "FILE_CONTAINS",
+    "PYTHON_SYMBOL_EXISTS",
+    "PYTHON_SYMBOL_CONTAINS",
+    "JSON_POINTER_EQUALS",
+    "JSON_POINTER_TRUE",
+    "HTML_ELEMENT_EXISTS",
+    "HTML_CTA_WIRED",
+)
+
 _CLAIM_SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _CLAIM_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _CLAIM_MAX_LINE_SPAN = 400
@@ -374,7 +386,6 @@ class SemanticCoverageClaim(BaseModel):
 
     @model_validator(mode="after")
     def _strict(self):
-        from repo_idea_miner.factory_coverage import SEMANTIC_CLAIM_TYPES
         if self.claim_type not in SEMANTIC_CLAIM_TYPES:
             raise ValueError(f"허용 밖 claim_type {self.claim_type!r}")
         f = self.file.replace("\\", "/")

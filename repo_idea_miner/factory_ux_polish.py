@@ -272,6 +272,18 @@ def recheck_first_screen_cta(artifact_root: Path) -> bool:
     return True
 
 
+def find_element_visibility(text: str, element_id: str) -> bool | None:
+    """id로 찾은 요소의 정적 표시 여부 — 부재는 None (이슈 #26 claim validator 재사용 공개 API).
+
+    숨김 판정 기준은 CTA와 동일(_element_hidden): hidden/aria-hidden, inline
+    display:none/visibility:hidden/화면 밖, stylesheet 숨김."""
+    m = re.search(r"<([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*\bid\s*=\s*[\"']"
+                  + re.escape(element_id) + r"[\"'][^>]*)>", text)
+    if m is None:
+        return None
+    return not _element_hidden(m.group(2), _stylesheet(text))
+
+
 def _cta_wired_surface(text: str, primary_actions: list[str]) -> bool:
     """표면이 계약 primary action을 실제 조작하는 표면인지 — action 이름이 표면 소스에
     verbatim으로 존재(스크립트 wiring 근거)하고 라벨 있는 활성 button이 있어야 한다."""
