@@ -89,7 +89,9 @@ PROBE_CHECK_KINDS = (
 # 제한 claim type enum(SEMANTIC_CLAIM_TYPES)은 factory_autopilot_schemas가 소유하고
 # 이 모듈이 re-export한다. 목록 밖 claim type은 UNSUPPORTED로 거부한다 (§4.5).
 CLAIM_VALIDATOR_VERSION = 1
-EVIDENCE_BUNDLE_SELECTION_VERSION = 1
+# v2(이슈 #26 live 실측): 토큰 매칭에 단복수('+s') 정규화 추가 — 요구문 'Edge'가
+# 소스의 'edges'와 겹치도록 (CANON-04 exposure 이름 정규화와 동일 원칙)
+EVIDENCE_BUNDLE_SELECTION_VERSION = 2
 EVIDENCE_BUNDLE_NAME = "coverage_evidence_bundle.json"
 CLAIM_PROPOSAL_NAME = "coverage_claim_proposal.json"
 CLAIM_RESULTS_NAME = "coverage_claim_results.json"
@@ -578,6 +580,16 @@ def _text_tokens(text: str) -> set[str]:
     return {t.lower() for t in _TOKEN_RE.findall(text or "")}
 
 
+def _matched_tokens(req_tokens: set[str], file_tokens: set[str]) -> int:
+    """단복수('+s')만 정규화한 결정론적 토큰 겹침 수 (selection v2)."""
+    n = 0
+    for t in req_tokens:
+        if t in file_tokens or f"{t}s" in file_tokens \
+                or (t.endswith("s") and t[:-1] in file_tokens):
+            n += 1
+    return n
+
+
 def _file_digest(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -681,7 +693,8 @@ def _bundle_candidate_pool(run_dir: Path) -> list[tuple[str, Path]]:
 def _bounded_excerpts(text: str, tokens: set[str], max_excerpts: int,
                       max_lines: int) -> list[dict]:
     lines = [ln[:_BUNDLE_MAX_LINE_CHARS] for ln in text.splitlines()]
-    match_lines = [i + 1 for i, line in enumerate(lines) if tokens & _text_tokens(line)]
+    match_lines = [i + 1 for i, line in enumerate(lines)
+                   if _matched_tokens(tokens, _text_tokens(line))]
     windows: list[tuple[int, int]] = []
     for ln in match_lines:
         start = max(1, ln - max_lines // 4)
@@ -727,7 +740,7 @@ def build_semantic_evidence_bundle(
         text = str(entry.get("requirement_text_or_ref")
                    or entry.get("requirement") or "")
         req_tokens = _text_tokens(text)
-        scored = sorted(((len(req_tokens & token_cache[ref]), ref)
+        scored = sorted(((_matched_tokens(req_tokens, token_cache[ref]), ref)
                          for ref, _ in pool if ref in texts),
                         key=lambda t: (-t[0], t[1]))
         chosen = [ref for score, ref in scored if score > 0][:max_files_per_requirement]
@@ -1242,6 +1255,13 @@ def _build_semantic_claim_prompt(semantic_entries: list[dict], bundle: dict) -> 
 - claim은 bundle의 files에 있는 경로만 인용한다. bundle 밖 경로/추측 symbol/추측 pointer 금지.
 - claim의 expected는 bundle excerpt에서 실제로 확인한 내용만 쓴다 — 파일 경로 인용만으로는
   아무것도 증명되지 않는다.
+- JSON_POINTER_EQUALS/TRUE: json_pointer는 해당 파일의 json_pointers 카탈로그에 있는
+  pointer를 **그대로 복사**하고, expected.value도 그 카탈로그의 value와 **정확히 일치**해야
+  한다. 카탈로그에 없는 pointer나 배열 전체를 기대값으로 추측하면 그 claim은 FAIL한다.
+- FILE_CONTAINS/PYTHON_SYMBOL_CONTAINS: required_tokens는 excerpt 원문에 실제로 보이는
+  문자열을 그대로 복사한다 (의역/요약 금지).
+- excerpt에서 검증 가능한 근거를 실제로 확인했다면 claims를 비우지 마라 — 근거가 있는데
+  claim을 생략하면 그 requirement는 부당하게 AMBIGUOUS가 된다.
 - requirement가 기계 검증 가능한 claim으로 표현되지 않으면(순수 감상/직관 판단) claims를
   비워라 — 그 requirement는 AMBIGUOUS 처리된다. 억지 claim을 만들지 마라.
 - requirement당 claim 최대 4개.
