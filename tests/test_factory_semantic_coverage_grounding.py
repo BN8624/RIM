@@ -119,6 +119,30 @@ def test_claim_schema_rejects_invalid(over):
         SemanticCoverageClaim.model_validate(_claim(**over))
 
 
+def test_claim_schema_unwraps_claim_wrapper():
+    """live 실측 형태 편차(loop 101130): {"claim": {...}} 래핑 — 정규화 후 strict 검증 통과."""
+    model = SemanticCoverageClaim.model_validate(
+        {"claim": _claim(), "requirement": _REQS[0]["requirement_text_or_ref"]})
+    assert model.claim_type == "PYTHON_SYMBOL_CONTAINS"
+    assert model.file == "workspace/src/runner.py"
+    # 래핑 해제 후에도 무효 내용은 그대로 거부된다 (판단 내용 불변)
+    with pytest.raises(ValidationError):
+        SemanticCoverageClaim.model_validate({"claim": _claim(claim_type="VIBES")})
+
+
+def test_wrapped_claims_flow_to_validated_covered(tmp_path):
+    """래핑된 claim이 flow에서 정상 검증·병합되는지 (live 결함 회귀 고정)."""
+    run = _make_flow_run(tmp_path)
+    res = ensure_deterministic_coverage_matrix(
+        run, executor=_claims_desk([
+            {"requirement": "정수만 허용하는 검증", "raw_coverage_status": "PARTIAL",
+             "claims": [{"claim": {**_VALID_CLAIM,
+                                   "requirement": "정수만 허용하는 검증"}}]}]))
+    assert res["status"] == "OK"
+    assert res["proposal_rejected_count"] == 0
+    assert res["validated_semantic_covered_count"] == 1
+
+
 # ---------------------------------------------------------------- §5.1 evidence bundle
 
 def test_bundle_deterministic_across_identical_dirs(tmp_path):

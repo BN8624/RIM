@@ -384,6 +384,22 @@ class SemanticCoverageClaim(BaseModel):
     file_digest: str | None = None
     reason: str = ""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _canonicalize(cls, data):
+        """LLM 출력의 형태 편차를 결정론적으로 정규화한다 — 판단 내용은 바꾸지 않는다.
+
+        {"claim": {...}} 래핑 해제 — live 실측(이슈 #26 loop 101130): Gemma가 claim마다
+        한 겹 감싸 반환해 전 claim이 Field required로 거부됐다. 이슈 #25의
+        {"probe": {...}} 편차와 동일 패턴이며, 이후 strict 검증은 그대로 적용된다."""
+        if isinstance(data, dict) and isinstance(data.get("claim"), dict) \
+                and "claim_type" not in data:
+            inner = dict(data["claim"])
+            if "requirement" in data and "requirement" not in inner:
+                inner["requirement"] = data["requirement"]
+            data = inner
+        return data
+
     @model_validator(mode="after")
     def _strict(self):
         if self.claim_type not in SEMANTIC_CLAIM_TYPES:
